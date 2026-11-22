@@ -1,0 +1,525 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Pillar 4.1: Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidInviteCode(code) {
+      return code is string && code.size() >= 6 && code.size() <= 16 && code.matches('^[A-Z0-9]+$');
+    }
+
+    function isValidDateStr(d) {
+      return d is string && d.size() == 10 && d.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isValidMemberUids(uids) {
+      return uids is list
+        && uids.size() >= 1
+        && uids.size() <= 10
+        && uids[0] is string
+        && request.auth.uid in uids;
+    }
+
+    function isValidFamilyNames(names) {
+      return names is list
+        && names.size() >= 1
+        && names.size() <= 10
+        && names[0] is string;
+    }
+
+    function isValidPaymentMethod(pm) {
+      return pm is string && pm in ['cash', 'khqr', 'aba', 'wing'];
+    }
+
+    function isValidUnit(u) {
+      return u is string && u in ['g', 'kg', 'ml', 'L', 'pcs'];
+    }
+
+    function isWorkspaceMember(workspaceId) {
+      return exists(/databases/$(database)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid));
+    }
+
+    // --- Entity Validation Blueprints ---
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'workspaceId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'workspaceId', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && isValidId(data.workspaceId)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWorkspaceInvite(data) {
+      return data.keys().hasAll(['inviteCode', 'workspaceId', 'createdBy', 'createdAt'])
+        && data.keys().hasOnly(['inviteCode', 'workspaceId', 'createdBy', 'createdAt'])
+        && isValidInviteCode(data.inviteCode)
+        && isValidId(data.workspaceId)
+        && isValidId(data.createdBy)
+        && data.createdBy == request.auth.uid
+        && data.createdAt is timestamp;
+    }
+
+    function isValidWorkspace(data) {
+      return data.keys().hasAll([
+          'name', 'location', 'inviteCode', 'ownerId', 'memberUids',
+          'currency', 'usdRate', 'language', 'familyMembers', 'lowStockDefault',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'name', 'location', 'inviteCode', 'ownerId', 'memberUids',
+          'currency', 'usdRate', 'language', 'familyMembers', 'lowStockDefault',
+          'createdAt', 'updatedAt'
+        ])
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.location is string && data.location.size() <= 120
+        && isValidInviteCode(data.inviteCode)
+        && isValidId(data.ownerId)
+        && isValidMemberUids(data.memberUids)
+        && data.currency == 'KHR'
+        && data.usdRate is number && data.usdRate > 0 && data.usdRate <= 100000
+        && data.language is string && data.language in ['en', 'vi']
+        && isValidFamilyNames(data.familyMembers)
+        && data.lowStockDefault is number && data.lowStockDefault >= 0 && data.lowStockDefault <= 1000000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWorkspaceMember(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'inviteCode', 'joinedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'inviteCode', 'joinedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && isValidInviteCode(data.inviteCode)
+        && data.joinedAt is timestamp;
+    }
+
+    function isValidProduct(data, workspaceId) {
+      return data.keys().hasAll([
+          'workspaceId', 'memberUids', 'name', 'nameVi', 'category',
+          'priceKhr', 'imageUrl', 'active', 'recipe', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'workspaceId', 'memberUids', 'name', 'nameVi', 'category',
+          'priceKhr', 'imageUrl', 'active', 'recipe', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.workspaceId == workspaceId
+        && isValidMemberUids(data.memberUids)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.nameVi is string && data.nameVi.size() <= 100
+        && data.category is string && data.category in ['juice', 'smoothie', 'tea', 'coffee', 'specialty']
+        && data.priceKhr is number && data.priceKhr >= 0 && data.priceKhr <= 100000000
+        && data.imageUrl is string && data.imageUrl.size() <= 300
+        && data.active is bool
+        && data.recipe is list && data.recipe.size() <= 20
+        && (data.recipe.size() == 0 || data.recipe[0] is map)
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidIngredient(data, workspaceId) {
+      return data.keys().hasAll([
+          'workspaceId', 'memberUids', 'name', 'nameVi', 'unit',
+          'stockQty', 'reorderLevel', 'unitCostKhr', 'supplier',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'workspaceId', 'memberUids', 'name', 'nameVi', 'unit',
+          'stockQty', 'reorderLevel', 'unitCostKhr', 'supplier',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.workspaceId == workspaceId
+        && isValidMemberUids(data.memberUids)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.nameVi is string && data.nameVi.size() <= 100
+        && isValidUnit(data.unit)
+        && data.stockQty is number && data.stockQty >= -1000000 && data.stockQty <= 100000000
+        && data.reorderLevel is number && data.reorderLevel >= 0 && data.reorderLevel <= 100000000
+        && data.unitCostKhr is number && data.unitCostKhr >= 0 && data.unitCostKhr <= 100000000
+        && data.supplier is string && data.supplier.size() <= 100
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSale(data, workspaceId) {
+      return data.keys().hasAll([
+          'workspaceId', 'memberUids', 'orderNumber', 'saleDate', 'items',
+          'totalKhr', 'cogsKhr', 'paymentMethod', 'customerName', 'note',
+          'recordedBy', 'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'workspaceId', 'memberUids', 'orderNumber', 'saleDate', 'items',
+          'totalKhr', 'cogsKhr', 'paymentMethod', 'customerName', 'note',
+          'recordedBy', 'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.workspaceId == workspaceId
+        && isValidMemberUids(data.memberUids)
+        && data.orderNumber is string && data.orderNumber.size() >= 1 && data.orderNumber.size() <= 32
+        && isValidDateStr(data.saleDate)
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 30 && data.items[0] is map
+        && data.totalKhr is number && data.totalKhr >= 0 && data.totalKhr <= 1000000000
+        && data.cogsKhr is number && data.cogsKhr >= 0 && data.cogsKhr <= 1000000000
+        && isValidPaymentMethod(data.paymentMethod)
+        && data.customerName is string && data.customerName.size() <= 80
+        && data.note is string && data.note.size() <= 200
+        && data.recordedBy is string && data.recordedBy.size() >= 1 && data.recordedBy.size() <= 80
+        && data.status is string && data.status in ['completed', 'voided']
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidExpense(data, workspaceId) {
+      return data.keys().hasAll([
+          'workspaceId', 'memberUids', 'expenseDate', 'title', 'category',
+          'scope', 'amountKhr', 'paymentMethod', 'vendor', 'note',
+          'linkedIngredientId', 'recordedBy', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'workspaceId', 'memberUids', 'expenseDate', 'title', 'category',
+          'scope', 'amountKhr', 'paymentMethod', 'vendor', 'note',
+          'linkedIngredientId', 'recordedBy', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.workspaceId == workspaceId
+        && isValidMemberUids(data.memberUids)
+        && isValidDateStr(data.expenseDate)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.category is string && data.category in [
+          'ingredients', 'packaging', 'utilities', 'rent',
+          'equipment', 'transport', 'household', 'travel', 'other'
+        ]
+        && data.scope is string && data.scope in ['business', 'household']
+        && data.amountKhr is number && data.amountKhr >= 0 && data.amountKhr <= 1000000000
+        && isValidPaymentMethod(data.paymentMethod)
+        && data.vendor is string && data.vendor.size() <= 100
+        && data.note is string && data.note.size() <= 200
+        && data.linkedIngredientId is string && data.linkedIngredientId.size() <= 128
+        && data.recordedBy is string && data.recordedBy.size() >= 1 && data.recordedBy.size() <= 80
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStockMovement(data, workspaceId) {
+      return data.keys().hasAll([
+          'workspaceId', 'memberUids', 'ingredientId', 'ingredientName',
+          'movementType', 'deltaQty', 'unit', 'totalCostKhr', 'referenceId',
+          'movementDate', 'note', 'recordedBy', 'createdBy', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'workspaceId', 'memberUids', 'ingredientId', 'ingredientName',
+          'movementType', 'deltaQty', 'unit', 'totalCostKhr', 'referenceId',
+          'movementDate', 'note', 'recordedBy', 'createdBy', 'createdAt'
+        ])
+        && data.workspaceId == workspaceId
+        && isValidMemberUids(data.memberUids)
+        && isValidId(data.ingredientId)
+        && data.ingredientName is string && data.ingredientName.size() >= 1 && data.ingredientName.size() <= 100
+        && data.movementType is string && data.movementType in ['purchase', 'sale_consumption', 'void_restore', 'adjustment']
+        && data.deltaQty is number && data.deltaQty >= -10000000 && data.deltaQty <= 10000000
+        && isValidUnit(data.unit)
+        && data.totalCostKhr is number && data.totalCostKhr >= 0 && data.totalCostKhr <= 1000000000
+        && data.referenceId is string && data.referenceId.size() <= 128
+        && isValidDateStr(data.movementDate)
+        && data.note is string && data.note.size() <= 200
+        && data.recordedBy is string && data.recordedBy.size() >= 1 && data.recordedBy.size() <= 80
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    // 1. User Profile (PII isolated to owner)
+    match /users/{userId} {
+      allow get: if isVerified() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if isVerified()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserProfile(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'workspaceId', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // 2. Workspace Invite Codes (lookup only by exact code, no listing)
+    match /workspaceInvites/{inviteCode} {
+      allow get: if isVerified() && isValidInviteCode(inviteCode);
+      allow list: if false;
+      allow create: if isVerified()
+        && isValidInviteCode(inviteCode)
+        && isValidWorkspaceInvite(incoming())
+        && incoming().inviteCode == inviteCode
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/workspaces/$(incoming().workspaceId));
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // 3. Family Workspaces
+    match /workspaces/{workspaceId} {
+      allow get: if isVerified()
+        && isValidId(workspaceId)
+        && (request.auth.uid in existing().memberUids || isWorkspaceMember(workspaceId));
+      allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
+      allow create: if isVerified()
+        && isValidId(workspaceId)
+        && isValidWorkspace(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid));
+      allow update: if isVerified()
+        && isValidId(workspaceId)
+        && isValidWorkspace(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            isWorkspaceMember(workspaceId)
+            && incoming().inviteCode == existing().inviteCode
+            && incoming().memberUids == existing().memberUids
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'location', 'usdRate', 'language', 'familyMembers', 'lowStockDefault', 'updatedAt'
+            ])
+          ) ||
+          (
+            isWorkspaceMember(workspaceId)
+            && incoming().inviteCode == existing().inviteCode
+            && incoming().memberUids.hasAll(existing().memberUids)
+            && incoming().memberUids.size() <= existing().memberUids.size() + 1
+            && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'familyMembers', 'updatedAt'])
+          )
+        );
+      allow delete: if false;
+
+      // 4. Workspace Members (Master Gate)
+      match /members/{memberUid} {
+        allow get: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(memberUid)
+          && (request.auth.uid == memberUid || isWorkspaceMember(workspaceId));
+        allow list: if false;
+        allow create: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(memberUid)
+          && request.auth.uid == memberUid
+          && isValidWorkspaceMember(incoming())
+          && incoming().joinedAt == request.time
+          && (
+            (
+              existsAfter(/databases/$(database)/documents/workspaces/$(workspaceId))
+              && getAfter(/databases/$(database)/documents/workspaces/$(workspaceId)).data.inviteCode == incoming().inviteCode
+            ) ||
+            (
+              exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+              && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.inviteCode == incoming().inviteCode
+            )
+          );
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      // 5. Beverage Products
+      match /products/{productId} {
+        allow get: if isVerified() && isValidId(workspaceId) && isValidId(productId) && isWorkspaceMember(workspaceId);
+        allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
+        allow create: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(productId)
+          && isValidProduct(incoming(), workspaceId)
+          && incoming().createdBy == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId);
+        allow update: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(productId)
+          && isValidProduct(incoming(), workspaceId)
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().createdBy == existing().createdBy
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId)
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'nameVi', 'category', 'priceKhr', 'imageUrl', 'active', 'recipe', 'updatedAt'
+            ]) ||
+            (
+              incoming().memberUids.hasAll(existing().memberUids)
+              && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+            )
+          );
+        allow delete: if isVerified() && isValidId(workspaceId) && isValidId(productId) && isWorkspaceMember(workspaceId);
+      }
+
+      // 6. Ingredients & Inventory
+      match /ingredients/{ingredientId} {
+        allow get: if isVerified() && isValidId(workspaceId) && isValidId(ingredientId) && isWorkspaceMember(workspaceId);
+        allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
+        allow create: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(ingredientId)
+          && isValidIngredient(incoming(), workspaceId)
+          && incoming().createdBy == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId);
+        allow update: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(ingredientId)
+          && isValidIngredient(incoming(), workspaceId)
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().createdBy == existing().createdBy
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId)
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'nameVi', 'unit', 'stockQty', 'reorderLevel', 'unitCostKhr', 'supplier', 'updatedAt'
+            ]) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'unitCostKhr', 'updatedAt']) ||
+            (
+              incoming().memberUids.hasAll(existing().memberUids)
+              && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+            )
+          );
+        allow delete: if isVerified() && isValidId(workspaceId) && isValidId(ingredientId) && isWorkspaceMember(workspaceId);
+      }
+
+      // 7. Sales & Orders (with Terminal State Locking on voided)
+      match /sales/{saleId} {
+        allow get: if isVerified() && isValidId(workspaceId) && isValidId(saleId) && isWorkspaceMember(workspaceId);
+        allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
+        allow create: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(saleId)
+          && isValidSale(incoming(), workspaceId)
+          && incoming().status == 'completed'
+          && incoming().createdBy == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId);
+        allow update: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(saleId)
+          && isValidSale(incoming(), workspaceId)
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().orderNumber == existing().orderNumber
+          && incoming().createdBy == existing().createdBy
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId)
+          && (
+            (
+              existing().status == 'completed'
+              && incoming().status == 'voided'
+              && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            ) ||
+            (
+              incoming().status == existing().status
+              && incoming().memberUids.hasAll(existing().memberUids)
+              && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+            )
+          );
+        allow delete: if false;
+      }
+
+      // 8. Operational & Household Expenses
+      match /expenses/{expenseId} {
+        allow get: if isVerified() && isValidId(workspaceId) && isValidId(expenseId) && isWorkspaceMember(workspaceId);
+        allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
+        allow create: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(expenseId)
+          && isValidExpense(incoming(), workspaceId)
+          && incoming().createdBy == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId);
+        allow update: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(expenseId)
+          && isValidExpense(incoming(), workspaceId)
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().createdBy == existing().createdBy
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId)
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'expenseDate', 'title', 'category', 'scope', 'amountKhr',
+              'paymentMethod', 'vendor', 'note', 'recordedBy', 'updatedAt'
+            ]) ||
+            (
+              incoming().memberUids.hasAll(existing().memberUids)
+              && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+            )
+          );
+        allow delete: if isVerified() && isValidId(workspaceId) && isValidId(expenseId) && isWorkspaceMember(workspaceId);
+      }
+
+      // 9. Stock Movements (Immutable Audit Log)
+      match /stockMovements/{movementId} {
+        allow get: if isVerified() && isValidId(workspaceId) && isValidId(movementId) && isWorkspaceMember(workspaceId);
+        allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
+        allow create: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(movementId)
+          && isValidStockMovement(incoming(), workspaceId)
+          && incoming().createdBy == request.auth.uid
+          && incoming().createdAt == request.time
+          && isWorkspaceMember(workspaceId);
+        allow update: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(movementId)
+          && isValidStockMovement(incoming(), workspaceId)
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().createdBy == existing().createdBy
+          && incoming().createdAt == existing().createdAt
+          && isWorkspaceMember(workspaceId)
+          && incoming().memberUids.hasAll(existing().memberUids)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids']);
+        allow delete: if false;
+      }
+    }
+  }
+}

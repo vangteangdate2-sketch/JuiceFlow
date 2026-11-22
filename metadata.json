@@ -1,0 +1,8 @@
+{
+  "name": "JuiceFlow",
+  "description": "Family-owned beverage business management system for sales, recipes, ingredient inventory, operational & household expenses, and KHR profit & loss reporting with offline and biometric support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
