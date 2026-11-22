@@ -7,7 +7,6 @@ import {
   Fingerprint,
   Globe,
   Lock,
-  LogIn,
   LogOut,
   Plus,
   RotateCcw,
@@ -25,6 +24,7 @@ import {
   isBiometricSupported,
 } from '../lib/biometric';
 import { PWAInstallButton } from '../components/PWAInstallButton';
+import { GoogleSignInButton } from '../components/GoogleSignInButton';
 
 interface SettingsViewProps {
   security: BiometricSecurityConfig;
@@ -442,14 +442,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {!user ? (
           <div className="space-y-3">
-            <button
-              type="button"
+            <GoogleSignInButton
               onClick={handleGoogleSignIn}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors"
-            >
-              <LogIn className="w-4 h-4" />
-              {t.settings.signInGoogle}
-            </button>
+              label={t.settings.signInGoogle}
+            />
             {authError && <p className="text-xs text-red-700">{authError}</p>}
           </div>
         ) : (

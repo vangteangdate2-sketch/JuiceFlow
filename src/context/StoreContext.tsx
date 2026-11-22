@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import {
   collection,
   deleteDoc,
@@ -14,7 +14,14 @@ import {
   writeBatch,
   type Timestamp,
 } from 'firebase/firestore';
-import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
+import {
+  auth,
+  db,
+  handleFirestoreError,
+  OperationType,
+  signInWithGoogleWorkspace,
+  signOutWorkspace,
+} from '../lib/firebase';
 import { getTranslations } from '../i18n/translations';
 import type {
   AppLanguage,
@@ -313,7 +320,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             nameVi: sanitizeString(prod.nameVi, 100),
             category: prod.category,
             priceKhr: clampNumber(prod.priceKhr, 0, 100000000),
-            imageUrl: sanitizeString(prod.imageUrl, 300),
+            imageUrl: sanitizeString(prod.imageUrl, 200000),
             active: Boolean(prod.active),
             recipe: prod.recipe.slice(0, 20),
             createdBy: user.uid,
@@ -682,7 +689,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         nameVi: sanitizeString(input.nameVi || input.name, 100),
         category: input.category,
         priceKhr: clampNumber(input.priceKhr, 0, 100000000),
-        imageUrl: sanitizeString(input.imageUrl, 300),
+        imageUrl: sanitizeString(input.imageUrl, 200000),
         active: Boolean(input.active),
         recipe: input.recipe
           .filter((r) => r.ingredientId && r.quantity > 0)
@@ -1326,11 +1333,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 
   const signInWithGoogle = useCallback(async () => {
-    await signInWithPopup(auth, googleProvider);
+    await signInWithGoogleWorkspace();
   }, []);
 
   const signOutGoogle = useCallback(async () => {
-    await signOut(auth);
+    await signOutWorkspace();
   }, []);
 
   const joinWorkspaceByCode = useCallback(

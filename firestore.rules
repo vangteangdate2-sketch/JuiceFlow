@@ -136,7 +136,7 @@ service cloud.firestore {
         && data.nameVi is string && data.nameVi.size() <= 100
         && data.category is string && data.category in ['juice', 'smoothie', 'tea', 'coffee', 'specialty']
         && data.priceKhr is number && data.priceKhr >= 0 && data.priceKhr <= 100000000
-        && data.imageUrl is string && data.imageUrl.size() <= 300
+        && data.imageUrl is string && data.imageUrl.size() <= 200000
         && data.active is bool
         && data.recipe is list && data.recipe.size() <= 20
         && (data.recipe.size() == 0 || data.recipe[0] is map)

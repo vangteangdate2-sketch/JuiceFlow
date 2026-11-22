@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { Edit2, Plus, Trash2, X } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Edit2, HardDrive, ImagePlus, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import type { Product, ProductCategory, RecipeItem } from '../types';
 import { calculateProductCogs, formatKhr, formatQty } from '../utils/format';
+import { compressImageBlobToDataUrl } from '../utils/image';
 import { DRINK_IMAGE_PRESETS } from '../utils/seedData';
 import { ProductPhoto } from '../components/ProductPhoto';
+import { GoogleDrivePickerModal } from '../components/GoogleDrivePickerModal';
 
 export const ProductsView: React.FC = () => {
   const { settings, products, ingredients, saveProduct, deleteProduct, t } = useStore();
@@ -20,6 +22,10 @@ export const ProductsView: React.FC = () => {
   const [active, setActive] = useState(true);
   const [recipe, setRecipe] = useState<RecipeItem[]>([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   const openNew = () => {
     setEditingId(null);
@@ -29,6 +35,7 @@ export const ProductsView: React.FC = () => {
     setPriceKhr('8000');
     setImageUrl(DRINK_IMAGE_PRESETS[0].url);
     setActive(true);
+    setPhotoError('');
     setRecipe(
       ingredients.length > 0 ? [{ ingredientId: ingredients[0].id, quantity: 1 }] : []
     );
@@ -43,8 +50,25 @@ export const ProductsView: React.FC = () => {
     setPriceKhr(String(product.priceKhr));
     setImageUrl(product.imageUrl || DRINK_IMAGE_PRESETS[0].url);
     setActive(product.active);
+    setPhotoError('');
     setRecipe(product.recipe.map((r) => ({ ...r })));
     setModalOpen(true);
+  };
+
+  const handleLocalPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPhotoError('');
+    setUploadingPhoto(true);
+    try {
+      const compressedDataUrl = await compressImageBlobToDataUrl(file);
+      setImageUrl(compressedDataUrl);
+    } catch {
+      setPhotoError(t.products.photoError);
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -333,25 +357,85 @@ export const ProductsView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Studio Photo Picker */}
-              <div>
-                <label className="block text-xs font-medium text-stone-700 mb-2">
+              {/* Beverage Photo Picker (Device Photos, Google Drive & Studio Presets) */}
+              <div className="space-y-3">
+                <label className="block text-xs font-medium text-stone-700">
                   {t.products.imagePreset}
                 </label>
-                <div className="grid grid-cols-5 gap-2">
-                  {DRINK_IMAGE_PRESETS.map((preset) => (
-                    <button
-                      key={preset.url}
-                      type="button"
-                      onClick={() => setImageUrl(preset.url)}
-                      className={`rounded-lg overflow-hidden border-2 transition-colors ${
-                        imageUrl === preset.url ? 'border-[#0F5C43]' : 'border-transparent'
-                      }`}
-                      title={isVi ? preset.labelVi : preset.label}
-                    >
-                      <ProductPhoto src={preset.url} alt={preset.label} className="w-full h-14" />
-                    </button>
-                  ))}
+
+                <div className="flex flex-col sm:flex-row items-start gap-4">
+                  <div className="w-full sm:w-40 h-28 rounded-lg overflow-hidden border border-stone-200 shrink-0 relative bg-stone-100">
+                    <ProductPhoto
+                      src={imageUrl}
+                      alt={name || t.products.imagePreset}
+                      className="w-full h-full"
+                    />
+                    {uploadingPhoto && (
+                      <div className="absolute inset-0 bg-black/45 flex items-center justify-center text-white text-xs gap-1.5">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 w-full space-y-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={uploadingPhoto}
+                        onClick={() => photoInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                      >
+                        <ImagePlus className="w-3.5 h-3.5 text-[#0F5C43]" />
+                        {uploadingPhoto ? t.products.processingPhoto : t.products.uploadFromPhotos}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={uploadingPhoto}
+                        onClick={() => setDrivePickerOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                      >
+                        <HardDrive className="w-3.5 h-3.5 text-[#0F5C43]" />
+                        {t.products.pickFromDrive}
+                      </button>
+
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLocalPhotoSelect}
+                        className="hidden"
+                      />
+                    </div>
+
+                    {photoError && (
+                      <p className="text-xs text-red-700 font-medium">{photoError}</p>
+                    )}
+
+                    <div>
+                      <p className="text-[11px] text-stone-500 mb-1.5">
+                        {t.products.studioPresetsLabel}
+                      </p>
+                      <div className="grid grid-cols-5 gap-2">
+                        {DRINK_IMAGE_PRESETS.map((preset) => (
+                          <button
+                            key={preset.url}
+                            type="button"
+                            onClick={() => {
+                              setPhotoError('');
+                              setImageUrl(preset.url);
+                            }}
+                            className={`rounded-lg overflow-hidden border-2 transition-colors ${
+                              imageUrl === preset.url ? 'border-[#0F5C43]' : 'border-transparent'
+                            }`}
+                            title={isVi ? preset.labelVi : preset.label}
+                          >
+                            <ProductPhoto src={preset.url} alt={preset.label} className="w-full h-12" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -441,6 +525,15 @@ export const ProductsView: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Google Drive Photo Browser Modal */}
+      <GoogleDrivePickerModal
+        open={drivePickerOpen}
+        onClose={() => setDrivePickerOpen(false)}
+        onSelectPhoto={(dataUrl) => {
+          setPhotoError('');
+          setImageUrl(dataUrl);
+        }}
+      />
     </div>
   );
 };

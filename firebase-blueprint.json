@@ -197,7 +197,7 @@
         },
         "imageUrl": {
           "type": "string",
-          "maxLength": 300
+          "maxLength": 200000
         },
         "active": {
           "type": "boolean"
