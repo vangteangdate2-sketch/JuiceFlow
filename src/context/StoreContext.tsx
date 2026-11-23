@@ -171,6 +171,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [memberUids, setMemberUids] = useState<string[]>([]);
   const [syncing, setSyncing] = useState(false);
 
+  // Prevents auto-creating a personal workspace while a pre-login "Join with Code" flow is in progress
+  const pendingDirectJoinRef = useRef(false);
+
   const latestRef = useRef({
     settings,
     ingredients,
@@ -224,6 +227,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Provision or load Cloud Family Workspace when authenticated
   useEffect(() => {
     if (!authReady || !user || !user.emailVerified) return;
+    if (pendingDirectJoinRef.current) return;
     let cancelled = false;
 
     const bootstrapWorkspace = async () => {
@@ -1342,61 +1346,126 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const joinWorkspaceByCode = useCallback(
     async (rawCode: string): Promise<{ ok: boolean; error?: string }> => {
-      if (!user) return { ok: false, error: 'Sign in with Google first.' };
       const code = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
       if (code.length < 6 || code.length > 16) {
-        return { ok: false, error: 'Invalid code format.' };
+        return { ok: false, error: 'Invalid code format. Enter the 6–8 character code.' };
       }
 
+      let activeUser = user ?? auth.currentUser;
+      const initiatedBeforeLogin = !activeUser;
+
+      if (!activeUser) {
+        // Hold off auto-provisioning a personal workspace while we authenticate & join directly
+        pendingDirectJoinRef.current = true;
+        try {
+          const result = await signInWithGoogleWorkspace();
+          activeUser = result.user;
+        } catch (err) {
+          pendingDirectJoinRef.current = false;
+          const msg = err instanceof Error ? err.message : '';
+          if (msg.includes('popup-closed-by-user') || msg.includes('cancelled-popup-request')) {
+            return { ok: false, error: 'Sign-in was canceled before connecting to the workspace.' };
+          }
+          return { ok: false, error: 'Unable to authenticate with Google. Please try again.' };
+        }
+      }
+
+      if (!activeUser || !activeUser.emailVerified) {
+        pendingDirectJoinRef.current = false;
+        return { ok: false, error: 'A verified Google account is required to sync.' };
+      }
+
+      setSyncing(true);
       try {
         const inviteSnap = await getDoc(doc(db, 'workspaceInvites', code));
         if (!inviteSnap.exists()) {
-          return { ok: false, error: 'Workspace code not found.' };
+          // If this was a returning user who mistyped a code, reconnect their existing workspace
+          if (initiatedBeforeLogin) {
+            try {
+              const existingProfile = await getDoc(doc(db, 'users', activeUser.uid));
+              if (existingProfile.exists() && typeof existingProfile.data().workspaceId === 'string') {
+                setCloudWorkspaceId(existingProfile.data().workspaceId);
+              }
+            } catch {
+              // Ignore fallback read error
+            }
+          }
+          return { ok: false, error: 'Workspace code not found. Please check the code and try again.' };
         }
+
         const targetWsId = String(inviteSnap.data().workspaceId || '');
-        if (!targetWsId) return { ok: false, error: 'Invalid invite record.' };
+        if (!targetWsId) {
+          return { ok: false, error: 'Invalid invite record.' };
+        }
 
-        const displayName = sanitizeString(user.displayName || user.email?.split('@')[0] || 'Family Member', 100);
+        const displayName = sanitizeString(
+          activeUser.displayName || activeUser.email?.split('@')[0] || 'Family Member',
+          100
+        );
 
-        // Step 1: Join workspace members subcollection (Master Gate)
-        await setDoc(doc(db, 'workspaces', targetWsId, 'members', user.uid), {
-          uid: user.uid,
-          displayName,
-          inviteCode: code,
-          joinedAt: serverTimestamp(),
-        });
+        // Step 1: Join workspace members subcollection (Master Gate) — idempotent if already a member
+        const memberRef = doc(db, 'workspaces', targetWsId, 'members', activeUser.uid);
+        const existingMemberSnap = await getDoc(memberRef);
+        if (!existingMemberSnap.exists()) {
+          await setDoc(memberRef, {
+            uid: activeUser.uid,
+            displayName,
+            inviteCode: code,
+            joinedAt: serverTimestamp(),
+          });
+        }
 
-        // Step 2: Read workspace and append UID to memberUids & familyMembers
+        // Step 2: Read workspace and append UID to memberUids & familyMembers if needed
         const wsSnap = await getDoc(doc(db, 'workspaces', targetWsId));
         if (wsSnap.exists()) {
           const wsData = wsSnap.data();
           const currentUids: string[] = Array.isArray(wsData.memberUids) ? wsData.memberUids : [];
-          const nextUids = currentUids.includes(user.uid)
-            ? currentUids
-            : [...currentUids, user.uid].slice(0, 10);
-          const currentFamily: string[] = Array.isArray(wsData.familyMembers) ? wsData.familyMembers : [];
-          const nextFamily = currentFamily.includes(displayName)
-            ? currentFamily
-            : [...currentFamily, displayName].slice(0, 10);
+          const hasUid = currentUids.includes(activeUser.uid);
+          const nextUids = hasUid ? currentUids : [...currentUids, activeUser.uid].slice(0, 10);
 
-          await updateDoc(doc(db, 'workspaces', targetWsId), {
-            memberUids: nextUids,
-            familyMembers: nextFamily,
+          const currentFamily: string[] = Array.isArray(wsData.familyMembers) ? wsData.familyMembers : [];
+          const hasName = currentFamily.includes(displayName);
+          const nextFamily = hasName ? currentFamily : [...currentFamily, displayName].slice(0, 10);
+
+          if (!hasUid || !hasName) {
+            await updateDoc(doc(db, 'workspaces', targetWsId), {
+              memberUids: nextUids,
+              familyMembers: nextFamily,
+              updatedAt: serverTimestamp(),
+            });
+          }
+        }
+
+        // Step 3: Create or update user profile pointing directly to the joined family workspace
+        const userRef = doc(db, 'users', activeUser.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          await updateDoc(userRef, {
+            displayName,
+            workspaceId: targetWsId,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          await setDoc(userRef, {
+            uid: activeUser.uid,
+            displayName,
+            workspaceId: targetWsId,
+            createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
         }
 
-        // Step 3: Point user profile to the joined family workspace
-        await updateDoc(doc(db, 'users', user.uid), {
-          displayName,
-          workspaceId: targetWsId,
-          updatedAt: serverTimestamp(),
-        });
-
         setCloudWorkspaceId(targetWsId);
+        // Clean ?join=... query parameter from URL after successful connection
+        if (typeof window !== 'undefined' && window.location.search.includes('join=')) {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
         return { ok: true };
       } catch {
         return { ok: false, error: 'Unable to join workspace. Check code and network connection.' };
+      } finally {
+        pendingDirectJoinRef.current = false;
+        setSyncing(false);
       }
     },
     [user]

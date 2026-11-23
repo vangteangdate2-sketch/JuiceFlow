@@ -40,7 +40,12 @@ const NAV_ITEMS: { id: AppTab; icon: React.ComponentType<{ className?: string }>
 const JuiceFlowShell: React.FC = () => {
   const { settings, cloudSynced, syncing, t, setActiveOperator } = useStore();
 
-  const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<AppTab>(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('join')) {
+      return 'settings';
+    }
+    return 'dashboard';
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [security, setSecurity] = useState<BiometricSecurityConfig>(() => loadSecurityConfig());
   const [isLocked, setIsLocked] = useState<boolean>(() => {
@@ -66,6 +71,14 @@ const JuiceFlowShell: React.FC = () => {
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [security.enabled, security.lockOnBackground]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('join')) {
+      window.setTimeout(() => {
+        document.getElementById('cloud-sync')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
+  }, []);
 
   const navigate = (tab: AppTab) => {
     setActiveTab(tab);
@@ -160,13 +173,22 @@ const JuiceFlowShell: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-between gap-2 text-[11px] text-stone-500">
-              <span className="truncate">
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('settings');
+                  window.setTimeout(() => {
+                    document.getElementById('cloud-sync')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 100);
+                }}
+                className="truncate text-left hover:text-[#0F5C43] transition-colors"
+              >
                 {syncing
                   ? t.common.syncing
                   : cloudSynced
                     ? t.common.onlineSynced
                     : t.common.localMode}
-              </span>
+              </button>
               {security.enabled && (
                 <button
                   type="button"

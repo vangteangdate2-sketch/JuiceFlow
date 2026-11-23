@@ -1,8 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import {
+  browserLocalPersistence,
   getAuth,
   GoogleAuthProvider,
   onAuthStateChanged,
+  setPersistence,
   signInWithPopup,
   signOut,
   type User,
@@ -41,6 +43,9 @@ try {
 
 export const db: Firestore = firestoreInstance;
 export const auth = getAuth(app);
+void setPersistence(auth, browserLocalPersistence).catch(() => {
+  // Fallback to default Firebase Auth persistence if browser storage is restricted
+});
 
 export const googleProvider = new GoogleAuthProvider();
 for (const scope of WORKSPACE_SCOPES) {

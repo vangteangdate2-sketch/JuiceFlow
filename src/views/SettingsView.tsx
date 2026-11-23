@@ -6,6 +6,8 @@ import {
   Download,
   Fingerprint,
   Globe,
+  KeyRound,
+  Link2,
   Lock,
   LogOut,
   Plus,
@@ -65,7 +67,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Cloud workspace pairing
   const [copiedCode, setCopiedCode] = useState(false);
-  const [joinCode, setJoinCode] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [joinCode, setJoinCode] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    const param = new URLSearchParams(window.location.search).get('join');
+    return param ? param.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16) : '';
+  });
+  const [hasUrlInvite] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return Boolean(new URLSearchParams(window.location.search).get('join'));
+  });
+  const [joining, setJoining] = useState(false);
   const [joinStatus, setJoinStatus] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [authError, setAuthError] = useState('');
 
@@ -131,13 +143,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleJoinWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!joinCode.trim() || joining) return;
     setJoinStatus(null);
-    const res = await joinWorkspaceByCode(joinCode);
-    if (res.ok) {
-      setJoinStatus({ type: 'ok', text: t.settings.joinSuccess });
-      setJoinCode('');
-    } else {
-      setJoinStatus({ type: 'err', text: res.error || t.settings.joinError });
+    setAuthError('');
+    setJoining(true);
+    try {
+      const res = await joinWorkspaceByCode(joinCode);
+      if (res.ok) {
+        setJoinStatus({ type: 'ok', text: t.settings.joinSuccess });
+        setJoinCode('');
+      } else {
+        setJoinStatus({ type: 'err', text: res.error || t.settings.joinError });
+      }
+    } finally {
+      setJoining(false);
     }
   };
 
@@ -146,6 +165,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       await navigator.clipboard.writeText(settings.inviteCode);
       setCopiedCode(true);
       window.setTimeout(() => setCopiedCode(false), 2000);
+    } catch {
+      // Clipboard fallback ignored
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    try {
+      const url = `${window.location.origin}${window.location.pathname}?join=${encodeURIComponent(settings.inviteCode)}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      window.setTimeout(() => setCopiedLink(false), 2000);
     } catch {
       // Clipboard fallback ignored
     }
@@ -429,7 +459,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </section>
 
       {/* 4. Multi-Device Cloud Sync (Firebase) */}
-      <section className="bg-white border border-stone-200 rounded-xl p-6 space-y-5">
+      <section id="cloud-sync" className="bg-white border border-stone-200 rounded-xl p-6 space-y-5">
         <div className="flex items-start gap-3">
           <Cloud className="w-5 h-5 text-[#0F5C43] mt-0.5 shrink-0" />
           <div>
@@ -441,12 +471,67 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {!user ? (
-          <div className="space-y-3">
-            <GoogleSignInButton
-              onClick={handleGoogleSignIn}
-              label={t.settings.signInGoogle}
-            />
-            {authError && <p className="text-xs text-red-700">{authError}</p>}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-stone-100 md:divide-x md:divide-stone-200">
+            {/* Left: Start / Reconnect with Google */}
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-stone-900">
+                  {t.settings.startWorkspaceTitle}
+                </h3>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  {t.settings.startWorkspaceDesc}
+                </p>
+              </div>
+              <GoogleSignInButton
+                onClick={handleGoogleSignIn}
+                label={t.settings.signInGoogle}
+              />
+              <p className="text-xs text-stone-500 leading-relaxed">
+                {t.settings.staySignedInNote}
+              </p>
+              {authError && <p className="text-xs text-red-700">{authError}</p>}
+            </div>
+
+            {/* Right: Direct Join Another Family Member's Workspace (On Surface Before Login) */}
+            <form onSubmit={handleJoinWorkspace} className="space-y-3 md:pl-6">
+              <div>
+                <h3 className="text-sm font-semibold text-stone-900 inline-flex items-center gap-1.5">
+                  <KeyRound className="w-4 h-4 text-[#0F5C43] shrink-0" />
+                  {t.settings.joinWorkspaceTitle}
+                </h3>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  {hasUrlInvite && joinCode
+                    ? t.settings.inviteDetectedHint
+                    : t.settings.joinBeforeLoginDesc}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  maxLength={16}
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  placeholder={t.settings.joinWorkspacePlaceholder}
+                  className="flex-1 min-w-0 px-3 py-2 text-sm font-mono-num uppercase tracking-wider border border-stone-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                />
+                <button
+                  type="submit"
+                  disabled={joining || !joinCode.trim()}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                >
+                  {joining ? t.settings.joiningWorkspace : t.settings.joinDirectBtn}
+                </button>
+              </div>
+              {joinStatus && (
+                <p
+                  className={`text-xs font-medium ${
+                    joinStatus.type === 'ok' ? 'text-emerald-700' : 'text-red-700'
+                  }`}
+                >
+                  {joinStatus.text}
+                </p>
+              )}
+            </form>
           </div>
         ) : (
           <div className="space-y-5">
@@ -465,7 +550,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <button
                 type="button"
                 onClick={signOutGoogle}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-stone-700 border border-stone-200 hover:bg-stone-50 rounded-lg self-start sm:self-auto"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-stone-700 border border-stone-200 hover:bg-stone-50 rounded-lg self-start sm:self-auto whitespace-nowrap shrink-0"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 {t.settings.signOut}
@@ -477,20 +562,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <p className="text-xs font-medium text-stone-600 mb-1.5">
                   {t.settings.workspaceCode}
                 </p>
-                <div className="flex items-center gap-2">
-                  <code className="font-mono-num text-base font-bold tracking-wider px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900">
-                    {settings.inviteCode}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={handleCopyCode}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 border border-stone-200 hover:bg-stone-50 rounded-lg whitespace-nowrap"
-                  >
-                    {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedCode ? t.settings.copied : t.settings.copyCode}
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-stone-500">{t.settings.syncBackfillNote}</p>
+                {cloudSynced ? (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <code className="font-mono-num text-base font-bold tracking-wider px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900">
+                        {settings.inviteCode}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={handleCopyCode}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 border border-stone-200 hover:bg-stone-50 rounded-lg whitespace-nowrap shrink-0"
+                      >
+                        {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedCode ? t.settings.copied : t.settings.copyCode}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCopyInviteLink}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-[#0F5C43] border border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 rounded-lg whitespace-nowrap shrink-0"
+                      >
+                        {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : <Link2 className="w-3.5 h-3.5" />}
+                        {copiedLink ? t.settings.linkCopied : t.settings.copyInviteLink}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-stone-500">{t.settings.syncBackfillNote}</p>
+                  </>
+                ) : (
+                  <p className="text-xs text-stone-500 py-2">
+                    {syncing ? t.common.syncing : t.settings.joinBeforeLoginDesc}
+                  </p>
+                )}
               </div>
 
               <form onSubmit={handleJoinWorkspace} className="space-y-2">
@@ -504,13 +605,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                     placeholder={t.settings.joinWorkspacePlaceholder}
-                    className="flex-1 px-3 py-2 text-sm font-mono-num uppercase border border-stone-200 rounded-lg"
+                    className="flex-1 min-w-0 px-3 py-2 text-sm font-mono-num uppercase tracking-wider border border-stone-200 rounded-lg"
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 hover:bg-stone-800 rounded-lg whitespace-nowrap shrink-0"
+                    disabled={joining || !joinCode.trim()}
+                    className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 hover:bg-stone-800 disabled:opacity-50 rounded-lg whitespace-nowrap shrink-0"
                   >
-                    {t.settings.joinWorkspaceBtn}
+                    {joining ? t.settings.joiningWorkspace : t.settings.joinWorkspaceBtn}
                   </button>
                 </div>
                 {joinStatus && (
