@@ -15,11 +15,19 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import {
+  applyAuthPersistence,
   auth,
+  checkPendingRedirectResult,
   db,
+  getFirebaseAuthErrorCode,
   handleFirestoreError,
+  isAllowedCloudUser,
+  loadRememberMePreference,
   OperationType,
-  signInWithGoogleWorkspace,
+  PENDING_JOIN_STORAGE_KEY,
+  saveRememberMePreference,
+  signInAnonymouslyForSync,
+  signInWithGoogleForSync,
   signOutWorkspace,
 } from '../lib/firebase';
 import { getTranslations } from '../i18n/translations';
@@ -114,6 +122,13 @@ export interface RecordPurchaseInput {
   purchaseDate?: string;
 }
 
+export interface CloudAuthResult {
+  ok: boolean;
+  errorCode?: string;
+  error?: string;
+  redirected?: boolean;
+}
+
 export interface StoreContextValue {
   settings: WorkspaceSettings;
   ingredients: Ingredient[];
@@ -125,6 +140,8 @@ export interface StoreContextValue {
   authReady: boolean;
   cloudSynced: boolean;
   syncing: boolean;
+  rememberMe: boolean;
+  setRememberMe: (value: boolean) => void;
   t: ReturnType<typeof getTranslations>;
   setLanguage: (lang: AppLanguage) => void;
   setActiveOperator: (name: string) => void;
@@ -145,9 +162,10 @@ export interface StoreContextValue {
     }
   ) => Promise<void>;
   deleteExpense: (expenseId: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  startQuickCloudSync: () => Promise<CloudAuthResult>;
+  signInWithGoogle: () => Promise<CloudAuthResult>;
   signOutGoogle: () => Promise<void>;
-  joinWorkspaceByCode: (code: string) => Promise<{ ok: boolean; error?: string }>;
+  joinWorkspaceByCode: (code: string) => Promise<CloudAuthResult>;
   exportJsonBackup: () => string;
   importJsonBackup: (jsonText: string) => { ok: boolean; error?: string };
   resetDemoData: () => void;
@@ -170,6 +188,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [cloudWorkspaceId, setCloudWorkspaceId] = useState<string | null>(null);
   const [memberUids, setMemberUids] = useState<string[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [rememberMe, setRememberMeState] = useState<boolean>(() => loadRememberMePreference());
+
+  const setRememberMe = useCallback((value: boolean) => {
+    setRememberMeState(value);
+    saveRememberMePreference(value);
+    void applyAuthPersistence(value);
+  }, []);
 
   // Prevents auto-creating a personal workspace while a pre-login "Join with Code" flow is in progress
   const pendingDirectJoinRef = useRef(false);
@@ -211,8 +236,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [settings, ingredients, products, sales, expenses, stockMovements]);
 
-  // Listen to Firebase Auth state
+  // Listen to Firebase Auth state & resolve any pending redirect sign-in
   useEffect(() => {
+    void checkPendingRedirectResult();
     const unsub = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setAuthReady(true);
@@ -226,8 +252,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Provision or load Cloud Family Workspace when authenticated
   useEffect(() => {
-    if (!authReady || !user || !user.emailVerified) return;
+    if (!authReady || !isAllowedCloudUser(user) || !user) return;
     if (pendingDirectJoinRef.current) return;
+    try {
+      if (sessionStorage.getItem(PENDING_JOIN_STORAGE_KEY)) return;
+    } catch {
+      // Ignore sessionStorage read errors
+    }
     let cancelled = false;
 
     const bootstrapWorkspace = async () => {
@@ -249,8 +280,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // First-time sign-in: create shared family workspace and upload local records atomically
         const wsId = generateId('ws');
         const inviteCode = generateInviteCode();
-        const displayName = sanitizeString(user.displayName || user.email?.split('@')[0] || 'Family Member', 100);
         const cur = latestRef.current;
+        const displayName = sanitizeString(
+          user.displayName || user.email?.split('@')[0] || cur.settings.activeOperator || 'Family Member',
+          100
+        );
         const familyList = cur.settings.familyMembers.includes(displayName)
           ? cur.settings.familyMembers.slice(0, 10)
           : [displayName, ...cur.settings.familyMembers].slice(0, 10);
@@ -1336,19 +1370,67 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [user, cloudWorkspaceId]
   );
 
-  const signInWithGoogle = useCallback(async () => {
-    await signInWithGoogleWorkspace();
-  }, []);
+  const startQuickCloudSync = useCallback(async (): Promise<CloudAuthResult> => {
+    try {
+      await signInAnonymouslyForSync(rememberMe);
+      return { ok: true };
+    } catch (err) {
+      const code = getFirebaseAuthErrorCode(err);
+      if (code === 'auth/admin-restricted-operation' || code === 'auth/operation-not-allowed') {
+        return {
+          ok: false,
+          errorCode: 'auth/operation-not-allowed',
+          error: 'Quick code-only sync needs the Anonymous toggle enabled once in Firebase Console.',
+        };
+      }
+      return {
+        ok: false,
+        errorCode: code || 'auth/unknown',
+        error: err instanceof Error ? err.message : 'Unable to start cloud sync.',
+      };
+    }
+  }, [rememberMe]);
+
+  const signInWithGoogle = useCallback(async (): Promise<CloudAuthResult> => {
+    try {
+      const signedIn = await signInWithGoogleForSync(rememberMe);
+      if (!signedIn) {
+        return { ok: true, redirected: true };
+      }
+      return { ok: true };
+    } catch (err) {
+      const code = getFirebaseAuthErrorCode(err);
+      if (code === 'auth/unauthorized-domain') {
+        return {
+          ok: false,
+          errorCode: 'auth/unauthorized-domain',
+          error: 'This site domain is not yet authorized in Firebase Authentication.',
+        };
+      }
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        return {
+          ok: false,
+          errorCode: code,
+          error: 'Google sign-in popup was closed before finishing.',
+        };
+      }
+      return {
+        ok: false,
+        errorCode: code || 'auth/unknown',
+        error: err instanceof Error ? err.message : 'Google sign-in failed.',
+      };
+    }
+  }, [rememberMe]);
 
   const signOutGoogle = useCallback(async () => {
     await signOutWorkspace();
   }, []);
 
   const joinWorkspaceByCode = useCallback(
-    async (rawCode: string): Promise<{ ok: boolean; error?: string }> => {
+    async (rawCode: string): Promise<CloudAuthResult> => {
       const code = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
       if (code.length < 6 || code.length > 16) {
-        return { ok: false, error: 'Invalid code format. Enter the 6–8 character code.' };
+        return { ok: false, error: 'Invalid code format. Enter the 6–10 character code.' };
       }
 
       let activeUser = user ?? auth.currentUser;
@@ -1358,21 +1440,55 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Hold off auto-provisioning a personal workspace while we authenticate & join directly
         pendingDirectJoinRef.current = true;
         try {
-          const result = await signInWithGoogleWorkspace();
-          activeUser = result.user;
-        } catch (err) {
-          pendingDirectJoinRef.current = false;
-          const msg = err instanceof Error ? err.message : '';
-          if (msg.includes('popup-closed-by-user') || msg.includes('cancelled-popup-request')) {
-            return { ok: false, error: 'Sign-in was canceled before connecting to the workspace.' };
+          // Prefer Anonymous Auth first: zero Google popup, works on Render/Netlify/Vercel/mobile PWAs immediately!
+          activeUser = await signInAnonymouslyForSync(rememberMe);
+        } catch (anonErr) {
+          const anonCode = getFirebaseAuthErrorCode(anonErr);
+          if (anonCode === 'auth/admin-restricted-operation' || anonCode === 'auth/operation-not-allowed') {
+            // Anonymous Auth is not toggled on yet in Firebase Console — seamlessly fall back to Google Sign-In
+            try {
+              const googleUser = await signInWithGoogleForSync(rememberMe, code);
+              if (!googleUser) {
+                return { ok: true, redirected: true };
+              }
+              activeUser = googleUser;
+            } catch (googleErr) {
+              pendingDirectJoinRef.current = false;
+              const googleCode = getFirebaseAuthErrorCode(googleErr);
+              if (googleCode === 'auth/unauthorized-domain') {
+                return {
+                  ok: false,
+                  errorCode: 'auth/unauthorized-domain',
+                  error: 'This external domain needs one quick Firebase setup step (enable Anonymous Sign-In or add this domain).',
+                };
+              }
+              if (googleCode === 'auth/popup-closed-by-user' || googleCode === 'auth/cancelled-popup-request') {
+                return {
+                  ok: false,
+                  errorCode: googleCode,
+                  error: 'Sign-in was canceled before connecting to the workspace.',
+                };
+              }
+              return {
+                ok: false,
+                errorCode: googleCode || 'auth/unknown',
+                error: 'Unable to authenticate. Please try again.',
+              };
+            }
+          } else {
+            pendingDirectJoinRef.current = false;
+            return {
+              ok: false,
+              errorCode: anonCode || 'auth/unknown',
+              error: anonErr instanceof Error ? anonErr.message : 'Unable to connect to cloud sync.',
+            };
           }
-          return { ok: false, error: 'Unable to authenticate with Google. Please try again.' };
         }
       }
 
-      if (!activeUser || !activeUser.emailVerified) {
+      if (!isAllowedCloudUser(activeUser) || !activeUser) {
         pendingDirectJoinRef.current = false;
-        return { ok: false, error: 'A verified Google account is required to sync.' };
+        return { ok: false, error: 'An active cloud session is required to sync.' };
       }
 
       setSyncing(true);
@@ -1399,7 +1515,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
 
         const displayName = sanitizeString(
-          activeUser.displayName || activeUser.email?.split('@')[0] || 'Family Member',
+          activeUser.displayName ||
+            activeUser.email?.split('@')[0] ||
+            latestRef.current.settings.activeOperator ||
+            'Family Member',
           100
         );
 
@@ -1468,8 +1587,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setSyncing(false);
       }
     },
-    [user]
+    [user, rememberMe]
   );
+
+  // Automatically complete any pending join code after a mobile/Render redirect sign-in
+  useEffect(() => {
+    if (!authReady || !isAllowedCloudUser(user) || !user) return;
+    let pendingCode: string | null = null;
+    try {
+      pendingCode = sessionStorage.getItem(PENDING_JOIN_STORAGE_KEY);
+      if (pendingCode) {
+        sessionStorage.removeItem(PENDING_JOIN_STORAGE_KEY);
+      }
+    } catch {
+      pendingCode = null;
+    }
+    if (pendingCode) {
+      void joinWorkspaceByCode(pendingCode);
+    }
+  }, [authReady, user, joinWorkspaceByCode]);
 
   const exportJsonBackup = useCallback((): string => {
     const payload = {
@@ -1525,6 +1661,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     authReady,
     cloudSynced: Boolean(user && cloudWorkspaceId),
     syncing,
+    rememberMe,
+    setRememberMe,
     t,
     setLanguage,
     setActiveOperator,
@@ -1539,6 +1677,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     voidSale,
     saveExpense,
     deleteExpense,
+    startQuickCloudSync,
     signInWithGoogle,
     signOutGoogle,
     joinWorkspaceByCode,

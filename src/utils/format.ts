@@ -47,7 +47,7 @@ export function generateId(prefix: string): string {
 export function generateInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = 'JF';
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;

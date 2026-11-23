@@ -1,11 +1,15 @@
 import { initializeApp } from 'firebase/app';
 import {
   browserLocalPersistence,
+  browserSessionPersistence,
   getAuth,
+  getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
   setPersistence,
+  signInAnonymously,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   type User,
 } from 'firebase/auth';
@@ -20,9 +24,32 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
+export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
+
 export const WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/drive.readonly',
 ];
+
+export const REMEMBER_ME_STORAGE_KEY = 'juiceflow_remember_me';
+export const PENDING_JOIN_STORAGE_KEY = 'juiceflow_pending_join_code';
+
+export function loadRememberMePreference(): boolean {
+  try {
+    const saved = localStorage.getItem(REMEMBER_ME_STORAGE_KEY);
+    if (saved === '0') return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export function saveRememberMePreference(rememberMe: boolean): void {
+  try {
+    localStorage.setItem(REMEMBER_ME_STORAGE_KEY, rememberMe ? '1' : '0');
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 const app = initializeApp(firebaseConfig);
 const databaseId = (firebaseConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId;
@@ -43,13 +70,23 @@ try {
 
 export const db: Firestore = firestoreInstance;
 export const auth = getAuth(app);
-void setPersistence(auth, browserLocalPersistence).catch(() => {
+
+// Apply initial Remember Me persistence preference on startup
+void setPersistence(
+  auth,
+  loadRememberMePreference() ? browserLocalPersistence : browserSessionPersistence
+).catch(() => {
   // Fallback to default Firebase Auth persistence if browser storage is restricted
 });
 
-export const googleProvider = new GoogleAuthProvider();
+// Clean Google provider for Firestore Cloud Sync (no extra Workspace scopes)
+export const cloudSyncGoogleProvider = new GoogleAuthProvider();
+cloudSyncGoogleProvider.setCustomParameters({ prompt: 'select_account' });
+
+// Dedicated Google provider with Drive read-only scope ONLY for Google Drive photo picker
+export const driveGoogleProvider = new GoogleAuthProvider();
 for (const scope of WORKSPACE_SCOPES) {
-  googleProvider.addScope(scope);
+  driveGoogleProvider.addScope(scope);
 }
 
 // In-memory access token cache ONLY (never persisted to localStorage or sessionStorage)
@@ -62,13 +99,83 @@ onAuthStateChanged(auth, (user: User | null) => {
   }
 });
 
+export function isAllowedCloudUser(user: User | null): boolean {
+  return Boolean(user && (user.emailVerified || user.isAnonymous));
+}
+
+export function getFirebaseAuthErrorCode(err: unknown): string {
+  if (err && typeof err === 'object' && 'code' in err && typeof (err as { code: unknown }).code === 'string') {
+    return (err as { code: string }).code;
+  }
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  const match = message.match(/auth\/[a-z0-9-]+/i);
+  return match ? match[0].toLowerCase() : '';
+}
+
+export async function applyAuthPersistence(rememberMe: boolean): Promise<void> {
+  saveRememberMePreference(rememberMe);
+  try {
+    await setPersistence(
+      auth,
+      rememberMe ? browserLocalPersistence : browserSessionPersistence
+    );
+  } catch {
+    // Ignore restricted storage fallback
+  }
+}
+
+export async function signInAnonymouslyForSync(rememberMe: boolean): Promise<User> {
+  await applyAuthPersistence(rememberMe);
+  const result = await signInAnonymously(auth);
+  return result.user;
+}
+
+export async function signInWithGoogleForSync(
+  rememberMe: boolean,
+  pendingJoinCode?: string
+): Promise<User | null> {
+  await applyAuthPersistence(rememberMe);
+  try {
+    const result = await signInWithPopup(auth, cloudSyncGoogleProvider);
+    return result.user;
+  } catch (err) {
+    const code = getFirebaseAuthErrorCode(err);
+    // Automatic redirect fallback when mobile/PWA/static host blocks popups
+    if (
+      code === 'auth/popup-blocked' ||
+      code === 'auth/operation-not-supported-in-this-environment'
+    ) {
+      if (pendingJoinCode) {
+        try {
+          sessionStorage.setItem(PENDING_JOIN_STORAGE_KEY, pendingJoinCode);
+        } catch {
+          // Ignore sessionStorage errors
+        }
+      }
+      await signInWithRedirect(auth, cloudSyncGoogleProvider);
+      return null;
+    }
+    throw err;
+  }
+}
+
+export async function checkPendingRedirectResult(): Promise<User | null> {
+  try {
+    const result = await getRedirectResult(auth);
+    return result?.user ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function signInWithGoogleWorkspace(): Promise<{
   user: User;
   accessToken: string | null;
 }> {
   isSigningIn = true;
   try {
-    const result = await signInWithPopup(auth, googleProvider);
+    await applyAuthPersistence(loadRememberMePreference());
+    const result = await signInWithPopup(auth, driveGoogleProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (credential?.accessToken) {
       cachedWorkspaceAccessToken = credential.accessToken;
