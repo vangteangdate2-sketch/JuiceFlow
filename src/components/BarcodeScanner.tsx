@@ -33,7 +33,12 @@ export interface BarcodeScannerProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
   /** Called whenever a barcode is captured from USB/BT scanner, camera, or manual Enter */
-  onScan: (barcode: string, source: BarcodeScanSource) => { ok: boolean; message: string };
+  onScan: (
+    barcode: string,
+    source: BarcodeScanSource
+  ) =>
+    | { ok: boolean; message: string; suppressToast?: boolean }
+    | Promise<{ ok: boolean; message: string; suppressToast?: boolean }>;
   /** Optional quick check to know whether Enter in the search input matches a product barcode */
   hasBarcodeMatch?: (code: string) => boolean;
 }
@@ -109,21 +114,25 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const soundEnabledRef = useRef(soundEnabled);
   soundEnabledRef.current = soundEnabled;
 
-  const dispatchScan = useCallback((rawCode: string, source: BarcodeScanSource) => {
+  const dispatchScan = useCallback(async (rawCode: string, source: BarcodeScanSource) => {
     const cleaned = rawCode.trim();
     if (!cleaned) return { ok: false, message: '' };
 
-    const outcome = onScanRef.current(cleaned, source);
+    const outcome = await onScanRef.current(cleaned, source);
     if (soundEnabledRef.current) {
       playScanTone(outcome.ok);
     }
-    setLastScan({
-      ok: outcome.ok,
-      code: cleaned,
-      message: outcome.message,
-      source,
-      timestamp: Date.now(),
-    });
+    if (outcome.suppressToast) {
+      setLastScan(null);
+    } else {
+      setLastScan({
+        ok: outcome.ok,
+        code: cleaned,
+        message: outcome.message,
+        source,
+        timestamp: Date.now(),
+      });
+    }
     if (source === 'camera' && outcome.ok) {
       setSessionScanCount((c) => c + 1);
     }
@@ -134,7 +143,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   useBarcodeScanner({
     enabled: enabled && hardwareEnabled,
     onScan: (code) => {
-      dispatchScan(code, 'hardware');
+      void dispatchScan(code, 'hardware');
       onSearchChange('');
       setManualCode('');
     },
@@ -230,11 +239,12 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             }
             lastCameraDecodeRef.current = { code: cleaned, at: now };
 
-            const outcome = dispatchScan(cleaned, 'camera');
-            if (outcome.ok && !continuousModeRef.current) {
-              void stopExisting();
-              setCameraOpen(false);
-            }
+            void dispatchScan(cleaned, 'camera').then((outcome) => {
+              if (outcome.ok && !continuousModeRef.current) {
+                void stopExisting();
+                setCameraOpen(false);
+              }
+            });
           },
           () => {
             // Per-frame decode miss (normal while aiming)
@@ -275,9 +285,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     if (e.key !== 'Enter') return;
     const code = searchValue.trim();
     if (!code) return;
-    if (!hasBarcodeMatch || hasBarcodeMatch(code)) {
+    const looksLikeBarcode =
+      /^[0-9]{6,14}$/.test(code) || /^JF-[A-Z0-9-]+$/i.test(code);
+    if (!hasBarcodeMatch || hasBarcodeMatch(code) || looksLikeBarcode) {
       e.preventDefault();
-      dispatchScan(code, 'manual');
+      void dispatchScan(code, 'manual');
       onSearchChange('');
     }
   };
@@ -286,11 +298,12 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     e.preventDefault();
     const cleaned = manualCode.trim();
     if (!cleaned) return;
-    const res = dispatchScan(cleaned, 'manual');
     setManualCode('');
-    if (res.ok && !continuousMode) {
-      setCameraOpen(false);
-    }
+    void dispatchScan(cleaned, 'manual').then((res) => {
+      if (res.ok && !continuousMode) {
+        setCameraOpen(false);
+      }
+    });
   };
 
   const handleCycleCamera = () => {

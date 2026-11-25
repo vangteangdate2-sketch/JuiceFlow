@@ -3,17 +3,27 @@ import {
   AlertTriangle,
   Check,
   Eye,
+  Loader2,
   Minus,
   Plus,
   Printer,
   RotateCcw,
+  ScanBarcode,
   Search,
   ShoppingBag,
   Trash2,
   X,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import type { PaymentMethod, Product, ProductCategory, ProductType, Sale } from '../types';
+import type {
+  BarcodeFormat,
+  ExternalBarcodePrefill,
+  PaymentMethod,
+  Product,
+  ProductCategory,
+  ProductType,
+  Sale,
+} from '../types';
 import {
   calculateProductCogs,
   formatDateTimeInPhnomPenh,
@@ -30,9 +40,11 @@ import {
   validateCheckoutStock,
   type StockShortage,
 } from '../utils/inventoryEngine';
+import { formatBarcodeTypeLabel } from '../utils/barcodeRegistry';
 import { ProductPhoto } from '../components/ProductPhoto';
 import { BarcodeScanner, type BarcodeScanSource } from '../components/BarcodeScanner';
 import { ReceiptModal } from '../components/ReceiptModal';
+import { ProductFormModal } from '../components/ProductFormModal';
 
 interface CartEntry {
   key: string; // `${productId}::${variantId || ''}`
@@ -57,7 +69,10 @@ export const SalesView: React.FC = () => {
     settings,
     products,
     ingredients,
+    barcodeRegistry,
     sales,
+    saveProduct,
+    lookupBarcode,
     recordSale,
     voidSale,
     returnSaleItems,
@@ -82,6 +97,16 @@ export const SalesView: React.FC = () => {
   const [lastCompletedSale, setLastCompletedSale] = useState<Sale | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [checkoutShortages, setCheckoutShortages] = useState<StockShortage[]>([]);
+
+  // Universal Barcode lookup & quick-registration state (preserves active cart)
+  const [lookingUpBarcode, setLookingUpBarcode] = useState<string | null>(null);
+  const [unknownBarcodePrompt, setUnknownBarcodePrompt] = useState<{
+    code: string;
+    format: BarcodeFormat;
+    prefill: ExternalBarcodePrefill | null;
+    lookedUpExternally: boolean;
+  } | null>(null);
+  const [quickRegisterOpen, setQuickRegisterOpen] = useState(false);
 
   // Modals
   const [variantPickerProduct, setVariantPickerProduct] = useState<Product | null>(null);
@@ -109,12 +134,16 @@ export const SalesView: React.FC = () => {
       const varMatch = (p.variants || []).some(
         (v) => v.name.toLowerCase().includes(q) || (v.barcode || '').toLowerCase().includes(q)
       );
+      const packMatch = (p.packagingBarcodes || []).some(
+        (pb) => pb.barcode.toLowerCase().includes(q) || pb.label.toLowerCase().includes(q)
+      );
       return (
         p.name.toLowerCase().includes(q) ||
         p.nameVi.toLowerCase().includes(q) ||
         (p.brand || '').toLowerCase().includes(q) ||
         (p.barcode || '').toLowerCase().includes(q) ||
-        varMatch
+        varMatch ||
+        packMatch
       );
     });
   }, [products, typeFilter, categoryFilter, posSearch]);
@@ -200,34 +229,59 @@ export const SalesView: React.FC = () => {
     });
   };
 
-  const handleBarcodeScan = (
+  const handleBarcodeScan = async (
     rawCode: string,
     _source: BarcodeScanSource
-  ): { ok: boolean; message: string } => {
-    const match = resolveBarcodeMatch(rawCode, products);
-    if (!match) {
-      const msg = isVi
-        ? `Không tìm thấy sản phẩm với mã vạch "${rawCode}".`
-        : `No product matched barcode "${rawCode}".`;
-      setCheckoutError(msg);
-      return { ok: false, message: msg };
+  ): Promise<{ ok: boolean; message: string; suppressToast?: boolean }> => {
+    const cleaned = rawCode.trim();
+    if (!cleaned) {
+      return { ok: false, message: '', suppressToast: true };
     }
-    if (!match.product.active) {
+
+    setCheckoutError(null);
+    setUnknownBarcodePrompt(null);
+    setLookingUpBarcode(cleaned);
+
+    let result;
+    try {
+      result = await lookupBarcode(cleaned);
+    } finally {
+      setLookingUpBarcode(null);
+    }
+
+    if (!result.found || !result.product) {
+      // Calm quick-registration prompt (never treated as an error; keeps current cart intact)
+      setUnknownBarcodePrompt({
+        code: result.code || cleaned,
+        format: result.format,
+        prefill: result.externalPrefill || null,
+        lookedUpExternally: result.lookedUpExternally,
+      });
+      return {
+        ok: false,
+        message: isVi
+          ? `Mã "${result.code || cleaned}" chưa có trong kho — nhấn Đăng ký ngay.`
+          : `Unregistered barcode "${result.code || cleaned}" — tap Register Now.`,
+        suppressToast: true,
+      };
+    }
+
+    if (!result.product.active) {
       const msg = isVi
-        ? `Sản phẩm "${match.product.nameVi || match.product.name}" đang tạm ngưng bán.`
-        : `"${match.product.name}" is currently paused.`;
+        ? `Sản phẩm "${result.product.nameVi || result.product.name}" đang tạm ngưng bán.`
+        : `"${result.product.name}" is currently paused.`;
       setCheckoutError(msg);
       return { ok: false, message: msg };
     }
 
-    const qty = match.isPackagingBarcode ? match.unitsPerPack : 1;
+    const qty = Math.max(1, result.unitsPerScan || 1);
     const availability = getAvailableUnitsForProduct(
-      match.product,
+      result.product,
       ingredients,
-      match.variant?.id
+      result.variant?.id
     );
     if (availability.status === 'out' && !settings.allowNegativeStock) {
-      const displayName = isVi ? match.product.nameVi || match.product.name : match.product.name;
+      const displayName = isVi ? result.product.nameVi || result.product.name : result.product.name;
       const msg = isVi
         ? `${displayName} hiện đã hết hàng trong kho.`
         : `${displayName} is currently out of stock.`;
@@ -235,14 +289,16 @@ export const SalesView: React.FC = () => {
       return { ok: false, message: msg };
     }
 
-    addEntryToCart(match.product.id, match.variant?.id, qty);
-    const displayName = isVi ? match.product.nameVi || match.product.name : match.product.name;
-    const variantSuffix = match.variant
-      ? ` (${isVi ? match.variant.nameVi || match.variant.name : match.variant.name})`
+    addEntryToCart(result.product.id, result.variant?.id, qty);
+    const displayName = isVi ? result.product.nameVi || result.product.name : result.product.name;
+    const variantSuffix = result.variant
+      ? ` (${isVi ? result.variant.nameVi || result.variant.name : result.variant.name})`
       : '';
+    const packSuffix =
+      qty > 1 && result.packLabel ? ` · ${result.packLabel}` : '';
     const msg = isVi
-      ? `Đã thêm +${qty}× ${displayName}${variantSuffix} vào giỏ`
-      : `Added +${qty}× ${displayName}${variantSuffix} to cart`;
+      ? `Đã thêm +${qty}× ${displayName}${variantSuffix}${packSuffix} vào giỏ`
+      : `Added +${qty}× ${displayName}${variantSuffix}${packSuffix} to cart`;
     return { ok: true, message: msg };
   };
 
@@ -423,13 +479,89 @@ export const SalesView: React.FC = () => {
             {/* Unified Search + Camera & USB/Bluetooth Barcode Scanner */}
             <div className="bg-white border border-stone-200 rounded-xl p-3.5 space-y-3">
               <BarcodeScanner
-                enabled={subTab === 'pos' && !variantPickerProduct && !receiptSale && !detailSaleId}
+                enabled={
+                  subTab === 'pos' &&
+                  !variantPickerProduct &&
+                  !receiptSale &&
+                  !detailSaleId &&
+                  !quickRegisterOpen
+                }
                 isVi={isVi}
                 searchValue={posSearch}
                 onSearchChange={setPosSearch}
                 onScan={handleBarcodeScan}
-                hasBarcodeMatch={(code) => Boolean(resolveBarcodeMatch(code, products))}
+                hasBarcodeMatch={(code) =>
+                  Boolean(
+                    resolveBarcodeMatch(code, products) ||
+                      barcodeRegistry.some((r) => r.code === code.trim())
+                  )
+                }
               />
+
+              {/* Live Registry / Open Food Facts Lookup Indicator */}
+              {lookingUpBarcode && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 text-xs text-stone-700"
+                >
+                  <Loader2 className="w-3.5 h-3.5 text-[#0F5C43] animate-spin shrink-0" />
+                  <span>
+                    {isVi
+                      ? `Đang kiểm tra sổ mã vạch JuiceFlow cho "${lookingUpBarcode}"...`
+                      : `Checking JuiceFlow registry for "${lookingUpBarcode}"...`}
+                  </span>
+                </div>
+              )}
+
+              {/* Quick Prompt for Unregistered Barcodes (preserves active cart) */}
+              {unknownBarcodePrompt && !lookingUpBarcode && (
+                <div
+                  role="status"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg bg-stone-50 border border-stone-300"
+                >
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <ScanBarcode className="w-4 h-4 text-[#0F5C43] shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-stone-900">
+                        {isVi ? 'Mã vạch chưa đăng ký' : 'Unregistered Barcode'}:{' '}
+                        <span className="font-mono-num text-[#0F5C43]">
+                          {unknownBarcodePrompt.code}
+                        </span>{' '}
+                        <span className="font-normal text-stone-500">
+                          ({formatBarcodeTypeLabel(unknownBarcodePrompt.format)})
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-stone-600 truncate mt-0.5">
+                        {unknownBarcodePrompt.prefill
+                          ? isVi
+                            ? `Tìm thấy từ Open Food Facts: ${unknownBarcodePrompt.prefill.name}${unknownBarcodePrompt.prefill.brand ? ` · ${unknownBarcodePrompt.prefill.brand}` : ''} (giá KHR & tồn kho bạn tự nhập)`
+                            : `Found on Open Food Facts: ${unknownBarcodePrompt.prefill.name}${unknownBarcodePrompt.prefill.brand ? ` · ${unknownBarcodePrompt.prefill.brand}` : ''} (local KHR price & stock required)`
+                          : isVi
+                          ? 'Không có trên Open Food Facts — nhấn Đăng ký ngay để tạo sản phẩm thủ công.'
+                          : 'Not found externally — tap Register Now to add manually while keeping your cart.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => setQuickRegisterOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-md transition-colors whitespace-nowrap"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      {isVi ? 'Đăng ký ngay' : 'Register Now'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUnknownBarcodePrompt(null)}
+                      aria-label={t.common.close}
+                      className="p-1.5 text-stone-400 hover:text-stone-700 rounded-md"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Type & Category Filters */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-stone-100">
@@ -1227,6 +1359,48 @@ export const SalesView: React.FC = () => {
         sale={receiptSale}
         settings={settings}
         onClose={() => setReceiptSale(null)}
+      />
+
+      {/* Quick Product Registration Modal triggered from Unrecognized POS Barcode */}
+      <ProductFormModal
+        open={quickRegisterOpen}
+        editingProduct={null}
+        existingProducts={products}
+        barcodeRegistry={barcodeRegistry}
+        ingredients={ingredients}
+        settings={settings}
+        t={t}
+        initialBarcode={unknownBarcodePrompt?.code || undefined}
+        initialPrefill={unknownBarcodePrompt?.prefill || null}
+        initialNotFoundExternally={Boolean(
+          unknownBarcodePrompt && !unknownBarcodePrompt.prefill
+        )}
+        onSave={saveProduct}
+        onSaved={(newProd) => {
+          setUnknownBarcodePrompt(null);
+          setPosSearch('');
+          const canAddNow =
+            newProd.active &&
+            (newProd.productType === 'PREPARED_TO_ORDER' ||
+              newProd.stockQty > 0 ||
+              Boolean(settings.allowNegativeStock));
+          if (canAddNow) {
+            addEntryToCart(newProd.id, newProd.variants?.[0]?.id, 1);
+          }
+          setLastCompletedSale(null);
+          const displayName = isVi ? newProd.nameVi || newProd.name : newProd.name;
+          setToastMessage(
+            canAddNow
+              ? isVi
+                ? `Đã đăng ký "${displayName}" và thêm vào giỏ POS.`
+                : `Registered "${displayName}" and added to POS cart.`
+              : isVi
+              ? `Đã đăng ký "${displayName}" — sẵn sàng trong POS & Kho hàng.`
+              : `Registered "${displayName}" — now searchable in POS & Inventory.`
+          );
+          window.setTimeout(() => setToastMessage(''), 4500);
+        }}
+        onClose={() => setQuickRegisterOpen(false)}
       />
     </div>
   );

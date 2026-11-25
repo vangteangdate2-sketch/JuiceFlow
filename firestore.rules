@@ -102,7 +102,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'name', 'location', 'inviteCode', 'ownerId', 'memberUids',
           'currency', 'usdRate', 'language', 'familyMembers', 'lowStockDefault',
-          'allowNegativeStock', 'timezone', 'createdAt', 'updatedAt'
+          'allowNegativeStock', 'enableOpenFoodFactsLookup', 'timezone', 'createdAt', 'updatedAt'
         ])
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
         && data.location is string && data.location.size() <= 120
@@ -115,6 +115,7 @@ service cloud.firestore {
         && isValidFamilyNames(data.familyMembers)
         && data.lowStockDefault is number && data.lowStockDefault >= 0 && data.lowStockDefault <= 1000000
         && (!('allowNegativeStock' in data) || data.allowNegativeStock is bool)
+        && (!('enableOpenFoodFactsLookup' in data) || data.enableOpenFoodFactsLookup is bool)
         && (!('timezone' in data) || (data.timezone is string && data.timezone.size() <= 64))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -166,6 +167,33 @@ service cloud.firestore {
         && (data.recipe.size() == 0 || data.recipe[0] is map)
         && (!('recipeVersion' in data) || (data.recipeVersion is number && data.recipeVersion >= 1 && data.recipeVersion <= 10000))
         && (!('variants' in data) || (data.variants is list && data.variants.size() <= 10))
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBarcodeRecord(data, workspaceId) {
+      return data.keys().hasAll([
+          'workspaceId', 'memberUids', 'code', 'format', 'productId',
+          'packagingType', 'label', 'unitsPerScan', 'active', 'source',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'workspaceId', 'memberUids', 'code', 'format', 'productId', 'variantId',
+          'packagingType', 'label', 'unitsPerScan', 'active', 'source',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.workspaceId == workspaceId
+        && isValidMemberUids(data.memberUids)
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 64
+        && data.format is string && data.format in ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'QR_CODE', 'INTERNAL']
+        && isValidId(data.productId)
+        && (!('variantId' in data) || (data.variantId is string && data.variantId.size() <= 64))
+        && data.packagingType is string && data.packagingType in ['unit', 'pack', 'carton', 'variant']
+        && data.label is string && data.label.size() <= 80
+        && data.unitsPerScan is number && data.unitsPerScan >= 1 && data.unitsPerScan <= 10000
+        && data.active is bool
+        && data.source is string && data.source in ['manufacturer', 'internal', 'open_food_facts']
         && isValidId(data.createdBy)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -401,7 +429,7 @@ service cloud.firestore {
             && incoming().memberUids == existing().memberUids
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'name', 'location', 'usdRate', 'language', 'familyMembers',
-              'lowStockDefault', 'allowNegativeStock', 'timezone', 'updatedAt'
+              'lowStockDefault', 'allowNegativeStock', 'enableOpenFoodFactsLookup', 'timezone', 'updatedAt'
             ])
           ) ||
           (
@@ -478,6 +506,41 @@ service cloud.firestore {
             )
           );
         allow delete: if isVerified() && isValidId(workspaceId) && isValidId(productId) && isWorkspaceMember(workspaceId);
+      }
+
+      // 5b. Universal Barcode Registry (Exact string IDs preserving leading zeros)
+      match /barcodes/{barcodeId} {
+        allow get: if isVerified() && isValidId(workspaceId) && isValidId(barcodeId) && isWorkspaceMember(workspaceId);
+        allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
+        allow create: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(barcodeId)
+          && isValidBarcodeRecord(incoming(), workspaceId)
+          && incoming().createdBy == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId);
+        allow update: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(barcodeId)
+          && isValidBarcodeRecord(incoming(), workspaceId)
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().code == existing().code
+          && incoming().createdBy == existing().createdBy
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId)
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'format', 'productId', 'variantId', 'packagingType',
+              'label', 'unitsPerScan', 'active', 'source', 'updatedAt'
+            ]) ||
+            (
+              incoming().memberUids.hasAll(existing().memberUids)
+              && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+            )
+          );
+        allow delete: if isVerified() && isValidId(workspaceId) && isValidId(barcodeId) && isWorkspaceMember(workspaceId);
       }
 
       // 6. Ingredients & Raw Materials

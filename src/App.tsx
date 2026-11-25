@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   BarChart3,
+  Check,
   Coffee,
   LayoutDashboard,
   Lock,
@@ -8,6 +9,7 @@ import {
   Package,
   Plus,
   Receipt,
+  RefreshCw,
   Settings,
   ShoppingCart,
   X,
@@ -38,7 +40,8 @@ const NAV_ITEMS: { id: AppTab; icon: React.ComponentType<{ className?: string }>
 ];
 
 const JuiceFlowShell: React.FC = () => {
-  const { settings, cloudSynced, syncing, t, setActiveOperator } = useStore();
+  const { settings, cloudSynced, syncing, refreshing, refreshData, t, setActiveOperator } = useStore();
+  const isVi = settings.language === 'vi';
 
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('join')) {
@@ -47,11 +50,21 @@ const JuiceFlowShell: React.FC = () => {
     return 'dashboard';
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [justRefreshed, setJustRefreshed] = useState(false);
   const [security, setSecurity] = useState<BiometricSecurityConfig>(() => loadSecurityConfig());
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     const cfg = loadSecurityConfig();
     return cfg.enabled && (cfg.biometricEnrolled || Boolean(cfg.pinHash));
   });
+
+  const handleManualRefresh = async () => {
+    if (refreshing || syncing) return;
+    const res = await refreshData();
+    if (res.ok) {
+      setJustRefreshed(true);
+      window.setTimeout(() => setJustRefreshed(false), 1600);
+    }
+  };
 
   const handleUpdateSecurity = (next: BiometricSecurityConfig) => {
     setSecurity(next);
@@ -229,7 +242,44 @@ const JuiceFlowShell: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleManualRefresh}
+                disabled={refreshing || syncing}
+                title={
+                  cloudSynced
+                    ? isVi
+                      ? 'Làm mới dữ liệu từ đám mây'
+                      : 'Refresh latest data from cloud'
+                    : isVi
+                      ? 'Làm mới dữ liệu cục bộ'
+                      : 'Refresh local data'
+                }
+                aria-label={isVi ? 'Làm mới dữ liệu' : 'Refresh data'}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 hover:text-stone-900 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shrink-0"
+              >
+                {justRefreshed ? (
+                  <Check className="w-3.5 h-3.5 text-[#0F5C43]" />
+                ) : (
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${refreshing || syncing ? 'animate-spin text-[#0F5C43]' : 'text-stone-500'}`}
+                  />
+                )}
+                <span className="hidden sm:inline">
+                  {refreshing
+                    ? isVi
+                      ? 'Đang tải...'
+                      : 'Refreshing...'
+                    : justRefreshed
+                      ? isVi
+                        ? 'Đã cập nhật'
+                        : 'Updated'
+                      : isVi
+                        ? 'Làm mới'
+                        : 'Refresh'}
+                </span>
+              </button>
               <PWAInstallButton variant="compact" />
               {activeTab !== 'sales' && (
                 <button

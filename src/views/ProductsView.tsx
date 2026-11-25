@@ -2,12 +2,16 @@ import React, { useMemo, useState } from 'react';
 import {
   Edit2,
   Layers,
+  Loader2,
   Plus,
+  QrCode,
+  ScanBarcode,
   Search,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import type { Product, ProductType } from '../types';
+import type { ExternalBarcodePrefill, Product, ProductType } from '../types';
 import {
   calculateProductCogs,
   calculateRecipeCogs,
@@ -16,9 +20,20 @@ import {
 } from '../utils/format';
 import { ProductPhoto } from '../components/ProductPhoto';
 import { ProductFormModal } from '../components/ProductFormModal';
+import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
+import { BarcodeLabelModal } from '../components/BarcodeLabelModal';
 
 export const ProductsView: React.FC = () => {
-  const { settings, products, ingredients, saveProduct, deleteProduct, t } = useStore();
+  const {
+    settings,
+    products,
+    ingredients,
+    barcodeRegistry,
+    saveProduct,
+    deleteProduct,
+    lookupBarcode,
+    t,
+  } = useStore();
   const isVi = settings.language === 'vi';
 
   const [typeFilter, setTypeFilter] = useState<'ALL' | ProductType>('ALL');
@@ -26,6 +41,15 @@ export const ProductsView: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Barcode Scan / Lookup & Label Studio state
+  const [scanLookupOpen, setScanLookupOpen] = useState(false);
+  const [scanLookingUp, setScanLookingUp] = useState(false);
+  const [scanNotice, setScanNotice] = useState<string | null>(null);
+  const [quickInitialBarcode, setQuickInitialBarcode] = useState<string | null>(null);
+  const [quickInitialPrefill, setQuickInitialPrefill] = useState<ExternalBarcodePrefill | null>(null);
+  const [quickNotFoundExternally, setQuickNotFoundExternally] = useState(false);
+  const [labelProduct, setLabelProduct] = useState<Product | null>(null);
 
   const ingMap = useMemo(() => new Map(ingredients.map((i) => [i.id, i])), [ingredients]);
 
@@ -35,24 +59,63 @@ export const ProductsView: React.FC = () => {
       if (typeFilter !== 'ALL' && p.productType !== typeFilter) return false;
       if (!q) return true;
       const packCodes = (p.packagingBarcodes || []).map((pb) => pb.barcode).join(' ');
+      const variantCodes = (p.variants || []).map((v) => v.barcode || '').join(' ');
       return (
         p.name.toLowerCase().includes(q) ||
         p.nameVi.toLowerCase().includes(q) ||
         (p.brand || '').toLowerCase().includes(q) ||
         (p.barcode || '').toLowerCase().includes(q) ||
-        packCodes.toLowerCase().includes(q)
+        packCodes.toLowerCase().includes(q) ||
+        variantCodes.toLowerCase().includes(q)
       );
     });
   }, [products, typeFilter, search]);
 
+  const resetQuickScanSeed = () => {
+    setQuickInitialBarcode(null);
+    setQuickInitialPrefill(null);
+    setQuickNotFoundExternally(false);
+  };
+
   const openNew = () => {
+    resetQuickScanSeed();
     setEditingProduct(null);
     setModalOpen(true);
   };
 
   const openEdit = (product: Product) => {
+    resetQuickScanSeed();
     setEditingProduct(product);
     setModalOpen(true);
+  };
+
+  const handleScanLookup = async (rawCode: string) => {
+    const cleaned = rawCode.trim();
+    if (!cleaned) return;
+    setScanLookingUp(true);
+    setScanNotice(null);
+    try {
+      const res = await lookupBarcode(cleaned);
+      if (res.found && res.product) {
+        resetQuickScanSeed();
+        setEditingProduct(res.product);
+        setModalOpen(true);
+        const displayName = isVi ? res.product.nameVi || res.product.name : res.product.name;
+        setScanNotice(
+          isVi
+            ? `Đã tìm thấy "${displayName}" (${res.code}) trong sổ mã vạch JuiceFlow.`
+            : `Found "${displayName}" (${res.code}) in your JuiceFlow registry.`
+        );
+      } else {
+        setEditingProduct(null);
+        setQuickInitialBarcode(res.code || cleaned);
+        setQuickInitialPrefill(res.externalPrefill || null);
+        setQuickNotFoundExternally(!res.externalPrefill);
+        setModalOpen(true);
+      }
+    } finally {
+      setScanLookingUp(false);
+    }
   };
 
   return (
@@ -69,15 +132,47 @@ export const ProductsView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={openNew}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          {isVi ? 'Thêm sản phẩm' : 'Add Product'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
+          <button
+            type="button"
+            disabled={scanLookingUp}
+            onClick={() => setScanLookupOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 text-sm font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 rounded-lg transition-colors whitespace-nowrap"
+          >
+            {scanLookingUp ? (
+              <Loader2 className="w-4 h-4 text-[#0F5C43] animate-spin" />
+            ) : (
+              <ScanBarcode className="w-4 h-4 text-[#0F5C43]" />
+            )}
+            {isVi ? 'Quét / Tra cứu mã' : 'Scan / Lookup'}
+          </button>
+          <button
+            type="button"
+            onClick={openNew}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            {isVi ? 'Thêm sản phẩm' : 'Add Product'}
+          </button>
+        </div>
       </div>
+
+      {scanNotice && (
+        <div
+          role="status"
+          className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-4 py-2.5 rounded-lg text-xs font-medium flex items-center justify-between gap-3"
+        >
+          <span>{scanNotice}</span>
+          <button
+            type="button"
+            onClick={() => setScanNotice(null)}
+            className="text-emerald-700 hover:text-emerald-950"
+            aria-label={t.common.close}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Filter & Search Toolbar */}
       <div className="bg-white border border-stone-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -292,14 +387,25 @@ export const ProductsView: React.FC = () => {
 
                   {/* Actions */}
                   <div className="mt-5 pt-3 border-t border-stone-100 flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(product)}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-700 hover:text-[#0F5C43] transition-colors"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      {t.common.edit}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(product)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-700 hover:text-[#0F5C43] transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        {t.common.edit}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setLabelProduct(product)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600 hover:text-[#0F5C43] transition-colors"
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                        {isVi ? 'In nhãn' : 'Labels'}
+                      </button>
+                    </div>
 
                     {confirmDeleteId === product.id ? (
                       <div className="inline-flex items-center gap-2">
@@ -344,11 +450,40 @@ export const ProductsView: React.FC = () => {
         open={modalOpen}
         editingProduct={editingProduct}
         existingProducts={products}
+        barcodeRegistry={barcodeRegistry}
         ingredients={ingredients}
         settings={settings}
         t={t}
+        initialBarcode={quickInitialBarcode || undefined}
+        initialPrefill={quickInitialPrefill}
+        initialNotFoundExternally={quickNotFoundExternally}
         onSave={saveProduct}
-        onClose={() => setModalOpen(false)}
+        onClose={() => {
+          setModalOpen(false);
+          resetQuickScanSeed();
+        }}
+      />
+
+      {/* Camera Barcode Scan & Lookup Modal */}
+      <BarcodeScannerModal
+        open={scanLookupOpen}
+        title={isVi ? 'Quét mã vạch sản phẩm' : 'Scan or Lookup Product Barcode'}
+        subtitle={
+          isVi
+            ? 'Kiểm tra sổ mã vạch JuiceFlow trước, sau đó tự động gợi ý từ Open Food Facts nếu chưa đăng ký.'
+            : 'Checks JuiceFlow registry first, then prefills from Open Food Facts if unregistered.'
+        }
+        onDetected={handleScanLookup}
+        onClose={() => setScanLookupOpen(false)}
+      />
+
+      {/* Code 128 & QR Code Thermal Label Studio */}
+      <BarcodeLabelModal
+        open={Boolean(labelProduct)}
+        product={labelProduct}
+        shopName={settings.name}
+        isVi={isVi}
+        onClose={() => setLabelProduct(null)}
       />
     </div>
   );

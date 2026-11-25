@@ -5,6 +5,9 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocFromServer,
+  getDocs,
+  getDocsFromServer,
   onSnapshot,
   query,
   runTransaction,
@@ -13,6 +16,9 @@ import {
   updateDoc,
   where,
   writeBatch,
+  type DocumentData,
+  type DocumentReference,
+  type Query,
   type Timestamp,
 } from 'firebase/firestore';
 import {
@@ -34,6 +40,11 @@ import {
 import { getTranslations } from '../i18n/translations';
 import type {
   AppLanguage,
+  BarcodeFormat,
+  BarcodePackagingType,
+  BarcodeRegistryRecord,
+  BarcodeResolutionResult,
+  BarcodeSource,
   Expense,
   ExpenseCategory,
   ExpenseScope,
@@ -47,6 +58,16 @@ import type {
   StockMovement,
   WorkspaceSettings,
 } from '../types';
+import {
+  buildRegistryFromProducts,
+  detectBarcodeFormat,
+  extractProductBarcodeRecords,
+  findDuplicateBarcodeConflicts,
+  lookupOpenFoodFactsV3,
+  normalizeBarcodeString,
+  resolveFromRegistryAndProducts,
+  toBarcodeDocId,
+} from '../utils/barcodeRegistry';
 import {
   BUSINESS_TIMEZONE,
   clampNumber,
@@ -85,6 +106,7 @@ interface LocalSnapshot {
   settings: WorkspaceSettings;
   ingredients: Ingredient[];
   products: Product[];
+  barcodeRegistry: BarcodeRegistryRecord[];
   sales: Sale[];
   expenses: Expense[];
   purchases: PurchaseRecord[];
@@ -148,10 +170,16 @@ function loadLocalSnapshot(): LocalSnapshot {
           }
         }
 
+        const barcodeRegistry =
+          Array.isArray(parsed.barcodeRegistry) && parsed.barcodeRegistry.length > 0
+            ? parsed.barcodeRegistry
+            : buildRegistryFromProducts(products);
+
         return {
           settings,
           ingredients,
           products,
+          barcodeRegistry,
           sales,
           expenses,
           purchases,
@@ -170,6 +198,7 @@ function loadLocalSnapshot(): LocalSnapshot {
   const seed = createSeedData();
   return {
     settings: createInitialSettings(),
+    barcodeRegistry: buildRegistryFromProducts(seed.products),
     ...seed,
   };
 }
@@ -216,6 +245,12 @@ export interface SaleOperationResult {
 export interface OperationResult {
   ok: boolean;
   shortages?: StockShortage[];
+  error?: string;
+}
+
+export interface SaveProductResult {
+  ok: boolean;
+  product?: Product;
   error?: string;
 }
 
@@ -295,6 +330,7 @@ export interface StoreContextValue {
   settings: WorkspaceSettings;
   ingredients: Ingredient[];
   products: Product[];
+  barcodeRegistry: BarcodeRegistryRecord[];
   sales: Sale[];
   expenses: Expense[];
   purchases: PurchaseRecord[];
@@ -303,14 +339,22 @@ export interface StoreContextValue {
   authReady: boolean;
   cloudSynced: boolean;
   syncing: boolean;
+  refreshing: boolean;
+  refreshData: () => Promise<OperationResult>;
   rememberMe: boolean;
   setRememberMe: (value: boolean) => void;
   t: ReturnType<typeof getTranslations>;
   setLanguage: (lang: AppLanguage) => void;
   setActiveOperator: (name: string) => void;
   updateSettings: (patch: Partial<WorkspaceSettings>) => Promise<void>;
-  saveProduct: (product: Omit<Product, 'id'> & { id?: string }) => Promise<void>;
+  saveProduct: (
+    product: Omit<Product, 'id'> & { id?: string; barcodeSource?: BarcodeSource }
+  ) => Promise<SaveProductResult>;
   deleteProduct: (productId: string) => Promise<void>;
+  lookupBarcode: (
+    rawCode: string,
+    options?: { skipExternal?: boolean }
+  ) => Promise<BarcodeResolutionResult>;
   saveIngredient: (ingredient: Omit<Ingredient, 'id'> & { id?: string }) => Promise<void>;
   deleteIngredient: (ingredientId: string) => Promise<void>;
   recordIngredientPurchase: (input: RecordPurchaseInput) => Promise<OperationResult>;
@@ -395,6 +439,30 @@ function productToFirestoreFields(clean: Product) {
         recipeVersion: Math.max(1, Math.round(v.recipeVersion || 1)),
       })
     ),
+  });
+}
+
+function barcodeRecordToFirestoreDoc(
+  rec: BarcodeRegistryRecord,
+  workspaceId: string,
+  memberUids: string[],
+  createdByUid: string
+) {
+  return stripUndefined({
+    workspaceId,
+    memberUids,
+    code: normalizeBarcodeString(rec.code),
+    format: rec.format,
+    productId: rec.productId,
+    ...(rec.variantId ? { variantId: sanitizeString(rec.variantId, 64) } : {}),
+    packagingType: rec.packagingType,
+    label: sanitizeString(rec.label || 'Unit', 80),
+    unitsPerScan: clampNumber(Math.round(rec.unitsPerScan || 1), 1, 10000),
+    active: Boolean(rec.active),
+    source: rec.source,
+    createdBy: createdByUid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 }
 
@@ -499,6 +567,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [settings, setSettings] = useState<WorkspaceSettings>(initial.settings);
   const [ingredients, setIngredients] = useState<Ingredient[]>(initial.ingredients);
   const [products, setProducts] = useState<Product[]>(initial.products);
+  const [barcodeRegistry, setBarcodeRegistry] = useState<BarcodeRegistryRecord[]>(
+    initial.barcodeRegistry
+  );
   const [sales, setSales] = useState<Sale[]>(initial.sales);
   const [expenses, setExpenses] = useState<Expense[]>(initial.expenses);
   const [purchases, setPurchases] = useState<PurchaseRecord[]>(initial.purchases);
@@ -509,6 +580,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [cloudWorkspaceId, setCloudWorkspaceId] = useState<string | null>(null);
   const [memberUids, setMemberUids] = useState<string[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [rememberMe, setRememberMeState] = useState<boolean>(() => loadRememberMePreference());
 
   const setRememberMe = useCallback((value: boolean) => {
@@ -523,6 +595,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     settings,
     ingredients,
     products,
+    barcodeRegistry,
     sales,
     expenses,
     purchases,
@@ -534,6 +607,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     settings,
     ingredients,
     products,
+    barcodeRegistry,
     sales,
     expenses,
     purchases,
@@ -548,6 +622,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         settings,
         ingredients,
         products,
+        barcodeRegistry,
         sales,
         expenses,
         purchases,
@@ -557,7 +632,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {
       // Ignore storage quota errors
     }
-  }, [settings, ingredients, products, sales, expenses, purchases, stockMovements]);
+  }, [settings, ingredients, products, barcodeRegistry, sales, expenses, purchases, stockMovements]);
 
   // Listen to Firebase Auth state & resolve any pending redirect sign-in
   useEffect(() => {
@@ -627,6 +702,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           familyMembers: familyList,
           lowStockDefault: clampNumber(cur.settings.lowStockDefault, 0, 1000000),
           allowNegativeStock: Boolean(cur.settings.allowNegativeStock),
+          enableOpenFoodFactsLookup: cur.settings.enableOpenFoodFactsLookup !== false,
           timezone: cur.settings.timezone || BUSINESS_TIMEZONE,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -684,6 +760,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
+          for (const rec of extractProductBarcodeRecords(prod)) {
+            seedBatch.set(
+              doc(db, 'workspaces', wsId, 'barcodes', rec.id),
+              barcodeRecordToFirestoreDoc(rec, wsId, uids, user.uid)
+            );
+          }
         }
         for (const sale of cur.sales) {
           seedBatch.set(
@@ -773,6 +855,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   : prev.familyMembers,
               lowStockDefault: Number(d.lowStockDefault ?? prev.lowStockDefault),
               allowNegativeStock: Boolean(d.allowNegativeStock ?? prev.allowNegativeStock ?? false),
+              enableOpenFoodFactsLookup:
+                d.enableOpenFoodFactsLookup !== undefined
+                  ? Boolean(d.enableOpenFoodFactsLookup)
+                  : prev.enableOpenFoodFactsLookup !== false,
               timezone: String(d.timezone || BUSINESS_TIMEZONE),
             },
             prev
@@ -924,9 +1010,36 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (err) => handleFirestoreError(err, OperationType.LIST, movPath)
     );
 
+    const barcodePath = `workspaces/${cloudWorkspaceId}/barcodes`;
+    const unsubBarcodes = onSnapshot(
+      query(collection(db, barcodePath), where('memberUids', 'array-contains', user.uid)),
+      (snap) => {
+        const list: BarcodeRegistryRecord[] = snap.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            code: normalizeBarcodeString(String(d.code || '')),
+            format: (d.format as BarcodeFormat) || detectBarcodeFormat(String(d.code || '')),
+            productId: String(d.productId || ''),
+            ...(d.variantId ? { variantId: String(d.variantId) } : {}),
+            packagingType: (d.packagingType as BarcodePackagingType) || 'unit',
+            label: String(d.label || 'Unit'),
+            unitsPerScan: Math.max(1, Math.round(Number(d.unitsPerScan) || 1)),
+            active: d.active !== false,
+            source: (d.source as BarcodeSource) || 'manufacturer',
+            createdAt: tsToIso(d.createdAt),
+            updatedAt: tsToIso(d.updatedAt),
+          };
+        });
+        setBarcodeRegistry(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, barcodePath)
+    );
+
     return () => {
       unsubWs();
       unsubProducts();
+      unsubBarcodes();
       unsubIngredients();
       unsubSales();
       unsubExpenses();
@@ -945,6 +1058,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         let ops = 0;
         for (const p of cur.products) {
           batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', p.id), {
+            memberUids,
+            updatedAt: serverTimestamp(),
+          });
+          ops++;
+        }
+        for (const bc of cur.barcodeRegistry) {
+          batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', bc.id), {
             memberUids,
             updatedAt: serverTimestamp(),
           });
@@ -1033,6 +1153,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             familyMembers: next.familyMembers.slice(0, 10),
             lowStockDefault: clampNumber(next.lowStockDefault, 0, 1000000),
             allowNegativeStock: Boolean(next.allowNegativeStock),
+            enableOpenFoodFactsLookup: next.enableOpenFoodFactsLookup !== false,
             timezone: next.timezone || BUSINESS_TIMEZONE,
             updatedAt: serverTimestamp(),
           });
@@ -1045,65 +1166,273 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 
   const saveProduct = useCallback(
-    async (input: Omit<Product, 'id'> & { id?: string }) => {
-      const isEdit = Boolean(input.id);
-      const id = input.id || generateId('prod');
-      const existingProd = isEdit ? latestRef.current.products.find((p) => p.id === id) : undefined;
+    async (
+      input: Omit<Product, 'id'> & { id?: string; barcodeSource?: BarcodeSource }
+    ): Promise<SaveProductResult> => {
+      const { barcodeSource, ...productInput } = input;
+      const isEdit = Boolean(productInput.id);
+      const id = productInput.id || generateId('prod');
+      const cur = latestRef.current;
+      const existingProd = isEdit ? cur.products.find((p) => p.id === id) : undefined;
+
+      // Prevent duplicate active barcode assignments across products, variants, and cartons
+      const conflicts = findDuplicateBarcodeConflicts(
+        {
+          id,
+          name: productInput.name,
+          barcode: productInput.barcode,
+          variants: productInput.variants,
+          packagingBarcodes: productInput.packagingBarcodes,
+        },
+        cur.products,
+        cur.barcodeRegistry
+      );
+      if (conflicts.length > 0) {
+        const first = conflicts[0];
+        const msg = first.isInternalDuplicate
+          ? `Duplicate barcode "${first.code}" appears more than once on this product.`
+          : `Barcode "${first.code}" is already assigned to "${first.existingProductName}"${
+              first.existingVariantName ? ` (${first.existingVariantName})` : ''
+            }.`;
+        return { ok: false, error: msg };
+      }
 
       // Increment recipeVersion whenever recipe changes on edit
       const recipeChanged =
-        existingProd && JSON.stringify(existingProd.recipe) !== JSON.stringify(input.recipe);
+        existingProd && JSON.stringify(existingProd.recipe) !== JSON.stringify(productInput.recipe);
       const nextRecipeVersion = recipeChanged
         ? (existingProd?.recipeVersion ?? 1) + 1
-        : Math.max(1, input.recipeVersion ?? existingProd?.recipeVersion ?? 1);
+        : Math.max(1, productInput.recipeVersion ?? existingProd?.recipeVersion ?? 1);
 
       const clean = normalizeProduct({
-        ...input,
+        ...productInput,
         id,
         recipeVersion: nextRecipeVersion,
         updatedAt: new Date().toISOString(),
       });
 
+      const nextBarcodeRecords = extractProductBarcodeRecords(clean, barcodeSource);
+      const nextBarcodeIds = new Set(nextBarcodeRecords.map((r) => r.id));
+      const previousProductRecords = cur.barcodeRegistry.filter((r) => r.productId === id);
+      const removedBarcodeIds = previousProductRecords
+        .filter((r) => !nextBarcodeIds.has(r.id))
+        .map((r) => r.id);
+
       setProducts((prev) => (isEdit ? prev.map((p) => (p.id === id ? clean : p)) : [clean, ...prev]));
+      setBarcodeRegistry((prev) => {
+        const withoutThisProduct = prev.filter((r) => r.productId !== id && !nextBarcodeIds.has(r.id));
+        return [...nextBarcodeRecords, ...withoutThisProduct];
+      });
 
       if (user && cloudWorkspaceId) {
         const path = `workspaces/${cloudWorkspaceId}/products/${id}`;
         const fields = productToFirestoreFields(clean);
+        const uids = activeMemberUids();
         try {
+          const batch = writeBatch(db);
           if (isEdit) {
-            await updateDoc(doc(db, 'workspaces', cloudWorkspaceId, 'products', id), {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', id), {
               ...fields,
               updatedAt: serverTimestamp(),
             });
           } else {
-            await setDoc(doc(db, 'workspaces', cloudWorkspaceId, 'products', id), {
+            batch.set(doc(db, 'workspaces', cloudWorkspaceId, 'products', id), {
               workspaceId: cloudWorkspaceId,
-              memberUids: activeMemberUids(),
+              memberUids: uids,
               ...fields,
               createdBy: user.uid,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             });
           }
+
+          for (const removedId of removedBarcodeIds) {
+            batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', removedId));
+          }
+
+          const existingRegMap = new Map(cur.barcodeRegistry.map((r) => [r.id, r]));
+          for (const rec of nextBarcodeRecords) {
+            const existingRec = existingRegMap.get(rec.id);
+            const bcRef = doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', rec.id);
+            if (existingRec && existingRec.productId === id) {
+              batch.update(
+                bcRef,
+                stripUndefined({
+                  format: rec.format,
+                  productId: rec.productId,
+                  ...(rec.variantId ? { variantId: sanitizeString(rec.variantId, 64) } : {}),
+                  packagingType: rec.packagingType,
+                  label: sanitizeString(rec.label || 'Unit', 80),
+                  unitsPerScan: clampNumber(Math.round(rec.unitsPerScan || 1), 1, 10000),
+                  active: Boolean(rec.active),
+                  source: rec.source,
+                  updatedAt: serverTimestamp(),
+                })
+              );
+            } else {
+              batch.set(bcRef, barcodeRecordToFirestoreDoc(rec, cloudWorkspaceId, uids, user.uid));
+            }
+          }
+
+          await batch.commit();
         } catch (err) {
           handleFirestoreError(err, isEdit ? OperationType.UPDATE : OperationType.CREATE, path);
         }
       }
+
+      return { ok: true, product: clean };
     },
     [user, cloudWorkspaceId, activeMemberUids]
   );
 
   const deleteProduct = useCallback(
     async (productId: string) => {
+      const removedBarcodes = latestRef.current.barcodeRegistry.filter(
+        (r) => r.productId === productId
+      );
       setProducts((prev) => prev.filter((p) => p.id !== productId));
+      setBarcodeRegistry((prev) => prev.filter((r) => r.productId !== productId));
+
       if (user && cloudWorkspaceId) {
         const path = `workspaces/${cloudWorkspaceId}/products/${productId}`;
         try {
-          await deleteDoc(doc(db, 'workspaces', cloudWorkspaceId, 'products', productId));
+          const batch = writeBatch(db);
+          batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'products', productId));
+          for (const rec of removedBarcodes) {
+            batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', rec.id));
+          }
+          await batch.commit();
         } catch (err) {
           handleFirestoreError(err, OperationType.DELETE, path);
         }
       }
+    },
+    [user, cloudWorkspaceId]
+  );
+
+  const lookupBarcode = useCallback(
+    async (
+      rawCode: string,
+      options?: { skipExternal?: boolean }
+    ): Promise<BarcodeResolutionResult> => {
+      const code = normalizeBarcodeString(rawCode);
+      const format = detectBarcodeFormat(code);
+      if (!code) {
+        return {
+          found: false,
+          code: '',
+          format,
+          source: 'not_found',
+          unitsPerScan: 1,
+          externalPrefill: null,
+          lookedUpExternally: false,
+        };
+      }
+
+      const cur = latestRef.current;
+
+      // Step 1: Always check JuiceFlow Firestore barcode registry FIRST
+      if (user && cloudWorkspaceId) {
+        const docId = toBarcodeDocId(code);
+        try {
+          const bcSnap = await getDoc(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', docId));
+          if (bcSnap.exists()) {
+            const d = bcSnap.data();
+            const regRecord: BarcodeRegistryRecord = {
+              id: bcSnap.id,
+              code: normalizeBarcodeString(String(d.code || code)),
+              format: (d.format as BarcodeFormat) || format,
+              productId: String(d.productId || ''),
+              ...(d.variantId ? { variantId: String(d.variantId) } : {}),
+              packagingType: (d.packagingType as BarcodePackagingType) || 'unit',
+              label: String(d.label || 'Unit'),
+              unitsPerScan: Math.max(1, Math.round(Number(d.unitsPerScan) || 1)),
+              active: d.active !== false,
+              source: (d.source as BarcodeSource) || 'manufacturer',
+              createdAt: tsToIso(d.createdAt),
+              updatedAt: tsToIso(d.updatedAt),
+            };
+            const matchedProduct = cur.products.find((p) => p.id === regRecord.productId);
+            if (matchedProduct) {
+              const matchedVariant = regRecord.variantId
+                ? matchedProduct.variants?.find((v) => v.id === regRecord.variantId)
+                : undefined;
+              return {
+                found: true,
+                code,
+                format: regRecord.format,
+                source: 'firestore_registry',
+                product: matchedProduct,
+                variant: matchedVariant,
+                registryRecord: regRecord,
+                unitsPerScan: regRecord.unitsPerScan,
+                packagingType: regRecord.packagingType,
+                packLabel: regRecord.label,
+                externalPrefill: null,
+                lookedUpExternally: false,
+              };
+            }
+          }
+        } catch {
+          // Offline or transient read miss -> fall through to local registry
+        }
+      }
+
+      // Step 2: Check local mirrored barcode registry & embedded product barcodes
+      const localHit = resolveFromRegistryAndProducts(code, cur.barcodeRegistry, cur.products);
+      if (localHit) {
+        return {
+          found: true,
+          code: localHit.code,
+          format: localHit.format,
+          source: 'local_registry',
+          product: localHit.product,
+          variant: localHit.variant,
+          registryRecord: localHit.registryRecord,
+          unitsPerScan: localHit.unitsPerScan,
+          packagingType: localHit.packagingType,
+          packLabel: localHit.packLabel,
+          externalPrefill: null,
+          lookedUpExternally: false,
+        };
+      }
+
+      // Step 3: Optional Open Food Facts API v3 external lookup (prefill metadata only)
+      const allowExternal =
+        !options?.skipExternal && cur.settings.enableOpenFoodFactsLookup !== false;
+      if (allowExternal) {
+        const prefill = await lookupOpenFoodFactsV3(code);
+        if (prefill) {
+          return {
+            found: false,
+            code,
+            format,
+            source: 'open_food_facts',
+            unitsPerScan: 1,
+            externalPrefill: prefill,
+            lookedUpExternally: true,
+          };
+        }
+        return {
+          found: false,
+          code,
+          format,
+          source: 'not_found',
+          unitsPerScan: 1,
+          externalPrefill: null,
+          lookedUpExternally: true,
+        };
+      }
+
+      return {
+        found: false,
+        code,
+        format,
+        source: 'not_found',
+        unitsPerScan: 1,
+        externalPrefill: null,
+        lookedUpExternally: false,
+      };
     },
     [user, cloudWorkspaceId]
   );
@@ -2469,6 +2798,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       settings: latestRef.current.settings,
       ingredients: latestRef.current.ingredients,
       products: latestRef.current.products,
+      barcodeRegistry: latestRef.current.barcodeRegistry,
       sales: latestRef.current.sales,
       expenses: latestRef.current.expenses,
       purchases: latestRef.current.purchases,
@@ -2483,9 +2813,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!parsed.settings || !Array.isArray(parsed.ingredients) || !Array.isArray(parsed.products)) {
         return { ok: false, error: 'Invalid JuiceFlow backup file.' };
       }
+      const normalizedProds = parsed.products.map((p) => normalizeProduct(p));
       setSettings(normalizeSettings(parsed.settings, createInitialSettings()));
       setIngredients(parsed.ingredients);
-      setProducts(parsed.products.map((p) => normalizeProduct(p)));
+      setProducts(normalizedProds);
+      setBarcodeRegistry(
+        Array.isArray(parsed.barcodeRegistry) && parsed.barcodeRegistry.length > 0
+          ? parsed.barcodeRegistry
+          : buildRegistryFromProducts(normalizedProds)
+      );
       setSales(Array.isArray(parsed.sales) ? parsed.sales.map((s) => normalizeSale(s)) : []);
       setExpenses(Array.isArray(parsed.expenses) ? parsed.expenses : []);
       setPurchases(Array.isArray(parsed.purchases) ? parsed.purchases : []);
@@ -2504,11 +2840,247 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const seed = createSeedData();
     setIngredients(seed.ingredients);
     setProducts(seed.products);
+    setBarcodeRegistry(buildRegistryFromProducts(seed.products));
     setSales(seed.sales);
     setExpenses(seed.expenses);
     setPurchases(seed.purchases);
     setStockMovements(seed.stockMovements);
   }, []);
+
+  const refreshData = useCallback(async (): Promise<OperationResult> => {
+    setRefreshing(true);
+    try {
+      if (!user || !cloudWorkspaceId) {
+        const snap = loadLocalSnapshot();
+        setSettings(snap.settings);
+        setIngredients(snap.ingredients);
+        setProducts(snap.products);
+        setBarcodeRegistry(snap.barcodeRegistry);
+        setSales(snap.sales);
+        setExpenses(snap.expenses);
+        setPurchases(snap.purchases);
+        setStockMovements(snap.stockMovements);
+        return { ok: true };
+      }
+
+      const fetchDoc = async (ref: DocumentReference<DocumentData>) => {
+        try {
+          return await getDocFromServer(ref);
+        } catch {
+          return await getDoc(ref);
+        }
+      };
+
+      const fetchQuery = async (q: Query<DocumentData>) => {
+        try {
+          return await getDocsFromServer(q);
+        } catch {
+          return await getDocs(q);
+        }
+      };
+
+      const wsRef = doc(db, 'workspaces', cloudWorkspaceId);
+      const prodPath = `workspaces/${cloudWorkspaceId}/products`;
+      const bcPath = `workspaces/${cloudWorkspaceId}/barcodes`;
+      const ingPath = `workspaces/${cloudWorkspaceId}/ingredients`;
+      const salesPath = `workspaces/${cloudWorkspaceId}/sales`;
+      const expPath = `workspaces/${cloudWorkspaceId}/expenses`;
+      const purPath = `workspaces/${cloudWorkspaceId}/purchases`;
+      const movPath = `workspaces/${cloudWorkspaceId}/stockMovements`;
+
+      const [wsSnap, prodSnap, bcSnap, ingSnap, salesSnap, expSnap, purSnap, movSnap] =
+        await Promise.all([
+          fetchDoc(wsRef),
+          fetchQuery(query(collection(db, prodPath), where('memberUids', 'array-contains', user.uid))),
+          fetchQuery(query(collection(db, bcPath), where('memberUids', 'array-contains', user.uid))),
+          fetchQuery(query(collection(db, ingPath), where('memberUids', 'array-contains', user.uid))),
+          fetchQuery(query(collection(db, salesPath), where('memberUids', 'array-contains', user.uid))),
+          fetchQuery(query(collection(db, expPath), where('memberUids', 'array-contains', user.uid))),
+          fetchQuery(query(collection(db, purPath), where('memberUids', 'array-contains', user.uid))),
+          fetchQuery(query(collection(db, movPath), where('memberUids', 'array-contains', user.uid))),
+        ]);
+
+      if (wsSnap.exists()) {
+        const d = wsSnap.data();
+        const uids = Array.isArray(d.memberUids) ? (d.memberUids as string[]) : [user.uid];
+        setMemberUids(uids);
+        setSettings((prev) =>
+          normalizeSettings(
+            {
+              ...prev,
+              workspaceId: cloudWorkspaceId,
+              inviteCode: String(d.inviteCode || prev.inviteCode),
+              name: String(d.name || prev.name),
+              location: String(d.location ?? prev.location),
+              currency: 'KHR',
+              usdRate: Number(d.usdRate) || prev.usdRate,
+              language: d.language === 'vi' ? 'vi' : 'en',
+              familyMembers:
+                Array.isArray(d.familyMembers) && d.familyMembers.length > 0
+                  ? (d.familyMembers as string[])
+                  : prev.familyMembers,
+              lowStockDefault: Number(d.lowStockDefault ?? prev.lowStockDefault),
+              allowNegativeStock: Boolean(d.allowNegativeStock ?? prev.allowNegativeStock ?? false),
+              enableOpenFoodFactsLookup:
+                d.enableOpenFoodFactsLookup !== undefined
+                  ? Boolean(d.enableOpenFoodFactsLookup)
+                  : prev.enableOpenFoodFactsLookup !== false,
+              timezone: String(d.timezone || BUSINESS_TIMEZONE),
+            },
+            prev
+          )
+        );
+      }
+
+      setProducts(
+        prodSnap.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return normalizeProduct({
+            id: docSnap.id,
+            ...d,
+            createdAt: tsToIso(d.createdAt),
+            updatedAt: tsToIso(d.updatedAt),
+          } as Partial<Product> & { id: string });
+        })
+      );
+
+      setBarcodeRegistry(
+        bcSnap.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            code: normalizeBarcodeString(String(d.code || '')),
+            format: (d.format as BarcodeFormat) || detectBarcodeFormat(String(d.code || '')),
+            productId: String(d.productId || ''),
+            ...(d.variantId ? { variantId: String(d.variantId) } : {}),
+            packagingType: (d.packagingType as BarcodePackagingType) || 'unit',
+            label: String(d.label || 'Unit'),
+            unitsPerScan: Math.max(1, Math.round(Number(d.unitsPerScan) || 1)),
+            active: d.active !== false,
+            source: (d.source as BarcodeSource) || 'manufacturer',
+            createdAt: tsToIso(d.createdAt),
+            updatedAt: tsToIso(d.updatedAt),
+          };
+        })
+      );
+
+      setIngredients(
+        ingSnap.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            name: String(d.name || ''),
+            nameVi: String(d.nameVi || ''),
+            unit: d.unit,
+            stockQty: Number(d.stockQty) || 0,
+            reorderLevel: Number(d.reorderLevel) || 0,
+            unitCostKhr: Number(d.unitCostKhr) || 0,
+            supplier: String(d.supplier || ''),
+            createdAt: tsToIso(d.createdAt),
+            updatedAt: tsToIso(d.updatedAt),
+          };
+        })
+      );
+
+      setSales(
+        salesSnap.docs
+          .map((docSnap) => {
+            const d = docSnap.data();
+            return normalizeSale({
+              id: docSnap.id,
+              ...d,
+              createdAt: tsToIso(d.createdAt),
+            } as Partial<Sale> & { id: string });
+          })
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      );
+
+      setExpenses(
+        expSnap.docs
+          .map((docSnap) => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              expenseDate: String(d.expenseDate || todayIso()),
+              title: String(d.title || ''),
+              category: d.category as ExpenseCategory,
+              scope: (d.scope === 'household' ? 'household' : 'business') as ExpenseScope,
+              amountKhr: Number(d.amountKhr) || 0,
+              paymentMethod: d.paymentMethod as PaymentMethod,
+              vendor: String(d.vendor || ''),
+              note: String(d.note || ''),
+              linkedIngredientId: String(d.linkedIngredientId || ''),
+              isInventoryPurchase: Boolean(d.isInventoryPurchase),
+              recordedBy: String(d.recordedBy || ''),
+              createdAt: tsToIso(d.createdAt),
+            };
+          })
+          .sort(
+            (a, b) =>
+              b.expenseDate.localeCompare(a.expenseDate) || b.createdAt.localeCompare(a.createdAt)
+          )
+      );
+
+      setPurchases(
+        purSnap.docs
+          .map((docSnap) => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              purchaseDate: String(d.purchaseDate || todayIso()),
+              itemId: String(d.itemId || ''),
+              itemName: String(d.itemName || ''),
+              itemClassification: d.itemClassification as StockClassification,
+              quantity: Number(d.quantity) || 0,
+              ...(d.packCount !== undefined ? { packCount: Number(d.packCount) } : {}),
+              ...(d.unitsPerPack !== undefined ? { unitsPerPack: Number(d.unitsPerPack) } : {}),
+              unit: d.unit,
+              totalCostKhr: Number(d.totalCostKhr) || 0,
+              unitCostKhr: Number(d.unitCostKhr) || 0,
+              paymentMethod: d.paymentMethod as PaymentMethod,
+              supplier: String(d.supplier || ''),
+              ...(d.barcodeScanned ? { barcodeScanned: String(d.barcodeScanned) } : {}),
+              note: String(d.note || ''),
+              recordedBy: String(d.recordedBy || ''),
+              createdAt: tsToIso(d.createdAt),
+            };
+          })
+          .sort(
+            (a, b) =>
+              b.purchaseDate.localeCompare(a.purchaseDate) || b.createdAt.localeCompare(a.createdAt)
+          )
+      );
+
+      setStockMovements(
+        movSnap.docs
+          .map((docSnap) => {
+            const d = docSnap.data();
+            return normalizeStockMovement({
+              id: docSnap.id,
+              ...d,
+              createdAt: tsToIso(d.createdAt),
+            } as Partial<StockMovement> & { id: string });
+          })
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      );
+
+      return { ok: true };
+    } catch (err) {
+      if (cloudWorkspaceId) {
+        try {
+          handleFirestoreError(err, OperationType.LIST, `workspaces/${cloudWorkspaceId}`);
+        } catch {
+          // Structured error logged via handleFirestoreError; return user-friendly result
+        }
+      }
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Unable to refresh data from cloud.',
+      };
+    } finally {
+      setRefreshing(false);
+    }
+  }, [user, cloudWorkspaceId]);
 
   const t = useMemo(() => getTranslations(settings.language), [settings.language]);
 
@@ -2516,6 +3088,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     settings,
     ingredients,
     products,
+    barcodeRegistry,
     sales,
     expenses,
     purchases,
@@ -2524,6 +3097,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     authReady,
     cloudSynced: Boolean(user && cloudWorkspaceId),
     syncing,
+    refreshing,
+    refreshData,
     rememberMe,
     setRememberMe,
     t,
@@ -2532,6 +3107,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     updateSettings,
     saveProduct,
     deleteProduct,
+    lookupBarcode,
     saveIngredient,
     deleteIngredient,
     recordIngredientPurchase,

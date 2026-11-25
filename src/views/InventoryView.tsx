@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import type {
+  BarcodeFormat,
+  ExternalBarcodePrefill,
   Ingredient,
   IngredientUnit,
   MovementType,
@@ -23,12 +25,13 @@ import type {
 } from '../types';
 import { calculateRecipeCogs, formatKhr, formatQty, todayIso } from '../utils/format';
 import {
-  resolveBarcodeMatch,
   type BatchPrepMode,
   type StockShortage,
 } from '../utils/inventoryEngine';
+import { formatBarcodeTypeLabel } from '../utils/barcodeRegistry';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
+import { ProductFormModal } from '../components/ProductFormModal';
 
 type InventoryTab = 'packaged' | 'ingredients' | 'prepared_stock' | 'movements';
 
@@ -51,7 +54,10 @@ export const InventoryView: React.FC = () => {
     settings,
     products,
     ingredients,
+    barcodeRegistry,
     stockMovements,
+    saveProduct,
+    lookupBarcode,
     saveIngredient,
     recordStockPurchase,
     recordOpeningStock,
@@ -68,8 +74,14 @@ export const InventoryView: React.FC = () => {
   const [movementTierFilter, setMovementTierFilter] = useState<'ALL' | StockClassification>('ALL');
   const [feedbackMsg, setFeedbackMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  // Camera barcode scanner for Stock-In
+  // Camera barcode scanner & quick-registration for Stock-In
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [unknownStockBarcode, setUnknownStockBarcode] = useState<{
+    code: string;
+    format: BarcodeFormat;
+    prefill: ExternalBarcodePrefill | null;
+  } | null>(null);
+  const [quickRegisterOpen, setQuickRegisterOpen] = useState(false);
 
   // Ingredient CRUD modal
   const [ingModalOpen, setIngModalOpen] = useState(false);
@@ -200,38 +212,52 @@ export const InventoryView: React.FC = () => {
     );
   };
 
-  const handleStockInBarcode = (rawCode: string) => {
-    const match = resolveBarcodeMatch(rawCode, products);
-    if (!match) {
-      showNotice(
-        'err',
-        isVi
-          ? `Không tìm thấy sản phẩm với mã vạch "${rawCode}".`
-          : `No packaged/prepared product matched barcode "${rawCode}".`
-      );
+  const handleStockInBarcode = async (rawCode: string) => {
+    const cleaned = rawCode.trim();
+    if (!cleaned) return;
+    setUnknownStockBarcode(null);
+
+    const res = await lookupBarcode(cleaned);
+    if (!res.found || !res.product) {
+      // Calm registration prompt (not an error)
+      setUnknownStockBarcode({
+        code: res.code || cleaned,
+        format: res.format,
+        prefill: res.externalPrefill || null,
+      });
       return;
     }
-    if (match.product.productType === 'PREPARED_TO_ORDER') {
+    if (res.product.productType === 'PREPARED_TO_ORDER') {
       showNotice(
         'err',
         isVi
-          ? `"${match.product.name}" là món pha chế theo đơn — hãy nhập nguyên liệu ở tab Nguyên liệu.`
-          : `"${match.product.name}" is Made-to-Order — restock raw ingredients instead.`
+          ? `"${res.product.nameVi || res.product.name}" là món pha chế theo đơn — hãy nhập nguyên liệu ở tab Nguyên liệu.`
+          : `"${res.product.name}" is Made-to-Order — restock raw ingredients instead.`
       );
       return;
     }
 
     const target: StockItemTarget = {
-      ...toTargetFromProduct(match.product),
-      barcodeScanned: match.matchedBarcode,
-      packLabel: match.packLabel || match.product.packagingBarcodes?.[0]?.label,
+      ...toTargetFromProduct(res.product),
+      barcodeScanned: res.code,
+      packLabel: res.packLabel || res.product.packagingBarcodes?.[0]?.label,
     };
-    openPurchaseModal(target, match.isPackagingBarcode ? match.unitsPerPack : undefined);
+    openPurchaseModal(target, res.unitsPerScan > 1 ? res.unitsPerScan : undefined);
   };
 
   useBarcodeScanner({
-    enabled: !scannerOpen && !purchaseTarget && !ingModalOpen && !batchProduct && !openingTarget && !countTarget && !adjustTarget,
-    onScan: handleStockInBarcode,
+    enabled:
+      !scannerOpen &&
+      !purchaseTarget &&
+      !ingModalOpen &&
+      !batchProduct &&
+      !openingTarget &&
+      !countTarget &&
+      !adjustTarget &&
+      !quickRegisterOpen,
+    onScan: (code) => {
+      void handleStockInBarcode(code);
+    },
   });
 
   const openNewIngredient = () => {
@@ -535,6 +561,53 @@ export const InventoryView: React.FC = () => {
           }`}
         >
           {feedbackMsg.text}
+        </div>
+      )}
+
+      {unknownStockBarcode && (
+        <div
+          role="status"
+          className="bg-white border border-stone-300 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div className="flex items-start gap-2.5 min-w-0">
+            <ScanBarcode className="w-4 h-4 text-[#0F5C43] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-stone-900">
+                {isVi ? 'Mã vạch chưa có trong kho' : 'Unregistered Stock-In Barcode'}:{' '}
+                <span className="font-mono-num text-[#0F5C43]">{unknownStockBarcode.code}</span>{' '}
+                <span className="text-xs font-normal text-stone-500">
+                  ({formatBarcodeTypeLabel(unknownStockBarcode.format)})
+                </span>
+              </p>
+              <p className="text-xs text-stone-600 mt-0.5 truncate">
+                {unknownStockBarcode.prefill
+                  ? isVi
+                    ? `Gợi ý từ Open Food Facts: ${unknownStockBarcode.prefill.name}${unknownStockBarcode.prefill.brand ? ` · ${unknownStockBarcode.prefill.brand}` : ''}`
+                    : `Prefill from Open Food Facts: ${unknownStockBarcode.prefill.name}${unknownStockBarcode.prefill.brand ? ` · ${unknownStockBarcode.prefill.brand}` : ''}`
+                  : isVi
+                  ? 'Không tìm thấy trên Open Food Facts — bạn có thể đăng ký sản phẩm mới ngay rồi nhập kho.'
+                  : 'Not found externally — register this product now and proceed directly to Stock-In.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            <button
+              type="button"
+              onClick={() => setQuickRegisterOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors whitespace-nowrap"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              {isVi ? 'Đăng ký sản phẩm' : 'Register Product'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setUnknownStockBarcode(null)}
+              aria-label={t.common.close}
+              className="p-1.5 text-stone-400 hover:text-stone-700 rounded-md"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -1816,8 +1889,42 @@ export const InventoryView: React.FC = () => {
             ? 'Quét mã lẻ hoặc mã thùng (VD: thùng 24 chai sẽ tự động nhân 24).'
             : 'Scan a unit or carton barcode (carton barcodes auto-multiply pack quantities).'
         }
-        onDetected={handleStockInBarcode}
+        onDetected={(code) => {
+          void handleStockInBarcode(code);
+        }}
         onClose={() => setScannerOpen(false)}
+      />
+
+      {/* Quick Product Registration from Unrecognized Stock-In Scan */}
+      <ProductFormModal
+        open={quickRegisterOpen}
+        editingProduct={null}
+        existingProducts={products}
+        barcodeRegistry={barcodeRegistry}
+        ingredients={ingredients}
+        settings={settings}
+        t={t}
+        initialBarcode={unknownStockBarcode?.code || undefined}
+        initialPrefill={unknownStockBarcode?.prefill || null}
+        initialNotFoundExternally={Boolean(
+          unknownStockBarcode && !unknownStockBarcode.prefill
+        )}
+        onSave={saveProduct}
+        onSaved={(newProd) => {
+          setUnknownStockBarcode(null);
+          const displayName = isVi ? newProd.nameVi || newProd.name : newProd.name;
+          showNotice(
+            'ok',
+            isVi
+              ? `Đã đăng ký "${displayName}" — sẵn sàng nhập kho & bán POS.`
+              : `Registered "${displayName}" — ready for Stock-In & POS.`
+          );
+          if (newProd.productType === 'PACKAGED' || newProd.productType === 'PREPARED_STOCK') {
+            setActiveTab(newProd.productType === 'PACKAGED' ? 'packaged' : 'prepared_stock');
+            openPurchaseModal(toTargetFromProduct(newProd));
+          }
+        }}
+        onClose={() => setQuickRegisterOpen(false)}
       />
     </div>
   );

@@ -41,6 +41,7 @@
         "familyMembers": { "type": "array", "description": "Bounded list (max 10) of family operator display names." },
         "lowStockDefault": { "type": "number" },
         "allowNegativeStock": { "type": "boolean" },
+        "enableOpenFoodFactsLookup": { "type": "boolean" },
         "timezone": { "type": "string", "maxLength": 64 },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
@@ -97,6 +98,32 @@
       "required": [
         "workspaceId", "memberUids", "name", "nameVi", "category",
         "priceKhr", "imageUrl", "active", "recipe", "createdBy", "createdAt", "updatedAt"
+      ]
+    },
+    "BarcodeRecord": {
+      "title": "BarcodeRecord",
+      "description": "Universal barcode registry entry mapping exact string barcode identifiers (preserving leading zeros) to products, variants, or multi-unit cartons.",
+      "type": "object",
+      "properties": {
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUids": { "type": "array" },
+        "code": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "format": { "type": "string", "enum": ["EAN_13", "EAN_8", "UPC_A", "UPC_E", "CODE_128", "QR_CODE", "INTERNAL"] },
+        "productId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "variantId": { "type": "string", "maxLength": 64 },
+        "packagingType": { "type": "string", "enum": ["unit", "pack", "carton", "variant"] },
+        "label": { "type": "string", "maxLength": 80 },
+        "unitsPerScan": { "type": "number" },
+        "active": { "type": "boolean" },
+        "source": { "type": "string", "enum": ["manufacturer", "internal", "open_food_facts"] },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "workspaceId", "memberUids", "code", "format", "productId",
+        "packagingType", "label", "unitsPerScan", "active", "source",
+        "createdBy", "createdAt", "updatedAt"
       ]
     },
     "Ingredient": {
@@ -277,6 +304,10 @@
     "/workspaces/{workspaceId}/products/{productId}": {
       "schema": { "$ref": "#/entities/Product" },
       "description": "Product catalog (Packaged, Made-to-Order, Prepared Stock) with variants, barcodes, and recipes."
+    },
+    "/workspaces/{workspaceId}/barcodes/{barcodeId}": {
+      "schema": { "$ref": "#/entities/BarcodeRecord" },
+      "description": "Deterministic Firestore barcode registry mapping exact string codes (preserving leading zeros) to products, variants, and cartons."
     },
     "/workspaces/{workspaceId}/ingredients/{ingredientId}": {
       "schema": { "$ref": "#/entities/Ingredient" },

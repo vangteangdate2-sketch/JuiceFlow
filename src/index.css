@@ -48,7 +48,9 @@
     visibility: hidden;
   }
   #thermal-receipt-sheet,
-  #thermal-receipt-sheet * {
+  #thermal-receipt-sheet *,
+  #barcode-label-sheet,
+  #barcode-label-sheet * {
     visibility: visible;
   }
   #thermal-receipt-sheet {
@@ -65,5 +67,20 @@
   }
   #thermal-receipt-sheet.thermal-80mm {
     width: 80mm !important;
+  }
+  #barcode-label-sheet {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+  }
+  #barcode-label-sheet .thermal-sticker-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }

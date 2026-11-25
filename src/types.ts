@@ -248,6 +248,60 @@ export interface PurchaseRecord {
   createdAt: string;
 }
 
+export type BarcodeFormat =
+  | 'EAN_13'
+  | 'EAN_8'
+  | 'UPC_A'
+  | 'UPC_E'
+  | 'CODE_128'
+  | 'QR_CODE'
+  | 'INTERNAL';
+
+export type BarcodePackagingType = 'unit' | 'pack' | 'carton' | 'variant';
+
+export type BarcodeSource = 'manufacturer' | 'internal' | 'open_food_facts';
+
+export interface BarcodeRegistryRecord {
+  id: string; // Deterministic doc ID (bc_<hex>) strictly preserving leading zeros
+  code: string; // Exact trimmed string identifier (never coerced to number)
+  format: BarcodeFormat;
+  productId: string;
+  variantId?: string;
+  packagingType: BarcodePackagingType;
+  label: string;
+  unitsPerScan: number; // >= 1 (e.g., 1 for single unit, 6 for 6-pack, 24 for carton)
+  active: boolean;
+  source: BarcodeSource;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ExternalBarcodePrefill {
+  barcode: string;
+  source: 'open_food_facts';
+  name: string;
+  nameVi?: string;
+  brand?: string;
+  suggestedCategory?: ProductCategory;
+  packQuantityText?: string;
+  imageUrl?: string;
+}
+
+export interface BarcodeResolutionResult {
+  found: boolean;
+  code: string;
+  format: BarcodeFormat;
+  source: 'firestore_registry' | 'local_registry' | 'open_food_facts' | 'not_found';
+  product?: Product;
+  variant?: ProductVariant;
+  registryRecord?: BarcodeRegistryRecord;
+  unitsPerScan: number;
+  packagingType?: BarcodePackagingType;
+  packLabel?: string;
+  externalPrefill?: ExternalBarcodePrefill | null;
+  lookedUpExternally: boolean;
+}
+
 export interface WorkspaceSettings {
   workspaceId: string;
   inviteCode: string;
@@ -260,6 +314,7 @@ export interface WorkspaceSettings {
   activeOperator: string;
   lowStockDefault: number;
   allowNegativeStock?: boolean;
+  enableOpenFoodFactsLookup?: boolean;
   timezone?: string; // 'Asia/Phnom_Penh'
 }
 

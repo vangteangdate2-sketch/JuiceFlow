@@ -1,20 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertCircle,
   Barcode,
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Globe,
   HardDrive,
   ImagePlus,
+  Info,
   Layers,
   Loader2,
   Plus,
+  Printer,
   RefreshCw,
   ScanBarcode,
   Trash2,
   X,
 } from 'lucide-react';
 import type {
+  BarcodeRegistryRecord,
+  BarcodeSource,
+  ExternalBarcodePrefill,
   Ingredient,
   IngredientUnit,
   PackagingBarcode,
@@ -25,7 +32,7 @@ import type {
   RecipeItem,
   WorkspaceSettings,
 } from '../types';
-import type { StoreContextValue } from '../context/StoreContext';
+import type { SaveProductResult, StoreContextValue } from '../context/StoreContext';
 import {
   calculateRecipeCogs,
   computePriceFromMarkup,
@@ -33,11 +40,20 @@ import {
   generateId,
   getCompatibleUnits,
 } from '../utils/format';
+import {
+  detectBarcodeFormat,
+  findDuplicateBarcodeConflicts,
+  formatBarcodeTypeLabel,
+  generateUniqueInternalSku,
+  lookupOpenFoodFactsV3,
+  normalizeBarcodeString,
+} from '../utils/barcodeRegistry';
 import { compressImageBlobToDataUrl } from '../utils/image';
 import { DRINK_IMAGE_PRESETS } from '../utils/seedData';
 import { ProductPhoto } from './ProductPhoto';
 import { GoogleDrivePickerModal } from './GoogleDrivePickerModal';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
+import { BarcodeLabelModal } from './BarcodeLabelModal';
 
 const ALL_CATEGORIES: ProductCategory[] = [
   'juice',
@@ -125,16 +141,24 @@ const CollapsibleFieldset: React.FC<CollapsibleFieldsetProps> = ({
   );
 };
 
-export type ProductFormPayload = Omit<Product, 'id'> & { id?: string };
+export type ProductFormPayload = Omit<Product, 'id'> & {
+  id?: string;
+  barcodeSource?: BarcodeSource;
+};
 
 interface ProductFormModalProps {
   open: boolean;
   editingProduct: Product | null;
   existingProducts?: Product[];
+  barcodeRegistry?: BarcodeRegistryRecord[];
+  initialBarcode?: string;
+  initialPrefill?: ExternalBarcodePrefill | null;
+  initialNotFoundExternally?: boolean;
   ingredients: Ingredient[];
   settings: WorkspaceSettings;
   t: StoreContextValue['t'];
-  onSave: (payload: ProductFormPayload) => Promise<void>;
+  onSave: (payload: ProductFormPayload) => Promise<SaveProductResult | void>;
+  onSaved?: (product: Product) => void;
   onClose: () => void;
 }
 
@@ -142,10 +166,15 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   open,
   editingProduct,
   existingProducts = [],
+  barcodeRegistry = [],
+  initialBarcode,
+  initialPrefill = null,
+  initialNotFoundExternally = false,
   ingredients,
   settings,
   t,
   onSave,
+  onSaved,
   onClose,
 }) => {
   const isVi = settings.language === 'vi';
@@ -160,6 +189,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [manualPriceOverride, setManualPriceOverride] = useState(false);
   const [priceKhr, setPriceKhr] = useState('8000');
   const [barcode, setBarcode] = useState('');
+  const [barcodeSource, setBarcodeSource] = useState<BarcodeSource | undefined>(undefined);
   const [packagingBarcodes, setPackagingBarcodes] = useState<PackagingBarcode[]>([]);
   const [stockQty, setStockQty] = useState('0');
   const [reorderLevel, setReorderLevel] = useState('12');
@@ -174,6 +204,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [showMarkupCalc, setShowMarkupCalc] = useState(false);
   const [showBarcodes, setShowBarcodes] = useState(false);
   const [showVariants, setShowVariants] = useState(false);
+
+  const [prefillBanner, setPrefillBanner] = useState<'none' | 'off_prefill' | 'manual_new'>('none');
+  const [lookingUpExternal, setLookingUpExternal] = useState(false);
+  const [externalLookupNote, setExternalLookupNote] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const [labelModalOpen, setLabelModalOpen] = useState(false);
 
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState('');
@@ -191,6 +227,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   // Synchronize form state whenever modal opens or target product changes
   useEffect(() => {
     if (!open) return;
+    setSaveError('');
+    setExternalLookupNote('');
+    setLabelModalOpen(false);
+
     if (editingProduct) {
       setName(editingProduct.name);
       setNameVi(editingProduct.nameVi);
@@ -204,6 +244,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setManualPriceOverride(Boolean(editingProduct.manualPriceOverride));
       setPriceKhr(String(editingProduct.priceKhr));
       setBarcode(editingProduct.barcode || '');
+      setBarcodeSource(undefined);
       setPackagingBarcodes((editingProduct.packagingBarcodes || []).map((pb) => ({ ...pb })));
       setStockQty(String(editingProduct.stockQty ?? 0));
       setReorderLevel(String(editingProduct.reorderLevel ?? 10));
@@ -229,49 +270,96 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setShowMarkupCalc(editingProduct.markupPercent !== undefined);
       setShowBarcodes(false);
       setShowVariants(Boolean(editingProduct.variants && editingProduct.variants.length > 0));
+      setPrefillBanner('none');
     } else {
-      setName('');
-      setNameVi('');
-      setBrand('');
-      setProductType('PREPARED_TO_ORDER');
-      setCategory('juice');
+      const cleanInitCode = normalizeBarcodeString(initialPrefill?.barcode || initialBarcode || '');
+      const hasScannedInit = Boolean(cleanInitCode);
+
+      setName(initialPrefill?.name || '');
+      setNameVi(initialPrefill?.nameVi || '');
+      setBrand(initialPrefill?.brand || '');
+      setProductType(hasScannedInit ? 'PACKAGED' : 'PREPARED_TO_ORDER');
+      setCategory(
+        initialPrefill?.suggestedCategory || (hasScannedInit ? 'packaged' : 'juice')
+      );
+      // External prefill NEVER sets local KHR selling price, unit cost, or stock quantity
       setCostPriceKhr('0');
       setMarkupPercent('');
       setManualPriceOverride(false);
-      setPriceKhr('8000');
-      setBarcode('');
+      setPriceKhr(hasScannedInit ? '' : '8000');
+      setBarcode(cleanInitCode);
+      setBarcodeSource(initialPrefill ? 'open_food_facts' : undefined);
       setPackagingBarcodes([]);
       setStockQty('0');
       setReorderLevel(String(settings.lowStockDefault || 12));
       setUnit('pcs');
       setSupplier('');
-      setImageUrl(DRINK_IMAGE_PRESETS[0].url);
+      setImageUrl(initialPrefill?.imageUrl || DRINK_IMAGE_PRESETS[0].url);
       setActive(true);
       setPhotoError('');
       setRecipe(
-        ingredients.length > 0
+        !hasScannedInit && ingredients.length > 0
           ? [{ ingredientId: ingredients[0].id, quantity: 1, unit: ingredients[0].unit }]
           : []
       );
       setVariants([]);
-      setShowSecondaryNaming(false);
+      setShowSecondaryNaming(Boolean(initialPrefill?.nameVi || initialPrefill?.brand));
       setShowMarkupCalc(false);
-      setShowBarcodes(false);
+      setShowBarcodes(hasScannedInit);
       setShowVariants(false);
+      setPrefillBanner(
+        initialPrefill
+          ? 'off_prefill'
+          : hasScannedInit && initialNotFoundExternally
+            ? 'manual_new'
+            : hasScannedInit
+              ? 'manual_new'
+              : 'none'
+      );
     }
-  }, [open, editingProduct, ingredients, settings.lowStockDefault]);
+  }, [
+    open,
+    editingProduct,
+    initialBarcode,
+    initialPrefill,
+    initialNotFoundExternally,
+    ingredients,
+    settings.lowStockDefault,
+  ]);
 
   // Close modal with Escape when sub-modals are not open
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !drivePickerOpen && scannerTarget === null) {
+      if (e.key === 'Escape' && !drivePickerOpen && scannerTarget === null && !labelModalOpen) {
         onClose();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, drivePickerOpen, scannerTarget, onClose]);
+  }, [open, drivePickerOpen, scannerTarget, labelModalOpen, onClose]);
+
+  // Real-time duplicate active barcode validation across products, variants, and cartons
+  const barcodeConflicts = useMemo(
+    () =>
+      findDuplicateBarcodeConflicts(
+        {
+          id: editingProduct?.id,
+          name: name.trim() || editingProduct?.name || 'This product',
+          barcode,
+          variants: productType === 'PREPARED_TO_ORDER' ? variants : [],
+          packagingBarcodes,
+        },
+        existingProducts,
+        barcodeRegistry
+      ),
+    [editingProduct, name, barcode, productType, variants, packagingBarcodes, existingProducts, barcodeRegistry]
+  );
+
+  const detectedUnitFormat = useMemo(
+    () => (barcode.trim() ? detectBarcodeFormat(barcode) : null),
+    [barcode]
+  );
 
   const recipeCogs = useMemo(
     () => Math.round(calculateRecipeCogs(recipe, ingredients)),
@@ -357,6 +445,22 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    setSaveError('');
+
+    if (barcodeConflicts.length > 0) {
+      setShowBarcodes(true);
+      const first = barcodeConflicts[0];
+      setSaveError(
+        first.isInternalDuplicate
+          ? isVi
+            ? `Mã vạch "${first.code}" bị lặp lại nhiều lần trong cùng sản phẩm.`
+            : `Barcode "${first.code}" is entered more than once on this product.`
+          : isVi
+            ? `Mã vạch "${first.code}" đã thuộc về sản phẩm "${first.existingProductName}".`
+            : `Barcode "${first.code}" is already assigned to "${first.existingProductName}".`
+      );
+      return;
+    }
 
     const cleanRecipe = recipe.filter((r) => r.ingredientId && r.quantity > 0);
     const cleanVariants =
@@ -368,7 +472,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               name: v.name.trim(),
               nameVi: (v.nameVi || v.name).trim(),
               priceKhr: Math.max(0, Number(v.priceKhr) || 0),
-              barcode: (v.barcode || '').trim(),
+              barcode: normalizeBarcodeString(v.barcode),
               recipe: v.recipe.filter((r) => r.ingredientId && r.quantity > 0),
               recipeVersion: Math.max(1, v.recipeVersion || 1),
             }))
@@ -382,7 +486,17 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         ? Math.round(calculateRecipeCogs(cleanRecipe, ingredients))
         : Math.max(0, Number(costPriceKhr) || 0);
 
-    await onSave({
+    const cleanUnitBarcode = normalizeBarcodeString(barcode);
+    const cleanPackBarcodes = packagingBarcodes
+      .map((pb) => ({
+        ...pb,
+        barcode: normalizeBarcodeString(pb.barcode),
+        label: pb.label.trim() || `Pack (${Math.max(1, Math.round(Number(pb.unitsPerPack) || 1))})`,
+        unitsPerPack: Math.max(1, Math.round(Number(pb.unitsPerPack) || 1)),
+      }))
+      .filter((pb) => pb.barcode && pb.unitsPerPack >= 1);
+
+    const result = await onSave({
       id: editingProduct?.id,
       name: name.trim(),
       nameVi: nameVi.trim() || name.trim(),
@@ -395,10 +509,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       manualPriceOverride,
       imageUrl,
       active,
-      barcode: barcode.trim(),
-      packagingBarcodes: packagingBarcodes.filter(
-        (pb) => pb.barcode.trim() && Number(pb.unitsPerPack) >= 1
-      ),
+      barcode: cleanUnitBarcode,
+      barcodeSource,
+      packagingBarcodes: cleanPackBarcodes,
       stockQty: productType === 'PREPARED_TO_ORDER' ? 0 : Number(stockQty) || 0,
       reorderLevel:
         productType === 'PREPARED_TO_ORDER' ? 0 : Math.max(0, Number(reorderLevel) || 0),
@@ -408,6 +521,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       recipeVersion: 1,
       variants: cleanVariants,
     });
+
+    if (result && !result.ok) {
+      setShowBarcodes(true);
+      setSaveError(result.error || 'Could not save product.');
+      return;
+    }
+
+    if (result?.product && onSaved) {
+      onSaved(result.product);
+    }
     onClose();
   };
 
@@ -527,10 +650,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     );
   };
 
-  const handleBarcodeScanned = (code: string) => {
+  const handleBarcodeScanned = (rawCode: string) => {
+    const code = normalizeBarcodeString(rawCode);
     if (!scannerTarget) return;
     if (scannerTarget.kind === 'unit') {
       setBarcode(code);
+      setBarcodeSource('manufacturer');
     } else if (scannerTarget.kind === 'pack') {
       updatePackagingBarcode(scannerTarget.index, { barcode: code });
     } else if (scannerTarget.kind === 'variant') {
@@ -540,48 +665,114 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   };
 
   const handleAutoGenerateSku = () => {
-    const usedCodes = new Set<string>();
-    for (const p of existingProducts) {
-      if (p.barcode?.trim()) usedCodes.add(p.barcode.trim().toUpperCase());
-      for (const pb of p.packagingBarcodes || []) {
-        if (pb.barcode?.trim()) usedCodes.add(pb.barcode.trim().toUpperCase());
-      }
-      for (const v of p.variants || []) {
-        if (v.barcode?.trim()) usedCodes.add(v.barcode.trim().toUpperCase());
-      }
-    }
-    if (barcode.trim()) usedCodes.add(barcode.trim().toUpperCase());
-    for (const pb of packagingBarcodes) {
-      if (pb.barcode?.trim()) usedCodes.add(pb.barcode.trim().toUpperCase());
-    }
-    for (const v of variants) {
-      if (v.barcode?.trim()) usedCodes.add(v.barcode.trim().toUpperCase());
-    }
-
-    const typePrefix =
-      productType === 'PACKAGED' ? 'PKG' : productType === 'PREPARED_STOCK' ? 'PRP' : 'MTO';
-
-    const cleanNameSlug = name
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9]/g, '')
-      .toUpperCase()
-      .slice(0, 3);
-
-    const catSlug = category.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3);
-    const segment = cleanNameSlug.length >= 2 ? cleanNameSlug : catSlug || 'PRD';
-
-    let candidate = '';
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      const numPart = String(Math.floor(1000 + Math.random() * 9000));
-      candidate = `JF-${typePrefix}-${segment}-${numPart}`;
-      if (!usedCodes.has(candidate)) break;
-    }
-    if (!candidate || usedCodes.has(candidate)) {
-      candidate = `JF-${typePrefix}-${Date.now().toString(36).toUpperCase().slice(-6)}`;
-    }
+    const extraCodes = [
+      barcode,
+      ...packagingBarcodes.map((pb) => pb.barcode),
+      ...variants.map((v) => v.barcode || ''),
+    ].filter(Boolean);
+    const candidate = generateUniqueInternalSku({
+      productType,
+      category,
+      name,
+      existingProducts,
+      registry: barcodeRegistry,
+      extraUsedCodes: extraCodes,
+    });
     setBarcode(candidate);
+    setBarcodeSource('internal');
+    setExternalLookupNote('');
   };
+
+  const handleExternalPrefillLookup = async () => {
+    const code = normalizeBarcodeString(barcode);
+    if (!code || lookingUpExternal) return;
+    setLookingUpExternal(true);
+    setExternalLookupNote('');
+    try {
+      const prefill = await lookupOpenFoodFactsV3(code);
+      if (!prefill) {
+        setExternalLookupNote(
+          isVi
+            ? 'Không tìm thấy trên Open Food Facts — bạn có thể nhập thông tin thủ công bên trên.'
+            : 'Not found on Open Food Facts — fill in product details manually above.'
+        );
+        return;
+      }
+      if (!name.trim()) setName(prefill.name);
+      if (prefill.nameVi && !nameVi.trim()) {
+        setNameVi(prefill.nameVi);
+        setShowSecondaryNaming(true);
+      }
+      if (prefill.brand && !brand.trim()) {
+        setBrand(prefill.brand);
+        setShowSecondaryNaming(true);
+      }
+      if (prefill.suggestedCategory) setCategory(prefill.suggestedCategory);
+      if (prefill.imageUrl && imageUrl === DRINK_IMAGE_PRESETS[0].url) {
+        setImageUrl(prefill.imageUrl);
+      }
+      setBarcodeSource('open_food_facts');
+      setPrefillBanner('off_prefill');
+      setExternalLookupNote(
+        isVi
+          ? `Đã điền gợi ý "${prefill.name}" từ Open Food Facts. Hãy nhập giá bán KHR và tồn kho thực tế.`
+          : `Prefilled "${prefill.name}" from Open Food Facts. Enter your local KHR price and stock.`
+      );
+    } finally {
+      setLookingUpExternal(false);
+    }
+  };
+
+  const draftProductForLabels = useMemo<Product>(
+    () => ({
+      id: editingProduct?.id || 'draft',
+      name: name.trim() || (isVi ? 'Sản phẩm mới' : 'New Product'),
+      nameVi: nameVi.trim() || name.trim() || 'Sản phẩm mới',
+      brand: brand.trim(),
+      category,
+      productType,
+      priceKhr: liveSellingPrice,
+      costPriceKhr: liveUnitCost,
+      imageUrl,
+      active,
+      barcode: normalizeBarcodeString(barcode),
+      packagingBarcodes,
+      stockQty: Number(stockQty) || 0,
+      reorderLevel: Number(reorderLevel) || 0,
+      unit,
+      supplier,
+      recipe,
+      recipeVersion: 1,
+      variants,
+    }),
+    [
+      editingProduct,
+      name,
+      nameVi,
+      brand,
+      category,
+      productType,
+      liveSellingPrice,
+      liveUnitCost,
+      imageUrl,
+      active,
+      barcode,
+      packagingBarcodes,
+      stockQty,
+      reorderLevel,
+      unit,
+      supplier,
+      recipe,
+      variants,
+      isVi,
+    ]
+  );
+
+  const hasAnyLabelableCode = Boolean(
+    barcode.trim() ||
+      variants.some((v) => v.barcode?.trim()) ||
+      packagingBarcodes.some((pb) => pb.barcode?.trim())
+  );
 
   const secondaryNamingSummary = [
     nameVi.trim() && nameVi.trim() !== name.trim() ? nameVi.trim() : '',
@@ -636,6 +827,73 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
             {/* Scrollable Grid Body */}
             <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+              {/* Calm Info Banner for Open Food Facts Prefill or Unknown Barcode Manual Registration */}
+              {prefillBanner !== 'none' && (
+                <div
+                  role="status"
+                  className={`px-4 py-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                    prefillBanner === 'off_prefill'
+                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                      : 'bg-white border-stone-200 text-stone-700'
+                  }`}
+                >
+                  <Info className="w-4 h-4 text-[#0F5C43] shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold text-stone-900">
+                      {prefillBanner === 'off_prefill'
+                        ? isVi
+                          ? 'Đã điền thông tin tham khảo từ Open Food Facts'
+                          : 'Product details prefilled from Open Food Facts'
+                        : isVi
+                          ? `Đăng ký sản phẩm mới cho mã vạch ${barcode}`
+                          : `Registering new product for barcode ${barcode}`}
+                    </p>
+                    <p className="text-stone-600">
+                      {prefillBanner === 'off_prefill'
+                        ? isVi
+                          ? 'Chỉ tự động gợi ý tên, thương hiệu và danh mục. Vui lòng nhập giá bán (KHR), giá vốn và tồn kho của cửa hàng.'
+                          : 'Only name, brand, and category were prefilled. Please enter your local selling price (KHR), cost, and opening stock.'
+                        : isVi
+                          ? 'Không tìm thấy trong danh mục ngoài — hãy nhập tên sản phẩm, giá bán KHR và tồn kho thủ công bên dưới.'
+                          : 'Not found in external food catalog — enter product name, local KHR price, and stock manually below.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Duplicate Active Barcode Error Banner */}
+              {(saveError || barcodeConflicts.length > 0) && (
+                <div
+                  role="alert"
+                  className="px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-xs text-red-900 flex items-start gap-2.5"
+                >
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-semibold">
+                      {saveError ||
+                        (isVi
+                          ? 'Phát hiện mã vạch trùng lặp đang hoạt động'
+                          : 'Duplicate active barcode detected')}
+                    </p>
+                    {barcodeConflicts.map((c, idx) => (
+                      <p key={`${c.code}-${idx}`} className="font-mono-num">
+                        {c.isInternalDuplicate
+                          ? isVi
+                            ? `Mã "${c.code}" xuất hiện hơn 1 lần trên sản phẩm này.`
+                            : `"${c.code}" is entered more than once on this product.`
+                          : isVi
+                            ? `Mã "${c.code}" đang được gắn cho "${c.existingProductName}"${
+                                c.existingVariantName ? ` (${c.existingVariantName})` : ''
+                              }.`
+                            : `"${c.code}" is already assigned to "${c.existingProductName}"${
+                                c.existingVariantName ? ` (${c.existingVariantName})` : ''
+                              }.`}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Top Bar: Inventory Classification Selector */}
               <fieldset className="bg-white border border-stone-200 rounded-xl p-4 sm:p-5">
                 <legend className="sr-only">
@@ -1473,21 +1731,32 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                     {/* Unit Barcode / SKU (All product types) */}
                     <div className="md:col-span-6 space-y-1.5">
-                      <label
-                        htmlFor="pf-barcode"
-                        className="block text-xs font-medium text-stone-700"
-                      >
-                        {isVi ? 'Mã vạch đơn vị / SKU' : 'Unit Barcode / SKU'}
-                      </label>
+                      <div className="flex items-center justify-between gap-2">
+                        <label
+                          htmlFor="pf-barcode"
+                          className="block text-xs font-medium text-stone-700"
+                        >
+                          {isVi ? 'Mã vạch đơn vị / SKU' : 'Unit Barcode / SKU'}
+                        </label>
+                        {detectedUnitFormat && (
+                          <span className="font-mono-num text-[11px] font-semibold text-[#0F5C43]">
+                            {formatBarcodeTypeLabel(detectedUnitFormat)}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-wrap sm:flex-nowrap gap-1.5">
                         <input
                           id="pf-barcode"
                           type="text"
                           maxLength={64}
                           value={barcode}
-                          onChange={(e) => setBarcode(e.target.value)}
-                          placeholder="e.g. 8851959132012"
-                          className="flex-1 min-w-[140px] px-3 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                          onChange={(e) => {
+                            setBarcode(e.target.value);
+                            setSaveError('');
+                            setExternalLookupNote('');
+                          }}
+                          placeholder="e.g. 0049000042566"
+                          className="flex-1 min-w-[130px] px-3 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
                         />
                         <button
                           type="button"
@@ -1511,11 +1780,50 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           {isVi ? 'Quét' : 'Scan'}
                         </button>
                       </div>
-                      <p className="text-[11px] text-stone-500">
-                        {isVi
-                          ? 'Áp dụng cho quét bán hàng POS và tìm kiếm nhanh.'
-                          : 'Works for quick POS scanning across made-to-order, packaged, and prepared items.'}
-                      </p>
+
+                      {/* External Lookup + Label Studio Action Row */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {settings.enableOpenFoodFactsLookup !== false &&
+                          barcode.trim().length >= 6 &&
+                          detectedUnitFormat !== 'INTERNAL' && (
+                            <button
+                              type="button"
+                              disabled={lookingUpExternal}
+                              onClick={handleExternalPrefillLookup}
+                              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#0F5C43] hover:underline disabled:opacity-50"
+                            >
+                              {lookingUpExternal ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Globe className="w-3 h-3" />
+                              )}
+                              {isVi
+                                ? 'Tra Open Food Facts (chỉ gợi ý tên)'
+                                : 'Lookup Open Food Facts (name only)'}
+                            </button>
+                          )}
+
+                        {hasAnyLabelableCode && (
+                          <button
+                            type="button"
+                            onClick={() => setLabelModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-stone-700 hover:text-[#0F5C43]"
+                          >
+                            <Printer className="w-3 h-3 text-[#0F5C43]" />
+                            {isVi ? 'In tem Code 128 / QR' : 'Print Code 128 / QR Label'}
+                          </button>
+                        )}
+                      </div>
+
+                      {externalLookupNote ? (
+                        <p className="text-[11px] text-stone-600">{externalLookupNote}</p>
+                      ) : (
+                        <p className="text-[11px] text-stone-500">
+                          {isVi
+                            ? 'Giữ nguyên số 0 ở đầu (EAN-13/8, UPC-A/E, Code 128, QR).'
+                            : 'Preserves leading zeros across EAN-13/8, UPC-A/E, Code 128, and QR.'}
+                        </p>
+                      )}
                     </div>
 
                     {/* Carton / Pack / Multi-Unit Barcodes (All product types) */}
@@ -1667,7 +1975,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors"
+                    disabled={barcodeConflicts.length > 0}
+                    className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] disabled:opacity-45 rounded-lg transition-colors"
                   >
                     {t.common.save}
                   </button>
@@ -1694,6 +2003,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         title={isVi ? 'Quét mã vạch sản phẩm' : 'Scan Product Barcode'}
         onDetected={handleBarcodeScanned}
         onClose={() => setScannerTarget(null)}
+      />
+
+      {/* Internal Code 128 & QR Label Studio */}
+      <BarcodeLabelModal
+        open={labelModalOpen}
+        product={draftProductForLabels}
+        initialCode={barcode.trim() || undefined}
+        shopName={settings.name}
+        isVi={isVi}
+        onClose={() => setLabelModalOpen(false)}
       />
     </>
   );

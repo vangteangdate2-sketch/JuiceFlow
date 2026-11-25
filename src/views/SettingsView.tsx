@@ -67,6 +67,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [usdRate, setUsdRate] = useState(String(settings.usdRate));
   const [lowStockDefault, setLowStockDefault] = useState(String(settings.lowStockDefault));
   const [allowNegativeStock, setAllowNegativeStock] = useState(Boolean(settings.allowNegativeStock));
+  const [enableOpenFoodFactsLookup, setEnableOpenFoodFactsLookup] = useState(
+    settings.enableOpenFoodFactsLookup !== false
+  );
   const [savedNotice, setSavedNotice] = useState('');
 
   // Family members
@@ -107,12 +110,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setUsdRate(String(settings.usdRate));
     setLowStockDefault(String(settings.lowStockDefault));
     setAllowNegativeStock(Boolean(settings.allowNegativeStock));
+    setEnableOpenFoodFactsLookup(settings.enableOpenFoodFactsLookup !== false);
   }, [
     settings.name,
     settings.location,
     settings.usdRate,
     settings.lowStockDefault,
     settings.allowNegativeStock,
+    settings.enableOpenFoodFactsLookup,
   ]);
 
   useEffect(() => {
@@ -127,6 +132,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       usdRate: Math.max(100, Number(usdRate) || 4050),
       lowStockDefault: Math.max(0, Number(lowStockDefault) || 15),
       allowNegativeStock,
+      enableOpenFoodFactsLookup,
     });
     setSavedNotice(t.settings.savedSuccess);
     window.setTimeout(() => setSavedNotice(''), 2500);
@@ -437,6 +443,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </span>
                 <span className="block text-xs text-stone-500">
                   {t.settings.allowNegativeStockDesc}
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={enableOpenFoodFactsLookup}
+                onChange={(e) => setEnableOpenFoodFactsLookup(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-stone-300 accent-[#0F5C43]"
+              />
+              <span>
+                <span className="block text-sm font-medium text-stone-900">
+                  {settings.language === 'vi'
+                    ? 'Tự động tra cứu Open Food Facts v3 khi quét mã mới'
+                    : 'Auto-lookup unrecognized barcodes on Open Food Facts v3'}
+                </span>
+                <span className="block text-xs text-stone-500">
+                  {settings.language === 'vi'
+                    ? 'Luôn kiểm tra sổ mã vạch JuiceFlow trước. Kết quả ngoài chỉ gợi ý tên, thương hiệu, nhóm hàng — không bao giờ tự điền giá KHR hay tồn kho.'
+                    : 'Always checks JuiceFlow Firestore registry first. External matches only prefill name, brand, and category — never local KHR prices or stock quantities.'}
                 </span>
               </span>
             </label>

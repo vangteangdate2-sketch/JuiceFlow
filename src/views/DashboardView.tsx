@@ -1,5 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -31,6 +33,7 @@ interface UnifiedLowStockItem {
 export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const { settings, sales, expenses, purchases, products, ingredients, t } = useStore();
   const isVi = settings.language === 'vi';
+  const [chartMode, setChartMode] = useState<'revenue_costs' | 'profit'>('revenue_costs');
   const today = todayIso();
   const sevenDaysAgo = daysAgoIso(6);
 
@@ -66,15 +69,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
   const chartData = useMemo(() => {
     const byDate = new Map(periodReport.series.map((b) => [b.periodKey, b]));
-    const days: { date: string; label: string; revenue: number; costs: number }[] = [];
+    const days: { date: string; label: string; revenue: number; costs: number; profit: number }[] =
+      [];
     for (let i = 6; i >= 0; i--) {
       const iso = daysAgoIso(i);
       const b = byDate.get(iso);
+      const rev = b ? b.netRevenueKhr : 0;
+      const costs = b ? b.cogsKhr + b.operatingExpensesKhr : 0;
       days.push({
         date: iso,
         label: iso.slice(5),
-        revenue: b ? b.netRevenueKhr : 0,
-        costs: b ? b.cogsKhr + b.operatingExpensesKhr : 0,
+        revenue: rev,
+        costs,
+        profit: rev - costs,
       });
     }
     return days;
@@ -204,120 +211,220 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         onNavigate={onNavigate}
       />
 
-      {/* 4-Column KPI Strip (reconciled with ReportsView Accrual P&L) */}
-      <div className="bg-white border border-stone-200 rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-stone-200">
-        <div className="p-5">
-          <p className="text-xs font-medium text-stone-500">{t.dashboard.revenueToday}</p>
-          <p className="mt-2 font-mono-num text-2xl font-semibold text-stone-900">
-            {formatKhr(todayReport.netRevenueKhr)}
-          </p>
-          <p className="mt-1.5 text-xs text-stone-500 font-mono-num">
-            {todayReport.completedOrderCount} {t.dashboard.ordersCount} ·{' '}
-            {formatUsdRef(todayReport.netRevenueKhr, settings.usdRate)}
-          </p>
-        </div>
-
-        <div className="p-5">
-          <p className="text-xs font-medium text-stone-500">{t.dashboard.revenuePeriod}</p>
-          <p className="mt-2 font-mono-num text-2xl font-semibold text-stone-900">
-            {formatKhr(periodReport.netRevenueKhr)}
-          </p>
-          <p className="mt-1.5 text-xs text-stone-500 font-mono-num">
-            {periodReport.completedOrderCount} {t.dashboard.ordersCount} ·{' '}
-            {formatUsdRef(periodReport.netRevenueKhr, settings.usdRate)}
-          </p>
-        </div>
-
-        <div className="p-5">
-          <p className="text-xs font-medium text-stone-500">
-            {isVi ? 'COGS + Chi vận hành (7 ngày)' : 'COGS + OpEx (7 Days)'}
-          </p>
-          <p className="mt-2 font-mono-num text-2xl font-semibold text-stone-900">
-            {formatKhr(periodReport.netCogsKhr + periodReport.operatingExpensesKhr)}
-          </p>
-          <p className="mt-1.5 text-xs text-stone-500 font-mono-num">
-            COGS {formatKhr(periodReport.netCogsKhr)} · OpEx{' '}
-            {formatKhr(periodReport.operatingExpensesKhr)}
-          </p>
-        </div>
-
-        <div className="p-5">
-          <p className="text-xs font-medium text-stone-500">{t.dashboard.netProfitPeriod}</p>
-          <p
-            className={`mt-2 font-mono-num text-2xl font-semibold ${
-              periodReport.netProfitKhr >= 0 ? 'text-emerald-700' : 'text-red-700'
-            }`}
+      {/* 7-Day Performance & Stock Strip (Distinct from Today's Daily Summary above) */}
+      <section aria-labelledby="period-performance-heading" className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2
+            id="period-performance-heading"
+            className="font-display text-base font-semibold text-stone-900 tracking-tight"
           >
-            {formatKhr(periodReport.netProfitKhr)}
-          </p>
-          <p className="mt-1.5 text-xs text-stone-500 font-mono-num">
-            {t.dashboard.margin}: {periodReport.netMarginPct}% ·{' '}
-            {isVi ? 'Kho:' : 'Stock:'}{' '}
-            {formatKhr(periodReport.inventoryValuation.totalInventoryValueKhr)}
-          </p>
+            {isVi ? 'Hiệu suất 7 ngày & Giá trị kho' : '7-Day Performance & Stock Value'}
+          </h2>
+          <span className="text-xs font-mono-num text-stone-500">
+            {sevenDaysAgo} – {today}
+          </span>
         </div>
-      </div>
+
+        <div className="bg-white border border-stone-200 rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-stone-200">
+          <div className="p-5">
+            <p className="text-xs font-medium text-stone-500">{t.dashboard.revenuePeriod}</p>
+            <p className="mt-2 font-mono-num text-2xl font-semibold text-stone-900">
+              {formatKhr(periodReport.netRevenueKhr)}
+            </p>
+            <p className="mt-1.5 text-xs text-stone-500 font-mono-num">
+              {periodReport.completedOrderCount} {t.dashboard.ordersCount} ·{' '}
+              {formatUsdRef(periodReport.netRevenueKhr, settings.usdRate)}
+            </p>
+          </div>
+
+          <div className="p-5">
+            <p className="text-xs font-medium text-stone-500">
+              {isVi ? 'COGS + Chi vận hành (7 ngày)' : 'COGS + OpEx (7 Days)'}
+            </p>
+            <p className="mt-2 font-mono-num text-2xl font-semibold text-stone-900">
+              {formatKhr(periodReport.netCogsKhr + periodReport.operatingExpensesKhr)}
+            </p>
+            <p className="mt-1.5 text-xs text-stone-500 font-mono-num">
+              COGS {formatKhr(periodReport.netCogsKhr)} · OpEx{' '}
+              {formatKhr(periodReport.operatingExpensesKhr)}
+            </p>
+          </div>
+
+          <div className="p-5">
+            <p className="text-xs font-medium text-stone-500">{t.dashboard.netProfitPeriod}</p>
+            <p
+              className={`mt-2 font-mono-num text-2xl font-semibold ${
+                periodReport.netProfitKhr >= 0 ? 'text-emerald-700' : 'text-red-700'
+              }`}
+            >
+              {formatKhr(periodReport.netProfitKhr)}
+            </p>
+            <p className="mt-1.5 text-xs text-stone-500 font-mono-num">
+              {t.dashboard.margin}: {periodReport.netMarginPct}% ·{' '}
+              {isVi ? 'Lãi gộp:' : 'Gross:'} {periodReport.grossMarginPct}%
+            </p>
+          </div>
+
+          <div className="p-5">
+            <p className="text-xs font-medium text-stone-500">
+              {isVi ? 'Tổng giá trị tồn kho' : 'Total Inventory Value'}
+            </p>
+            <p className="mt-2 font-mono-num text-2xl font-semibold text-stone-900">
+              {formatKhr(periodReport.inventoryValuation.totalInventoryValueKhr)}
+            </p>
+            <p className="mt-1.5 text-xs text-stone-500 font-mono-num">
+              {isVi ? 'Sản phẩm:' : 'Goods:'}{' '}
+              {formatKhr(
+                periodReport.inventoryValuation.packagedValueKhr +
+                  periodReport.inventoryValuation.preparedStockValueKhr
+              )}{' '}
+              · {isVi ? 'NL:' : 'Ing:'}{' '}
+              {formatKhr(periodReport.inventoryValuation.ingredientsValueKhr)}
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* Main Analytics + 3-Tier Low Stock Split */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* 7-Day Revenue vs P&L Cost Chart */}
+        {/* 7-Day Revenue vs Costs / Net Profit Trend Chart */}
         <div className="lg:col-span-8 bg-white border border-stone-200 rounded-xl p-6 flex flex-col">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
-            <h2 className="font-display text-lg font-semibold text-stone-900">
-              {t.dashboard.revenueVsExpense}
-            </h2>
-            <div className="flex items-center gap-4 text-xs text-stone-600">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-[#0F5C43]" />
-                {t.dashboard.revenueSeries}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-[#D9822B]" />
-                {isVi ? 'COGS + Vận hành' : 'COGS + OpEx'}
-              </span>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-4 flex-wrap">
+              <h2 className="font-display text-lg font-semibold text-stone-900">
+                {chartMode === 'revenue_costs'
+                  ? t.dashboard.revenueVsExpense
+                  : isVi
+                    ? 'Xu hướng lợi nhuận ròng (7 ngày)'
+                    : 'Net Profit Trend (7 Days)'}
+              </h2>
+              {chartMode === 'revenue_costs' ? (
+                <div className="flex items-center gap-3 text-xs text-stone-600">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-[#0F5C43]" />
+                    {t.dashboard.revenueSeries}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-[#D9822B]" />
+                    {isVi ? 'COGS + Vận hành' : 'COGS + OpEx'}
+                  </span>
+                </div>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs text-stone-600">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-[#0F5C43]" />
+                  {isVi ? 'Lợi nhuận ròng hàng ngày' : 'Daily Net Profit'}
+                </span>
+              )}
+            </div>
+
+            <div className="inline-flex items-center rounded-lg border border-stone-200 bg-stone-50 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setChartMode('revenue_costs')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors whitespace-nowrap ${
+                  chartMode === 'revenue_costs'
+                    ? 'bg-white text-stone-900 border border-stone-200'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                {isVi ? 'Doanh thu / Chi phí' : 'Revenue vs Costs'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartMode('profit')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors whitespace-nowrap ${
+                  chartMode === 'profit'
+                    ? 'bg-white text-stone-900 border border-stone-200'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                {isVi ? 'Lợi nhuận' : 'Net Profit'}
+              </button>
             </div>
           </div>
 
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 12, fill: '#78716C' }}
-                  axisLine={{ stroke: '#E7E5E4' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#78716C' }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
-                />
-                <Tooltip
-                  formatter={(value) => formatKhr(Number(value ?? 0))}
-                  contentStyle={{
-                    borderRadius: '8px',
-                    border: '1px solid #E7E5E4',
-                    boxShadow: 'none',
-                    fontSize: '12px',
-                  }}
-                />
-                <Bar
-                  dataKey="revenue"
-                  name={t.dashboard.revenueSeries}
-                  fill="#0F5C43"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={28}
-                />
-                <Bar
-                  dataKey="costs"
-                  name={isVi ? 'COGS + Vận hành' : 'COGS + OpEx'}
-                  fill="#D9822B"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={28}
-                />
-              </BarChart>
+              {chartMode === 'revenue_costs' ? (
+                <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 12, fill: '#78716C' }}
+                    axisLine={{ stroke: '#E7E5E4' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#78716C' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+                  />
+                  <Tooltip
+                    formatter={(value) => formatKhr(Number(value ?? 0))}
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: '1px solid #E7E5E4',
+                      boxShadow: 'none',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <Bar
+                    dataKey="revenue"
+                    name={t.dashboard.revenueSeries}
+                    fill="#0F5C43"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={28}
+                  />
+                  <Bar
+                    dataKey="costs"
+                    name={isVi ? 'COGS + Vận hành' : 'COGS + OpEx'}
+                    fill="#D9822B"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={28}
+                  />
+                </BarChart>
+              ) : (
+                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0F5C43" stopOpacity={0.22} />
+                      <stop offset="95%" stopColor="#0F5C43" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 12, fill: '#78716C' }}
+                    axisLine={{ stroke: '#E7E5E4' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#78716C' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+                  />
+                  <Tooltip
+                    formatter={(value) => formatKhr(Number(value ?? 0))}
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: '1px solid #E7E5E4',
+                      boxShadow: 'none',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="profit"
+                    name={isVi ? 'Lợi nhuận ròng' : 'Net Profit'}
+                    stroke="#0F5C43"
+                    strokeWidth={2}
+                    fill="url(#profitFill)"
+                    activeDot={{ r: 4, fill: '#0F5C43' }}
+                  />
+                </AreaChart>
+              )}
             </ResponsiveContainer>
           </div>
         </div>

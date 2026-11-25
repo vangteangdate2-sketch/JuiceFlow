@@ -202,6 +202,7 @@ export function normalizeSettings(raw: Partial<WorkspaceSettings>, fallback: Wor
     ...fallback,
     ...raw,
     allowNegativeStock: Boolean(raw.allowNegativeStock ?? false),
+    enableOpenFoodFactsLookup: raw.enableOpenFoodFactsLookup !== false,
     timezone: raw.timezone || BUSINESS_TIMEZONE,
   };
 }
