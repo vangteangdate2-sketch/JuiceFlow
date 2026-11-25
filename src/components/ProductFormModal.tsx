@@ -393,6 +393,51 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const liveMarginPct =
     liveSellingPrice > 0 ? Math.round((liveProfit / liveSellingPrice) * 100) : 0;
 
+  const draftProductForLabels = useMemo<Product>(
+    () => ({
+      id: editingProduct?.id || 'draft',
+      name: name.trim() || (isVi ? 'Sản phẩm mới' : 'New Product'),
+      nameVi: nameVi.trim() || name.trim() || 'Sản phẩm mới',
+      brand: brand.trim(),
+      category,
+      productType,
+      priceKhr: liveSellingPrice,
+      costPriceKhr: liveUnitCost,
+      imageUrl,
+      active,
+      barcode: normalizeBarcodeString(barcode),
+      packagingBarcodes,
+      stockQty: Number(stockQty) || 0,
+      reorderLevel: Number(reorderLevel) || 0,
+      unit,
+      supplier,
+      recipe,
+      recipeVersion: 1,
+      variants,
+    }),
+    [
+      editingProduct,
+      name,
+      nameVi,
+      brand,
+      category,
+      productType,
+      liveSellingPrice,
+      liveUnitCost,
+      imageUrl,
+      active,
+      barcode,
+      packagingBarcodes,
+      stockQty,
+      reorderLevel,
+      unit,
+      supplier,
+      recipe,
+      variants,
+      isVi,
+    ]
+  );
+
   if (!open) return null;
 
   const handleProductTypeChange = (nextType: ProductType) => {
@@ -724,51 +769,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setLookingUpExternal(false);
     }
   };
-
-  const draftProductForLabels = useMemo<Product>(
-    () => ({
-      id: editingProduct?.id || 'draft',
-      name: name.trim() || (isVi ? 'Sản phẩm mới' : 'New Product'),
-      nameVi: nameVi.trim() || name.trim() || 'Sản phẩm mới',
-      brand: brand.trim(),
-      category,
-      productType,
-      priceKhr: liveSellingPrice,
-      costPriceKhr: liveUnitCost,
-      imageUrl,
-      active,
-      barcode: normalizeBarcodeString(barcode),
-      packagingBarcodes,
-      stockQty: Number(stockQty) || 0,
-      reorderLevel: Number(reorderLevel) || 0,
-      unit,
-      supplier,
-      recipe,
-      recipeVersion: 1,
-      variants,
-    }),
-    [
-      editingProduct,
-      name,
-      nameVi,
-      brand,
-      category,
-      productType,
-      liveSellingPrice,
-      liveUnitCost,
-      imageUrl,
-      active,
-      barcode,
-      packagingBarcodes,
-      stockQty,
-      reorderLevel,
-      unit,
-      supplier,
-      recipe,
-      variants,
-      isVi,
-    ]
-  );
 
   const hasAnyLabelableCode = Boolean(
     barcode.trim() ||

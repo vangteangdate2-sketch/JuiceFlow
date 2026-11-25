@@ -79,14 +79,13 @@ export const ProductPhoto: React.FC<ProductPhotoProps> = ({
   const [failed, setFailed] = useState(false);
 
   if (!src || failed) {
-    const style = category
-      ? CATEGORY_PLACEHOLDER_STYLES[category]
-      : {
-          bg: 'bg-stone-100 dark:bg-[#18251F]',
-          iconBg: 'bg-white/80 dark:bg-[#131D18]/90',
-          iconColor: 'text-stone-400 dark:text-[#94A39B]',
-          Icon: CupSoda,
-        };
+    const style =
+      (category && CATEGORY_PLACEHOLDER_STYLES[category]) || {
+        bg: 'bg-stone-100 dark:bg-[#18251F]',
+        iconBg: 'bg-white/80 dark:bg-[#131D18]/90',
+        iconColor: 'text-stone-400 dark:text-[#94A39B]',
+        Icon: CupSoda,
+      };
     const Icon = style.Icon;
 
     return (
