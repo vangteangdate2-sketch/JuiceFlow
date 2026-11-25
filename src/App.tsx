@@ -102,9 +102,9 @@ const JuiceFlowShell: React.FC = () => {
           />
         )}
 
-        {/* Sidebar Navigation (256px desktop) */}
+        {/* Sidebar Navigation (256px desktop, stays fixed in viewport while scrolling) */}
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-stone-200 flex flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-stone-200 flex flex-col transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
             mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -150,7 +150,7 @@ const JuiceFlowShell: React.FC = () => {
           </nav>
 
           {/* Family Operator Switcher & Lock Footer */}
-          <div className="p-4 border-t border-stone-200 space-y-3 bg-stone-50/60">
+          <div className="p-4 border-t border-solid border-stone-200 space-y-3 bg-white shrink-0">
             <div>
               <label
                 htmlFor="operator-select"
