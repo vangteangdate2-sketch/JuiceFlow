@@ -47,7 +47,12 @@ const NAV_ITEMS: { id: AppTab; icon: React.ComponentType<{ className?: string }>
 const JuiceFlowShell: React.FC = () => {
   const { settings, cloudSynced, syncing, refreshing, refreshData, t, setActiveOperator } = useStore();
   const { isDark, toggleTheme } = useTheme();
-  const isVi = settings.language === 'vi';
+  const isVi = settings?.language === 'vi';
+  const familyMembers =
+    Array.isArray(settings?.familyMembers) && settings.familyMembers.length > 0
+      ? settings.familyMembers
+      : [settings?.activeOperator || 'Family'];
+  const activeOperator = settings?.activeOperator || familyMembers[0] || 'Family';
 
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('join')) {
@@ -254,10 +259,10 @@ const JuiceFlowShell: React.FC = () => {
                 <button
                   type="button"
                   onClick={toggleSidebarCollapsed}
-                  title={`${t.common.activeOperator}: ${settings.activeOperator}`}
+                  title={`${t.common.activeOperator}: ${activeOperator}`}
                   className="w-11 h-11 rounded-lg bg-[#E6F2ED] dark:bg-[#064E3B] text-[#0D5C3E] dark:text-[#6EE7B7] text-xs font-bold flex items-center justify-center hover:bg-[#D9ECE4] dark:hover:bg-[#065F46] transition-colors"
                 >
-                  {(settings.activeOperator || 'U').slice(0, 2).toUpperCase()}
+                  {activeOperator.slice(0, 2).toUpperCase()}
                 </button>
                 {security.enabled && (
                   <button
@@ -283,11 +288,11 @@ const JuiceFlowShell: React.FC = () => {
                 </label>
                 <select
                   id="operator-select"
-                  value={settings.activeOperator}
+                  value={activeOperator}
                   onChange={(e) => setActiveOperator(e.target.value)}
                   className="w-full h-11 px-3 text-xs font-medium bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 >
-                  {settings.familyMembers.map((member) => (
+                  {familyMembers.map((member) => (
                     <option key={member} value={member}>
                       {member}
                     </option>

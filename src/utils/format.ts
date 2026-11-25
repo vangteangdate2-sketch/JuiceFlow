@@ -143,12 +143,17 @@ export function getCompatibleUnits(baseUnit: IngredientUnit): IngredientUnit[] {
 }
 
 export function calculateRecipeCogs(recipe: RecipeItem[], ingredients: Ingredient[]): number {
-  const ingMap = new Map(ingredients.map((ing) => [ing.id, ing]));
+  if (!Array.isArray(recipe) || recipe.length === 0) return 0;
+  const safeIngredients = Array.isArray(ingredients) ? ingredients : [];
+  const ingMap = new Map(safeIngredients.filter((ing) => ing && ing.id).map((ing) => [ing.id, ing]));
   return recipe.reduce((sum, item) => {
+    if (!item || !item.ingredientId) return sum;
     const ing = ingMap.get(item.ingredientId);
     if (!ing) return sum;
-    const qtyInStockUnit = convertUnitQty(item.quantity, item.unit ?? ing.unit, ing.unit);
-    return sum + ing.unitCostKhr * qtyInStockUnit;
+    const qty = Number(item.quantity) || 0;
+    if (qty <= 0) return sum;
+    const qtyInStockUnit = convertUnitQty(qty, item.unit ?? ing.unit, ing.unit);
+    return sum + (Number(ing.unitCostKhr) || 0) * qtyInStockUnit;
   }, 0);
 }
 
@@ -157,17 +162,27 @@ export function calculateProductCogs(
   ingredients: Ingredient[],
   variant?: ProductVariant
 ): number {
+  if (!product) return 0;
   if (product.productType === 'PACKAGED') {
     return Math.max(0, Number(variant?.costPriceKhr ?? product.costPriceKhr) || 0);
   }
   if (product.productType === 'PREPARED_STOCK') {
-    if ((variant?.costPriceKhr ?? product.costPriceKhr) > 0) {
+    if ((Number(variant?.costPriceKhr ?? product.costPriceKhr) || 0) > 0) {
       return Math.max(0, Number(variant?.costPriceKhr ?? product.costPriceKhr) || 0);
     }
-    const recipe = variant?.recipe?.length ? variant.recipe : product.recipe;
+    const recipe =
+      Array.isArray(variant?.recipe) && variant.recipe.length > 0
+        ? variant.recipe
+        : Array.isArray(product.recipe)
+          ? product.recipe
+          : [];
     return calculateRecipeCogs(recipe, ingredients);
   }
-  const activeRecipe = variant?.recipe ?? product.recipe;
+  const activeRecipe = Array.isArray(variant?.recipe)
+    ? variant.recipe
+    : Array.isArray(product.recipe)
+      ? product.recipe
+      : [];
   return calculateRecipeCogs(activeRecipe, ingredients);
 }
 

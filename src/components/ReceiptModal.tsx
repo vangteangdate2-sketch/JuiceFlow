@@ -12,21 +12,25 @@ interface ReceiptModalProps {
 
 export function buildReceiptPlainText(sale: Sale, settings: WorkspaceSettings): string {
   const divider = '--------------------------------';
+  const shopName = settings?.name || 'JuiceFlow';
+  const paymentLabel = String(sale.paymentMethod || 'cash').toUpperCase();
+  const statusValue = sale.status || 'completed';
+  const saleItems = Array.isArray(sale.items) ? sale.items : [];
   const lines: string[] = [
-    settings.name.toUpperCase(),
-    settings.location || 'Phnom Penh, Cambodia',
+    shopName.toUpperCase(),
+    settings?.location || 'Phnom Penh, Cambodia',
     divider,
-    `Order: ${sale.orderNumber}`,
+    `Order: ${sale.orderNumber || ''}`,
     `Date:  ${formatDateTimeInPhnomPenh(sale.createdAt)} (ICT)`,
-    `Staff: ${sale.recordedBy}`,
-    `Pay:   ${sale.paymentMethod.toUpperCase()}`,
+    `Staff: ${sale.recordedBy || ''}`,
+    `Pay:   ${paymentLabel}`,
   ];
   if (sale.customerName && sale.customerName !== 'Walk-in') {
     lines.push(`Cust:  ${sale.customerName}`);
   }
   lines.push(divider);
 
-  for (const item of sale.items) {
+  for (const item of saleItems) {
     const label = item.variantName
       ? `${item.productName} (${item.variantName})`
       : item.productName;
@@ -45,7 +49,7 @@ export function buildReceiptPlainText(sale: Sale, settings: WorkspaceSettings): 
   } else {
     lines.push(`TOTAL:    ${formatKhr(sale.totalKhr)}`);
   }
-  if (settings.usdRate > 0) {
+  if ((settings?.usdRate ?? 0) > 0) {
     const net = sale.netTotalKhr ?? sale.totalKhr;
     lines.push(`USD REF:  ${formatUsdRef(net, settings.usdRate)}`);
   }
@@ -56,7 +60,7 @@ export function buildReceiptPlainText(sale: Sale, settings: WorkspaceSettings): 
   ) {
     const usd = sale.cash_received_usd ?? 0;
     const khr = sale.cash_received_khr ?? 0;
-    const rate = sale.exchange_rate_used ?? settings.posExchangeRate ?? 4000;
+    const rate = sale.exchange_rate_used ?? settings?.posExchangeRate ?? 4000;
     const parts: string[] = [];
     if (usd > 0) parts.push(`${formatUsdClean(usd)} (${formatKhr(Math.round(usd * rate))})`);
     if (khr > 0) parts.push(formatKhr(khr));
@@ -67,8 +71,8 @@ export function buildReceiptPlainText(sale: Sale, settings: WorkspaceSettings): 
       lines.push(`CHANGE:   ${formatKhr(sale.change_given_khr)}`);
     }
   }
-  if (sale.status !== 'completed') {
-    lines.push(`STATUS:   ${sale.status.toUpperCase()}`);
+  if (statusValue !== 'completed') {
+    lines.push(`STATUS:   ${String(statusValue).toUpperCase()}`);
   }
   if (sale.note) {
     lines.push(`Note: ${sale.note}`);
@@ -163,8 +167,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
             }`}
           >
             <div className="text-center pb-2.5 border-b border-dashed border-stone-300">
-              <div className="text-sm font-bold tracking-tight uppercase">{settings.name}</div>
-              {settings.location && (
+              <div className="text-sm font-bold tracking-tight uppercase">{settings?.name || 'JuiceFlow'}</div>
+              {settings?.location && (
                 <div className="text-[11px] text-stone-600 mt-0.5">{settings.location}</div>
               )}
             </div>
@@ -184,7 +188,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
               </div>
               <div className="flex justify-between">
                 <span className="text-stone-500">Payment</span>
-                <span className="uppercase font-semibold">{sale.paymentMethod}</span>
+                <span className="uppercase font-semibold">{sale.paymentMethod || 'cash'}</span>
               </div>
               {sale.customerName && sale.customerName !== 'Walk-in' && (
                 <div className="flex justify-between">
@@ -192,16 +196,16 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
                   <span>{sale.customerName}</span>
                 </div>
               )}
-              {sale.status !== 'completed' && (
+              {sale.status && sale.status !== 'completed' && (
                 <div className="flex justify-between text-rose-700 font-bold">
                   <span>Status</span>
-                  <span className="uppercase">{sale.status.replace('_', ' ')}</span>
+                  <span className="uppercase">{String(sale.status).replace('_', ' ')}</span>
                 </div>
               )}
             </div>
 
             <div className="py-2.5 space-y-2 border-b border-dashed border-stone-300">
-              {sale.items.map((item, i) => (
+              {(Array.isArray(sale.items) ? sale.items : []).map((item, i) => (
                 <div key={item.lineId || `${item.productId}_${i}`}>
                   <div className="flex justify-between gap-2 font-medium">
                     <span className="truncate">
@@ -233,7 +237,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
                 <span>TOTAL</span>
                 <span>{formatKhr(netAmount)}</span>
               </div>
-              {settings.usdRate > 0 && (
+              {(settings?.usdRate ?? 0) > 0 && (
                 <div className="flex justify-between text-[11px] text-stone-500">
                   <span>USD Equivalent</span>
                   <span>{formatUsdRef(netAmount, settings.usdRate)}</span>
@@ -248,7 +252,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
                         <span>Cash (USD)</span>
                         <span>
                           {formatUsdClean(sale.cash_received_usd ?? 0)} @{' '}
-                          {(sale.exchange_rate_used ?? settings.posExchangeRate ?? 4000).toLocaleString(
+                          {(sale.exchange_rate_used ?? settings?.posExchangeRate ?? 4000).toLocaleString(
                             'en-US'
                           )}{' '}
                           ៛
@@ -278,7 +282,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
             )}
 
             <div className="pt-2.5 text-center text-[11px] text-stone-500">
-              Thank you for supporting {settings.name}!
+              Thank you for supporting {settings?.name || 'JuiceFlow'}!
             </div>
           </div>
         </div>

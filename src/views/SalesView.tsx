@@ -81,10 +81,10 @@ interface SalesViewProps {
 export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }) => {
   const {
     settings,
-    products,
-    ingredients,
-    barcodeRegistry,
-    sales,
+    products: rawProducts,
+    ingredients: rawIngredients,
+    barcodeRegistry: rawBarcodeRegistry,
+    sales: rawSales,
     saveProduct,
     lookupBarcode,
     recordSale,
@@ -92,7 +92,11 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
     returnSaleItems,
     t,
   } = useStore();
-  const isVi = settings.language === 'vi';
+  const products = Array.isArray(rawProducts) ? rawProducts : [];
+  const ingredients = Array.isArray(rawIngredients) ? rawIngredients : [];
+  const barcodeRegistry = Array.isArray(rawBarcodeRegistry) ? rawBarcodeRegistry : [];
+  const sales = Array.isArray(rawSales) ? rawSales : [];
+  const isVi = settings?.language === 'vi';
 
   const [subTab, setSubTab] = useState<'pos' | 'ledger'>('pos');
   const [posSearch, setPosSearch] = useState('');
@@ -150,19 +154,23 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
   const activeProducts = useMemo(() => {
     const q = posSearch.trim().toLowerCase();
     return products.filter((p) => {
-      if (!p.active) return false;
+      if (!p || !p.active) return false;
       if (typeFilter !== 'ALL' && p.productType !== typeFilter) return false;
       if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
       if (!q) return true;
       const varMatch = (p.variants || []).some(
-        (v) => v.name.toLowerCase().includes(q) || (v.barcode || '').toLowerCase().includes(q)
+        (v) =>
+          (v?.name || '').toLowerCase().includes(q) ||
+          (v?.barcode || '').toLowerCase().includes(q)
       );
       const packMatch = (p.packagingBarcodes || []).some(
-        (pb) => pb.barcode.toLowerCase().includes(q) || pb.label.toLowerCase().includes(q)
+        (pb) =>
+          (pb?.barcode || '').toLowerCase().includes(q) ||
+          (pb?.label || '').toLowerCase().includes(q)
       );
       return (
-        p.name.toLowerCase().includes(q) ||
-        p.nameVi.toLowerCase().includes(q) ||
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.nameVi || '').toLowerCase().includes(q) ||
         (p.brand || '').toLowerCase().includes(q) ||
         (p.barcode || '').toLowerCase().includes(q) ||
         varMatch ||
@@ -488,16 +496,17 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
   const filteredSales = useMemo(() => {
     const q = search.trim().toLowerCase();
     return sales.filter((s) => {
+      if (!s) return false;
       if (paymentFilter !== 'all' && s.paymentMethod !== paymentFilter) return false;
       if (!q) return true;
-      const itemsText = s.items
-        .map((i) => `${i.productName} ${i.productNameVi} ${i.variantName || ''}`)
+      const itemsText = (s.items || [])
+        .map((i) => `${i?.productName || ''} ${i?.productNameVi || ''} ${i?.variantName || ''}`)
         .join(' ')
         .toLowerCase();
       return (
-        s.orderNumber.toLowerCase().includes(q) ||
-        s.customerName.toLowerCase().includes(q) ||
-        s.recordedBy.toLowerCase().includes(q) ||
+        (s.orderNumber || '').toLowerCase().includes(q) ||
+        (s.customerName || '').toLowerCase().includes(q) ||
+        (s.recordedBy || '').toLowerCase().includes(q) ||
         itemsText.includes(q)
       );
     });
@@ -656,7 +665,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 hasBarcodeMatch={(code) =>
                   Boolean(
                     resolveBarcodeMatch(code, products) ||
-                      barcodeRegistry.some((r) => r.code === code.trim())
+                      barcodeRegistry.some((r) => r && typeof r.code === 'string' && r.code === code.trim())
                   )
                 }
                 secondaryLeftSlot={
@@ -855,23 +864,24 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 {activeProducts.map((product) => {
                   const qtyInCart = getQtyInCartForProduct(product.id);
                   const displayName = isVi ? product.nameVi || product.name : product.name;
+                  const productVariants = Array.isArray(product.variants) ? product.variants : [];
                   const availability = getAvailableUnitsForProduct(
                     product,
                     ingredients,
-                    product.variants?.[0]?.id
+                    productVariants[0]?.id
                   );
-                  const hasMultiVariants = product.variants && product.variants.length > 1;
+                  const hasMultiVariants = productVariants.length > 1;
                   const minPrice = hasMultiVariants
-                    ? Math.min(...product.variants.map((v) => v.priceKhr))
-                    : product.variants?.[0]?.priceKhr ?? product.priceKhr;
+                    ? Math.min(...productVariants.map((v) => Number(v.priceKhr) || 0))
+                    : productVariants[0]?.priceKhr ?? product.priceKhr;
 
                   const outBlocked = availability.status === 'out' && !settings.allowNegativeStock;
                   const atStockLimit =
                     !outBlocked &&
                     !settings.allowNegativeStock &&
                     (hasMultiVariants
-                      ? product.variants.every((v) => !canAddToCart(product.id, v.id, 1).allowed)
-                      : !canAddToCart(product.id, product.variants?.[0]?.id, 1).allowed);
+                      ? productVariants.every((v) => !canAddToCart(product.id, v.id, 1).allowed)
+                      : !canAddToCart(product.id, productVariants[0]?.id, 1).allowed);
                   const cardDisabled = outBlocked || atStockLimit;
 
                   return (
@@ -928,8 +938,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       <div className="p-3">
                         <div className="flex items-center justify-between gap-2 text-[11px]">
                           <span className="text-stone-500 dark:text-[#94A39B] truncate">
-                            {t.productTypes[product.productType]}
-                            {hasMultiVariants ? ` · ${product.variants.length} sizes` : ''}
+                            {t.productTypes[product.productType] || product.productType}
+                            {hasMultiVariants ? ` · ${productVariants.length} sizes` : ''}
                           </span>
                           {atStockLimit ? (
                             <span className="font-mono-num font-semibold text-amber-700 dark:text-amber-400 shrink-0">
@@ -1665,7 +1675,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                         </td>
                         <td className="py-3.5 px-4 max-w-xs">
                           <p className="text-stone-900 dark:text-[#F1F5F3]">
-                            {sale.items
+                            {(sale.items || [])
                               .map(
                                 (i) =>
                                   `${i.quantity}× ${isVi ? i.productNameVi || i.productName : i.productName}${
@@ -1682,7 +1692,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                         </td>
                         <td className="py-3.5 px-4 text-xs text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
                           <span className="font-medium text-stone-700 dark:text-[#F1F5F3]">
-                            {t.paymentMethods[sale.paymentMethod]}
+                            {t.paymentMethods[sale.paymentMethod] || sale.paymentMethod}
                           </span>
                           {sale.paymentMethod === 'cash' &&
                             ((sale.cash_received_usd !== null &&
@@ -1811,7 +1821,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               </button>
             </div>
             <div className="p-4 space-y-2.5">
-              {variantPickerProduct.variants.map((variant) => {
+              {(variantPickerProduct.variants || []).map((variant) => {
                 const avail = getAvailableUnitsForProduct(
                   variantPickerProduct,
                   ingredients,
@@ -1939,7 +1949,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   {isVi ? 'Chi tiết món & Hoàn trả một phần' : 'Order Items & Partial Returns'}
                 </h3>
                 <div className="divide-y divide-stone-100 dark:divide-[#24352C] border border-stone-200 dark:border-[#24352C] rounded-lg">
-                  {detailSale.items.map((item, idx) => {
+                  {(detailSale.items || []).map((item, idx) => {
                     const lineId = item.lineId || `${detailSale.id}_line_${idx}`;
                     const returned = item.returnedQty ?? 0;
                     const remaining = Math.max(0, item.quantity - returned);

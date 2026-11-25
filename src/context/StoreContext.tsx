@@ -85,6 +85,7 @@ import {
   buildPurchasePlan,
   buildStockCountPlan,
   buildVoidPlan,
+  normalizeIngredient,
   normalizeProduct,
   normalizeSale,
   normalizeSettings,
@@ -129,6 +130,29 @@ function stripUndefined<T>(value: T): T {
   return value;
 }
 
+function normalizeBarcodeRecord(
+  raw: Partial<BarcodeRegistryRecord> & { id?: string }
+): BarcodeRegistryRecord | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const code = normalizeBarcodeString(typeof raw.code === 'string' ? raw.code : '');
+  const productId = typeof raw.productId === 'string' ? raw.productId.trim() : '';
+  if (!code || !productId) return null;
+  return {
+    id: String(raw.id || toBarcodeDocId(code)),
+    code,
+    format: raw.format || detectBarcodeFormat(code),
+    productId,
+    ...(raw.variantId ? { variantId: String(raw.variantId) } : {}),
+    packagingType: raw.packagingType || 'unit',
+    label: String(raw.label || 'Unit'),
+    unitsPerScan: Math.max(1, Math.round(Number(raw.unitsPerScan) || 1)),
+    active: raw.active !== false,
+    source: raw.source || 'manufacturer',
+    ...(raw.createdAt ? { createdAt: String(raw.createdAt) } : {}),
+    ...(raw.updatedAt ? { updatedAt: String(raw.updatedAt) } : {}),
+  };
+}
+
 function loadLocalSnapshot(): LocalSnapshot {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -136,13 +160,27 @@ function loadLocalSnapshot(): LocalSnapshot {
       const parsed = JSON.parse(raw) as Partial<LocalSnapshot>;
       if (parsed.settings && Array.isArray(parsed.ingredients) && Array.isArray(parsed.products)) {
         const settings = normalizeSettings(parsed.settings, createInitialSettings());
-        let ingredients = parsed.ingredients;
-        let products = parsed.products.map((p) => normalizeProduct(p));
-        const sales = Array.isArray(parsed.sales) ? parsed.sales.map((s) => normalizeSale(s)) : [];
-        const expenses = Array.isArray(parsed.expenses) ? parsed.expenses : [];
-        const purchases = Array.isArray(parsed.purchases) ? parsed.purchases : [];
+        let ingredients = parsed.ingredients
+          .filter((i): i is Ingredient => Boolean(i && typeof i === 'object' && i.id))
+          .map((i) => normalizeIngredient(i));
+        let products = parsed.products
+          .filter((p): p is Product => Boolean(p && typeof p === 'object' && p.id))
+          .map((p) => normalizeProduct(p));
+        const sales = Array.isArray(parsed.sales)
+          ? parsed.sales
+              .filter((s): s is Sale => Boolean(s && typeof s === 'object' && s.id))
+              .map((s) => normalizeSale(s))
+          : [];
+        const expenses = Array.isArray(parsed.expenses)
+          ? parsed.expenses.filter((e): e is Expense => Boolean(e && typeof e === 'object' && e.id))
+          : [];
+        const purchases = Array.isArray(parsed.purchases)
+          ? parsed.purchases.filter((p): p is PurchaseRecord => Boolean(p && typeof p === 'object' && p.id))
+          : [];
         const stockMovements = Array.isArray(parsed.stockMovements)
-          ? parsed.stockMovements.map((m) => normalizeStockMovement(m))
+          ? parsed.stockMovements
+              .filter((m): m is StockMovement => Boolean(m && typeof m === 'object' && m.id))
+              .map((m) => normalizeStockMovement(m))
           : [];
 
         // Preserve 100% of existing data & append sample packaged/prepared items once
@@ -170,10 +208,14 @@ function loadLocalSnapshot(): LocalSnapshot {
           }
         }
 
+        const parsedRegistry = Array.isArray(parsed.barcodeRegistry)
+          ? parsed.barcodeRegistry
+              .map((rec) => normalizeBarcodeRecord(rec))
+              .filter((rec): rec is BarcodeRegistryRecord => rec !== null)
+          : [];
+
         const barcodeRegistry =
-          Array.isArray(parsed.barcodeRegistry) && parsed.barcodeRegistry.length > 0
-            ? parsed.barcodeRegistry
-            : buildRegistryFromProducts(products);
+          parsedRegistry.length > 0 ? parsedRegistry : buildRegistryFromProducts(products);
 
         return {
           settings,
@@ -925,18 +967,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (snap) => {
         const list: Ingredient[] = snap.docs.map((docSnap) => {
           const d = docSnap.data();
-          return {
+          return normalizeIngredient({
             id: docSnap.id,
-            name: String(d.name || ''),
-            nameVi: String(d.nameVi || ''),
-            unit: d.unit,
-            stockQty: Number(d.stockQty) || 0,
-            reorderLevel: Number(d.reorderLevel) || 0,
-            unitCostKhr: Number(d.unitCostKhr) || 0,
-            supplier: String(d.supplier || ''),
+            ...d,
             createdAt: tsToIso(d.createdAt),
             updatedAt: tsToIso(d.updatedAt),
-          };
+          } as Partial<Ingredient> & { id: string });
         });
         setIngredients(list);
       },
@@ -2861,21 +2897,47 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!parsed.settings || !Array.isArray(parsed.ingredients) || !Array.isArray(parsed.products)) {
         return { ok: false, error: 'Invalid JuiceFlow backup file.' };
       }
-      const normalizedProds = parsed.products.map((p) => normalizeProduct(p));
+      const normalizedProds = parsed.products
+        .filter((p): p is Product => Boolean(p && typeof p === 'object' && p.id))
+        .map((p) => normalizeProduct(p));
+      const normalizedIngs = parsed.ingredients
+        .filter((i): i is Ingredient => Boolean(i && typeof i === 'object' && i.id))
+        .map((i) => normalizeIngredient(i));
+      const normalizedRegistry = Array.isArray(parsed.barcodeRegistry)
+        ? parsed.barcodeRegistry
+            .map((rec) => normalizeBarcodeRecord(rec))
+            .filter((rec): rec is BarcodeRegistryRecord => rec !== null)
+        : [];
       setSettings(normalizeSettings(parsed.settings, createInitialSettings()));
-      setIngredients(parsed.ingredients);
+      setIngredients(normalizedIngs);
       setProducts(normalizedProds);
       setBarcodeRegistry(
-        Array.isArray(parsed.barcodeRegistry) && parsed.barcodeRegistry.length > 0
-          ? parsed.barcodeRegistry
+        normalizedRegistry.length > 0
+          ? normalizedRegistry
           : buildRegistryFromProducts(normalizedProds)
       );
-      setSales(Array.isArray(parsed.sales) ? parsed.sales.map((s) => normalizeSale(s)) : []);
-      setExpenses(Array.isArray(parsed.expenses) ? parsed.expenses : []);
-      setPurchases(Array.isArray(parsed.purchases) ? parsed.purchases : []);
+      setSales(
+        Array.isArray(parsed.sales)
+          ? parsed.sales
+              .filter((s): s is Sale => Boolean(s && typeof s === 'object' && s.id))
+              .map((s) => normalizeSale(s))
+          : []
+      );
+      setExpenses(
+        Array.isArray(parsed.expenses)
+          ? parsed.expenses.filter((e): e is Expense => Boolean(e && typeof e === 'object' && e.id))
+          : []
+      );
+      setPurchases(
+        Array.isArray(parsed.purchases)
+          ? parsed.purchases.filter((p): p is PurchaseRecord => Boolean(p && typeof p === 'object' && p.id))
+          : []
+      );
       setStockMovements(
         Array.isArray(parsed.stockMovements)
-          ? parsed.stockMovements.map((m) => normalizeStockMovement(m))
+          ? parsed.stockMovements
+              .filter((m): m is StockMovement => Boolean(m && typeof m === 'object' && m.id))
+              .map((m) => normalizeStockMovement(m))
           : []
       );
       return { ok: true };
@@ -3019,18 +3081,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setIngredients(
         ingSnap.docs.map((docSnap) => {
           const d = docSnap.data();
-          return {
+          return normalizeIngredient({
             id: docSnap.id,
-            name: String(d.name || ''),
-            nameVi: String(d.nameVi || ''),
-            unit: d.unit,
-            stockQty: Number(d.stockQty) || 0,
-            reorderLevel: Number(d.reorderLevel) || 0,
-            unitCostKhr: Number(d.unitCostKhr) || 0,
-            supplier: String(d.supplier || ''),
+            ...d,
             createdAt: tsToIso(d.createdAt),
             updatedAt: tsToIso(d.updatedAt),
-          };
+          } as Partial<Ingredient> & { id: string });
         })
       );
 

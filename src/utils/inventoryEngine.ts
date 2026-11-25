@@ -42,6 +42,42 @@ export function roundKhr(val: number): number {
 // Backward-compatible Normalizers (for legacy Firestore & localStorage docs)
 // ---------------------------------------------------------------------------
 
+const VALID_PRODUCT_CATEGORIES = new Set([
+  'juice',
+  'smoothie',
+  'tea',
+  'coffee',
+  'specialty',
+  'packaged',
+  'snack',
+]);
+
+const VALID_UNITS = new Set<IngredientUnit>(['pcs', 'ml', 'L', 'g', 'kg']);
+const VALID_PAYMENT_METHODS = new Set<PaymentMethod>(['cash', 'khqr', 'aba', 'wing']);
+
+export function normalizeIngredient(raw: Partial<Ingredient> & { id: string }): Ingredient {
+  const unit: IngredientUnit =
+    raw.unit && VALID_UNITS.has(raw.unit) ? raw.unit : 'pcs';
+  const name = String(raw.name || 'Unnamed Ingredient').trim() || 'Unnamed Ingredient';
+  const nameVi = String(raw.nameVi || name).trim() || name;
+  return {
+    id: String(raw.id),
+    name,
+    nameVi,
+    unit,
+    stockQty: Number.isFinite(Number(raw.stockQty)) ? Number(raw.stockQty) : 0,
+    reorderLevel: Number.isFinite(Number(raw.reorderLevel))
+      ? Math.max(0, Number(raw.reorderLevel))
+      : 0,
+    unitCostKhr: Number.isFinite(Number(raw.unitCostKhr))
+      ? Math.max(0, Number(raw.unitCostKhr))
+      : 0,
+    supplier: String(raw.supplier || ''),
+    ...(raw.createdAt ? { createdAt: String(raw.createdAt) } : {}),
+    ...(raw.updatedAt ? { updatedAt: String(raw.updatedAt) } : {}),
+  };
+}
+
 export function normalizeProduct(raw: Partial<Product> & { id: string }): Product {
   const productType: ProductType =
     raw.productType === 'PACKAGED' ||
@@ -52,140 +88,198 @@ export function normalizeProduct(raw: Partial<Product> & { id: string }): Produc
 
   const baseRecipe: RecipeItem[] = Array.isArray(raw.recipe)
     ? raw.recipe
-        .filter((r) => r && r.ingredientId && Number(r.quantity) > 0)
+        .filter((r) => Boolean(r && typeof r === 'object' && r.ingredientId && Number(r.quantity) > 0))
         .map((r) => ({
           ingredientId: String(r.ingredientId),
           quantity: Number(r.quantity),
-          ...(r.unit ? { unit: r.unit } : {}),
+          ...(r.unit && VALID_UNITS.has(r.unit) ? { unit: r.unit } : {}),
         }))
     : [];
 
   const variants: ProductVariant[] =
     Array.isArray(raw.variants) && raw.variants.length > 0
-      ? raw.variants.map((v, idx) => ({
-          id: v.id || `var_${raw.id}_${idx}`,
-          name: v.name || 'Standard',
-          nameVi: v.nameVi || v.name || 'Tiêu chuẩn',
-          priceKhr: Math.max(0, Number(v.priceKhr ?? raw.priceKhr ?? 0)),
-          ...(v.costPriceKhr !== undefined ? { costPriceKhr: Math.max(0, Number(v.costPriceKhr)) } : {}),
-          ...(v.barcode ? { barcode: String(v.barcode).trim() } : {}),
-          recipe: Array.isArray(v.recipe)
-            ? v.recipe
-                .filter((r) => r && r.ingredientId && Number(r.quantity) > 0)
-                .map((r) => ({
-                  ingredientId: String(r.ingredientId),
-                  quantity: Number(r.quantity),
-                  ...(r.unit ? { unit: r.unit } : {}),
-                }))
-            : [],
-          recipeVersion: Math.max(1, Number(v.recipeVersion ?? raw.recipeVersion ?? 1)),
-        }))
+      ? raw.variants
+          .filter((v): v is ProductVariant => Boolean(v && typeof v === 'object'))
+          .map((v, idx) => ({
+            id: String(v.id || `var_${raw.id}_${idx}`),
+            name: String(v.name || 'Standard'),
+            nameVi: String(v.nameVi || v.name || 'Tiêu chuẩn'),
+            priceKhr: Math.max(0, Number(v.priceKhr ?? raw.priceKhr ?? 0) || 0),
+            ...(v.costPriceKhr !== undefined && Number.isFinite(Number(v.costPriceKhr))
+              ? { costPriceKhr: Math.max(0, Number(v.costPriceKhr)) }
+              : {}),
+            ...(v.barcode ? { barcode: String(v.barcode).trim() } : {}),
+            recipe: Array.isArray(v.recipe)
+              ? v.recipe
+                  .filter((r) => Boolean(r && typeof r === 'object' && r.ingredientId && Number(r.quantity) > 0))
+                  .map((r) => ({
+                    ingredientId: String(r.ingredientId),
+                    quantity: Number(r.quantity),
+                    ...(r.unit && VALID_UNITS.has(r.unit) ? { unit: r.unit } : {}),
+                  }))
+              : [],
+            recipeVersion: Math.max(1, Number(v.recipeVersion ?? raw.recipeVersion ?? 1) || 1),
+          }))
       : [];
 
+  const safeCategory =
+    typeof raw.category === 'string' && VALID_PRODUCT_CATEGORIES.has(raw.category)
+      ? raw.category
+      : productType === 'PACKAGED'
+        ? 'packaged'
+        : 'juice';
+
+  const safeUnit: IngredientUnit =
+    raw.unit && VALID_UNITS.has(raw.unit) ? raw.unit : 'pcs';
+
   return {
-    id: raw.id,
-    name: raw.name || 'Untitled Item',
-    nameVi: raw.nameVi || raw.name || 'Sản phẩm',
-    brand: raw.brand ?? '',
-    category: raw.category || (productType === 'PACKAGED' ? 'packaged' : 'juice'),
+    id: String(raw.id),
+    name: String(raw.name || 'Untitled Item'),
+    nameVi: String(raw.nameVi || raw.name || 'Sản phẩm'),
+    brand: String(raw.brand ?? ''),
+    category: safeCategory as Product['category'],
     productType,
-    priceKhr: Math.max(0, Number(raw.priceKhr ?? 0)),
-    costPriceKhr: Math.max(0, Number(raw.costPriceKhr ?? 0)),
-    markupPercent: raw.markupPercent !== undefined ? Number(raw.markupPercent) : undefined,
+    priceKhr: Math.max(0, Number(raw.priceKhr ?? 0) || 0),
+    costPriceKhr: Math.max(0, Number(raw.costPriceKhr ?? 0) || 0),
+    markupPercent:
+      raw.markupPercent !== undefined && Number.isFinite(Number(raw.markupPercent))
+        ? Number(raw.markupPercent)
+        : undefined,
     manualPriceOverride: Boolean(raw.manualPriceOverride),
-    imageUrl: raw.imageUrl || '',
+    imageUrl: typeof raw.imageUrl === 'string' ? raw.imageUrl : '',
     active: raw.active !== false,
     barcode: raw.barcode ? String(raw.barcode).trim() : '',
     packagingBarcodes: Array.isArray(raw.packagingBarcodes)
       ? raw.packagingBarcodes
-          .filter((pb) => pb && pb.barcode && Number(pb.unitsPerPack) > 0)
+          .filter((pb) => Boolean(pb && typeof pb === 'object' && pb.barcode && Number(pb.unitsPerPack) > 0))
           .map((pb) => ({
             barcode: String(pb.barcode).trim(),
-            label: pb.label || `Pack (${pb.unitsPerPack})`,
+            label: String(pb.label || `Pack (${pb.unitsPerPack})`),
             unitsPerPack: Math.max(1, Math.round(Number(pb.unitsPerPack))),
           }))
       : [],
     stockQty: Number.isFinite(Number(raw.stockQty)) ? Number(raw.stockQty) : 0,
     reorderLevel: Number.isFinite(Number(raw.reorderLevel)) ? Math.max(0, Number(raw.reorderLevel)) : 10,
-    unit: raw.unit || 'pcs',
-    supplier: raw.supplier || '',
+    unit: safeUnit,
+    supplier: String(raw.supplier || ''),
     recipe: baseRecipe,
-    recipeVersion: Math.max(1, Number(raw.recipeVersion ?? 1)),
+    recipeVersion: Math.max(1, Number(raw.recipeVersion ?? 1) || 1),
     variants,
-    ...(raw.createdAt ? { createdAt: raw.createdAt } : {}),
-    ...(raw.updatedAt ? { updatedAt: raw.updatedAt } : {}),
+    ...(raw.createdAt ? { createdAt: String(raw.createdAt) } : {}),
+    ...(raw.updatedAt ? { updatedAt: String(raw.updatedAt) } : {}),
   };
 }
 
 export function normalizeSale(raw: Partial<Sale> & { id: string }): Sale {
-  const totalKhr = Math.max(0, Number(raw.totalKhr ?? 0));
-  const status = raw.status || 'completed';
+  const totalKhr = Math.max(0, Number(raw.totalKhr ?? 0) || 0);
+  const status =
+    raw.status === 'voided' ||
+    raw.status === 'partially_returned' ||
+    raw.status === 'refunded' ||
+    raw.status === 'completed'
+      ? raw.status
+      : 'completed';
   const refundedKhr =
     status === 'voided'
       ? totalKhr
-      : Math.max(0, Number(raw.refundedKhr ?? 0));
+      : Math.max(0, Number(raw.refundedKhr ?? 0) || 0);
   const netTotalKhr =
     status === 'voided'
       ? 0
-      : Math.max(0, raw.netTotalKhr !== undefined ? Number(raw.netTotalKhr) : totalKhr - refundedKhr);
-  const cogsKhr = Math.max(0, Number(raw.cogsKhr ?? 0));
+      : Math.max(
+          0,
+          raw.netTotalKhr !== undefined && Number.isFinite(Number(raw.netTotalKhr))
+            ? Number(raw.netTotalKhr)
+            : totalKhr - refundedKhr
+        );
+  const cogsKhr = Math.max(0, Number(raw.cogsKhr ?? 0) || 0);
   const refundedCogsKhr =
     status === 'voided'
       ? cogsKhr
-      : Math.max(0, Number(raw.refundedCogsKhr ?? 0));
+      : Math.max(0, Number(raw.refundedCogsKhr ?? 0) || 0);
 
   const items: SaleItem[] = Array.isArray(raw.items)
-    ? raw.items.map((item, idx) => ({
-        ...item,
-        lineId: item.lineId || `${raw.id}_line_${idx}`,
-        returnedQty: Math.max(0, Number(item.returnedQty ?? 0)),
-      }))
+    ? raw.items
+        .filter((item): item is SaleItem => Boolean(item && typeof item === 'object'))
+        .map((item, idx) => ({
+          ...item,
+          lineId: String(item.lineId || `${raw.id}_line_${idx}`),
+          productId: String(item.productId || ''),
+          productName: String(item.productName || 'Item'),
+          productNameVi: String(item.productNameVi || item.productName || 'Sản phẩm'),
+          ...(item.variantName ? { variantName: String(item.variantName) } : {}),
+          quantity: Math.max(0, Number(item.quantity ?? 0) || 0),
+          unitPriceKhr: Math.max(0, Number(item.unitPriceKhr ?? 0) || 0),
+          unitCogsKhr: Math.max(0, Number(item.unitCogsKhr ?? 0) || 0),
+          lineTotalKhr: Math.max(0, Number(item.lineTotalKhr ?? 0) || 0),
+          returnedQty: Math.max(0, Number(item.returnedQty ?? 0) || 0),
+          deductions: Array.isArray(item.deductions) ? item.deductions : [],
+        }))
     : [];
 
+  const paymentMethod: PaymentMethod =
+    raw.paymentMethod && VALID_PAYMENT_METHODS.has(raw.paymentMethod)
+      ? raw.paymentMethod
+      : 'cash';
+
   return {
-    id: raw.id,
-    clientTxId: raw.clientTxId || raw.id,
-    orderNumber: raw.orderNumber || 'JF-0000',
-    saleDate: raw.saleDate || todayIso(),
+    id: String(raw.id),
+    clientTxId: String(raw.clientTxId || raw.id),
+    orderNumber: String(raw.orderNumber || 'JF-0000'),
+    saleDate: String(raw.saleDate || todayIso()),
     items,
-    subtotalKhr: raw.subtotalKhr !== undefined ? Number(raw.subtotalKhr) : totalKhr,
+    subtotalKhr:
+      raw.subtotalKhr !== undefined && Number.isFinite(Number(raw.subtotalKhr))
+        ? Number(raw.subtotalKhr)
+        : totalKhr,
     totalKhr,
     refundedKhr,
     netTotalKhr,
     cogsKhr,
     refundedCogsKhr,
-    paymentMethod: raw.paymentMethod || 'cash',
+    paymentMethod,
     cash_received_usd:
-      raw.cash_received_usd !== undefined && raw.cash_received_usd !== null
+      raw.cash_received_usd !== undefined &&
+      raw.cash_received_usd !== null &&
+      Number.isFinite(Number(raw.cash_received_usd))
         ? Math.max(0, Number(raw.cash_received_usd))
         : null,
     cash_received_khr:
-      raw.cash_received_khr !== undefined && raw.cash_received_khr !== null
+      raw.cash_received_khr !== undefined &&
+      raw.cash_received_khr !== null &&
+      Number.isFinite(Number(raw.cash_received_khr))
         ? Math.max(0, Math.round(Number(raw.cash_received_khr)))
         : null,
     exchange_rate_used:
-      raw.exchange_rate_used !== undefined && raw.exchange_rate_used !== null
+      raw.exchange_rate_used !== undefined &&
+      raw.exchange_rate_used !== null &&
+      Number.isFinite(Number(raw.exchange_rate_used)) &&
+      Number(raw.exchange_rate_used) > 0
         ? Math.max(1, Math.round(Number(raw.exchange_rate_used)))
         : null,
     change_given_khr:
-      raw.change_given_khr !== undefined && raw.change_given_khr !== null
+      raw.change_given_khr !== undefined &&
+      raw.change_given_khr !== null &&
+      Number.isFinite(Number(raw.change_given_khr))
         ? Math.max(0, Math.round(Number(raw.change_given_khr)))
         : null,
-    customerName: raw.customerName || 'Walk-in',
-    note: raw.note || '',
-    recordedBy: raw.recordedBy || 'Family',
+    customerName: String(raw.customerName || 'Walk-in'),
+    note: String(raw.note || ''),
+    recordedBy: String(raw.recordedBy || 'Family'),
     status,
-    returns: Array.isArray(raw.returns) ? raw.returns : [],
-    ...(raw.voidedAt ? { voidedAt: raw.voidedAt } : {}),
-    ...(raw.voidedBy ? { voidedBy: raw.voidedBy } : {}),
-    ...(raw.voidReason ? { voidReason: raw.voidReason } : {}),
-    createdAt: raw.createdAt || new Date().toISOString(),
+    returns: Array.isArray(raw.returns)
+      ? raw.returns.filter((ret) => Boolean(ret && typeof ret === 'object'))
+      : [],
+    ...(raw.voidedAt ? { voidedAt: String(raw.voidedAt) } : {}),
+    ...(raw.voidedBy ? { voidedBy: String(raw.voidedBy) } : {}),
+    ...(raw.voidReason ? { voidReason: String(raw.voidReason) } : {}),
+    createdAt: String(raw.createdAt || new Date().toISOString()),
   };
 }
 
 export function normalizeStockMovement(raw: Partial<StockMovement> & { id: string }): StockMovement {
-  const itemId = raw.itemId || raw.ingredientId || '';
-  const itemName = raw.itemName || raw.ingredientName || 'Unknown Item';
+  const itemId = String(raw.itemId || raw.ingredientId || '');
+  const itemName = String(raw.itemName || raw.ingredientName || 'Unknown Item');
   const itemClassification: StockClassification =
     raw.itemClassification === 'packaged' ||
     raw.itemClassification === 'prepared_stock' ||
@@ -194,40 +288,87 @@ export function normalizeStockMovement(raw: Partial<StockMovement> & { id: strin
       : 'ingredient';
 
   return {
-    id: raw.id,
+    id: String(raw.id),
     itemId,
     itemName,
     itemClassification,
-    ingredientId: raw.ingredientId || itemId,
-    ingredientName: raw.ingredientName || itemName,
+    ingredientId: String(raw.ingredientId || itemId),
+    ingredientName: String(raw.ingredientName || itemName),
     movementType: raw.movementType || 'adjustment',
-    deltaQty: Number(raw.deltaQty ?? 0),
-    unit: raw.unit || 'pcs',
-    unitCostKhr: raw.unitCostKhr !== undefined ? Number(raw.unitCostKhr) : undefined,
-    totalCostKhr: Math.max(0, Number(raw.totalCostKhr ?? 0)),
-    referenceId: raw.referenceId || '',
-    movementDate: raw.movementDate || todayIso(),
-    note: raw.note || '',
-    recordedBy: raw.recordedBy || 'Family',
-    createdAt: raw.createdAt || new Date().toISOString(),
+    deltaQty: Number.isFinite(Number(raw.deltaQty)) ? Number(raw.deltaQty) : 0,
+    unit: raw.unit && VALID_UNITS.has(raw.unit) ? raw.unit : 'pcs',
+    unitCostKhr:
+      raw.unitCostKhr !== undefined && Number.isFinite(Number(raw.unitCostKhr))
+        ? Number(raw.unitCostKhr)
+        : undefined,
+    totalCostKhr: Math.max(0, Number(raw.totalCostKhr ?? 0) || 0),
+    referenceId: String(raw.referenceId || ''),
+    movementDate: String(raw.movementDate || todayIso()),
+    note: String(raw.note || ''),
+    recordedBy: String(raw.recordedBy || 'Family'),
+    createdAt: String(raw.createdAt || new Date().toISOString()),
   };
 }
 
-export function normalizeSettings(raw: Partial<WorkspaceSettings>, fallback: WorkspaceSettings): WorkspaceSettings {
-  const rawPosRate = Number(raw.posExchangeRate);
+export function normalizeSettings(
+  raw: Partial<WorkspaceSettings> | null | undefined,
+  fallback: WorkspaceSettings
+): WorkspaceSettings {
+  const safeRaw = raw && typeof raw === 'object' ? raw : {};
+  const rawPosRate = Number(safeRaw.posExchangeRate);
   const fallbackPosRate = Number(fallback.posExchangeRate);
+  const rawUsdRate = Number(safeRaw.usdRate);
+  const rawLowStock = Number(safeRaw.lowStockDefault);
+
+  const familyMembers =
+    Array.isArray(safeRaw.familyMembers) &&
+    safeRaw.familyMembers.filter((m): m is string => typeof m === 'string' && m.trim().length > 0).length > 0
+      ? safeRaw.familyMembers
+          .filter((m): m is string => typeof m === 'string' && m.trim().length > 0)
+          .map((m) => m.trim())
+      : fallback.familyMembers;
+
+  const activeOperator =
+    typeof safeRaw.activeOperator === 'string' && safeRaw.activeOperator.trim().length > 0
+      ? safeRaw.activeOperator.trim()
+      : familyMembers[0] || fallback.activeOperator;
+
   return {
-    ...fallback,
-    ...raw,
+    workspaceId:
+      typeof safeRaw.workspaceId === 'string' && safeRaw.workspaceId.trim().length > 0
+        ? safeRaw.workspaceId
+        : fallback.workspaceId,
+    inviteCode:
+      typeof safeRaw.inviteCode === 'string' && safeRaw.inviteCode.trim().length > 0
+        ? safeRaw.inviteCode
+        : fallback.inviteCode,
+    name:
+      typeof safeRaw.name === 'string' && safeRaw.name.trim().length > 0
+        ? safeRaw.name
+        : fallback.name,
+    location: typeof safeRaw.location === 'string' ? safeRaw.location : fallback.location,
+    currency: 'KHR',
+    usdRate: Number.isFinite(rawUsdRate) && rawUsdRate > 0 ? rawUsdRate : fallback.usdRate,
     posExchangeRate:
       Number.isFinite(rawPosRate) && rawPosRate > 0
         ? Math.round(rawPosRate)
         : Number.isFinite(fallbackPosRate) && fallbackPosRate > 0
           ? Math.round(fallbackPosRate)
           : 4000,
-    allowNegativeStock: Boolean(raw.allowNegativeStock ?? false),
-    enableOpenFoodFactsLookup: raw.enableOpenFoodFactsLookup !== false,
-    timezone: raw.timezone || BUSINESS_TIMEZONE,
+    language: safeRaw.language === 'vi' ? 'vi' : safeRaw.language === 'en' ? 'en' : fallback.language,
+    familyMembers,
+    activeOperator,
+    lowStockDefault:
+      Number.isFinite(rawLowStock) && rawLowStock >= 0 ? rawLowStock : fallback.lowStockDefault,
+    allowNegativeStock: Boolean(safeRaw.allowNegativeStock ?? fallback.allowNegativeStock ?? false),
+    enableOpenFoodFactsLookup:
+      safeRaw.enableOpenFoodFactsLookup !== undefined
+        ? Boolean(safeRaw.enableOpenFoodFactsLookup)
+        : fallback.enableOpenFoodFactsLookup !== false,
+    timezone:
+      typeof safeRaw.timezone === 'string' && safeRaw.timezone.trim().length > 0
+        ? safeRaw.timezone
+        : fallback.timezone || BUSINESS_TIMEZONE,
   };
 }
 
@@ -245,12 +386,13 @@ export interface BarcodeMatch {
 }
 
 export function resolveBarcodeMatch(rawBarcode: string, products: Product[]): BarcodeMatch | null {
-  const code = rawBarcode.trim();
-  if (!code) return null;
+  const code = String(rawBarcode || '').trim();
+  if (!code || !Array.isArray(products)) return null;
 
   for (const product of products) {
+    if (!product) continue;
     // 1. Direct product unit barcode
-    if (product.barcode && product.barcode.trim() === code) {
+    if (product.barcode && String(product.barcode).trim() === code) {
       return {
         product,
         unitsPerPack: 1,
@@ -260,8 +402,10 @@ export function resolveBarcodeMatch(rawBarcode: string, products: Product[]): Ba
     }
 
     // 2. Variant barcode
-    if (product.variants && product.variants.length > 0) {
-      const matchedVariant = product.variants.find((v) => v.barcode && v.barcode.trim() === code);
+    if (Array.isArray(product.variants) && product.variants.length > 0) {
+      const matchedVariant = product.variants.find(
+        (v) => v && v.barcode && String(v.barcode).trim() === code
+      );
       if (matchedVariant) {
         return {
           product,
@@ -274,12 +418,14 @@ export function resolveBarcodeMatch(rawBarcode: string, products: Product[]): Ba
     }
 
     // 3. Packaging / Carton barcode (e.g. 24-bottle carton)
-    if (product.packagingBarcodes && product.packagingBarcodes.length > 0) {
-      const matchedPack = product.packagingBarcodes.find((pb) => pb.barcode.trim() === code);
+    if (Array.isArray(product.packagingBarcodes) && product.packagingBarcodes.length > 0) {
+      const matchedPack = product.packagingBarcodes.find(
+        (pb) => pb && pb.barcode && String(pb.barcode).trim() === code
+      );
       if (matchedPack) {
         return {
           product,
-          unitsPerPack: Math.max(1, Math.round(matchedPack.unitsPerPack)),
+          unitsPerPack: Math.max(1, Math.round(Number(matchedPack.unitsPerPack) || 1)),
           packLabel: matchedPack.label,
           isPackagingBarcode: true,
           matchedBarcode: code,
@@ -302,19 +448,19 @@ export interface StockAvailability {
 }
 
 export function getProductVariant(product: Product, variantId?: string): ProductVariant | undefined {
-  if (!product.variants || product.variants.length === 0) return undefined;
+  if (!product || !Array.isArray(product.variants) || product.variants.length === 0) return undefined;
   if (variantId) {
-    const found = product.variants.find((v) => v.id === variantId);
+    const found = product.variants.find((v) => v && v.id === variantId);
     if (found) return found;
   }
   return product.variants[0];
 }
 
 export function getActiveRecipe(product: Product, variant?: ProductVariant): RecipeItem[] {
-  if (variant && variant.recipe && variant.recipe.length > 0) {
+  if (variant && Array.isArray(variant.recipe) && variant.recipe.length > 0) {
     return variant.recipe;
   }
-  return product.recipe || [];
+  return Array.isArray(product?.recipe) ? product.recipe : [];
 }
 
 export function getAvailableUnitsForProduct(
@@ -322,12 +468,17 @@ export function getAvailableUnitsForProduct(
   ingredients: Ingredient[],
   variantId?: string
 ): StockAvailability {
+  if (!product) {
+    return { availableUnits: 0, status: 'out' };
+  }
   if (product.productType === 'PACKAGED' || product.productType === 'PREPARED_STOCK') {
-    const qty = Math.floor(Math.max(0, product.stockQty));
-    if (product.stockQty <= 0) {
+    const stockQty = Number.isFinite(Number(product.stockQty)) ? Number(product.stockQty) : 0;
+    const reorderLevel = Number.isFinite(Number(product.reorderLevel)) ? Number(product.reorderLevel) : 0;
+    const qty = Math.floor(Math.max(0, stockQty));
+    if (stockQty <= 0) {
       return { availableUnits: 0, status: 'out', limitingItemName: product.name };
     }
-    if (product.stockQty <= product.reorderLevel) {
+    if (stockQty <= reorderLevel) {
       return { availableUnits: qty, status: 'low', limitingItemName: product.name };
     }
     return { availableUnits: qty, status: 'ok' };
@@ -340,7 +491,8 @@ export function getAvailableUnitsForProduct(
     return { availableUnits: null, status: 'ok' };
   }
 
-  const ingMap = new Map(ingredients.map((i) => [i.id, i]));
+  const safeIngredients = Array.isArray(ingredients) ? ingredients : [];
+  const ingMap = new Map(safeIngredients.filter((i) => i && i.id).map((i) => [i.id, i]));
   let minMakeable = Infinity;
   let limitingName: string | undefined;
   let anyLow = false;
