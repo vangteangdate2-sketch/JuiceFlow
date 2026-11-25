@@ -3,6 +3,7 @@ import {
   Barcode,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   HardDrive,
   ImagePlus,
   Layers,
@@ -223,12 +224,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       );
       setShowSecondaryNaming(hasDistinctVi || Boolean(editingProduct.brand));
       setShowMarkupCalc(editingProduct.markupPercent !== undefined);
-      setShowBarcodes(
-        Boolean(
-          editingProduct.barcode ||
-            (editingProduct.packagingBarcodes && editingProduct.packagingBarcodes.length > 0)
-        )
-      );
+      setShowBarcodes(false);
       setShowVariants(Boolean(editingProduct.variants && editingProduct.variants.length > 0));
     } else {
       setName('');
@@ -1392,177 +1388,230 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       </div>
                     </div>
                   </fieldset>
-
-                  {/* SECTION 5 (Collapsible): Advanced Barcode Configurations */}
-                  <CollapsibleFieldset
-                    id="pf-barcodes"
-                    variant="card"
-                    title={
-                      isVi
-                        ? 'Cấu hình mã vạch nâng cao'
-                        : 'Advanced Barcode Configurations'
-                    }
-                    summary={barcodeSummary}
-                    open={showBarcodes}
-                    onToggle={() => setShowBarcodes((prev) => !prev)}
-                  >
-                    <div className="space-y-4">
-                      <div>
-                        <label
-                          htmlFor="pf-barcode"
-                          className="block text-xs font-medium text-stone-600 mb-1.5"
-                        >
-                          {isVi ? 'Mã vạch đơn vị / SKU' : 'Unit Barcode / SKU'}
-                        </label>
-                        <div className="flex gap-2">
-                          <input
-                            id="pf-barcode"
-                            type="text"
-                            maxLength={64}
-                            value={barcode}
-                            onChange={(e) => setBarcode(e.target.value)}
-                            placeholder="e.g. 8851959132012"
-                            className="flex-1 min-w-0 px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg bg-white"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setScannerTarget({ kind: 'unit' })}
-                            className="px-3 py-2 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                          >
-                            <ScanBarcode className="w-4 h-4 text-[#0F5C43]" />
-                            {isVi ? 'Quét' : 'Scan'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {productType === 'PACKAGED' && (
-                        <div className="pt-3 border-t border-stone-100 space-y-2.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-medium text-stone-700 flex items-center gap-1.5">
-                              <Barcode className="w-3.5 h-3.5 text-stone-400" />
-                              {isVi ? 'Mã vạch Thùng / Lốc' : 'Carton / Pack Barcodes'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={addPackagingBarcode}
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline whitespace-nowrap"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              {isVi ? 'Thêm mã thùng' : 'Add Pack'}
-                            </button>
-                          </div>
-
-                          {packagingBarcodes.length === 0 ? (
-                            <p className="text-[11px] text-stone-400">
-                              {isVi
-                                ? 'Gắn mã vạch thùng để tự động nhân số lượng khi nhập kho.'
-                                : 'Map carton barcodes to auto-multiply units during stock receiving.'}
-                            </p>
-                          ) : (
-                            <div className="space-y-2">
-                              {packagingBarcodes.map((pb, idx) => (
-                                <div
-                                  key={idx}
-                                  className="p-2.5 bg-stone-50 border border-stone-200 rounded-lg space-y-2"
-                                >
-                                  <div className="flex items-center gap-1.5">
-                                    <input
-                                      type="text"
-                                      placeholder={isVi ? 'Mã thùng' : 'Carton code'}
-                                      value={pb.barcode}
-                                      onChange={(e) =>
-                                        updatePackagingBarcode(idx, { barcode: e.target.value })
-                                      }
-                                      className="flex-1 min-w-0 px-2.5 py-1.5 text-xs font-mono-num border border-stone-200 rounded bg-white"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => setScannerTarget({ kind: 'pack', index: idx })}
-                                      className="p-1.5 text-stone-500 hover:text-[#0F5C43]"
-                                      title={isVi ? 'Quét mã thùng' : 'Scan carton barcode'}
-                                    >
-                                      <ScanBarcode className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => removePackagingBarcode(idx)}
-                                      className="p-1.5 text-stone-400 hover:text-red-700"
-                                      aria-label="Remove carton barcode"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                  <div className="grid grid-cols-12 gap-2">
-                                    <input
-                                      type="text"
-                                      placeholder={isVi ? 'Tên gói (Thùng 24)' : 'Label (Carton 24)'}
-                                      value={pb.label}
-                                      onChange={(e) =>
-                                        updatePackagingBarcode(idx, { label: e.target.value })
-                                      }
-                                      className="col-span-8 px-2.5 py-1.5 text-xs border border-stone-200 rounded bg-white"
-                                    />
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      value={pb.unitsPerPack}
-                                      onChange={(e) =>
-                                        updatePackagingBarcode(idx, {
-                                          unitsPerPack: Math.max(1, Number(e.target.value) || 1),
-                                        })
-                                      }
-                                      className="col-span-4 px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded bg-white"
-                                      title={isVi ? 'Số đơn vị / gói' : 'Units per pack'}
-                                    />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </CollapsibleFieldset>
                 </div>
               </div>
             </div>
 
-            {/* Sticky Bottom Action Bar */}
-            <div className="px-6 py-4 border-t border-stone-200 bg-white flex items-center justify-between gap-3 shrink-0">
-              <div className="hidden sm:flex items-center gap-3 text-xs text-stone-500">
-                <span>
-                  {isVi ? 'Giá bán:' : 'Price:'}{' '}
-                  <strong className="font-mono-num text-stone-900">
-                    {formatKhr(liveSellingPrice)}
-                  </strong>
-                </span>
-                <span className="text-stone-300">|</span>
-                <span>
-                  {isVi ? 'Lãi gộp:' : 'Profit:'}{' '}
-                  <strong
-                    className={`font-mono-num ${
-                      liveProfit >= 0 ? 'text-emerald-700' : 'text-red-700'
+            {/* Sticky Bottom Bar + Docked Advanced Barcode Configuration Drawer (All Product Types) */}
+            <div className="shrink-0 border-t border-stone-200 bg-white">
+              {showBarcodes && (
+                <fieldset
+                  id="pf-barcodes-panel"
+                  className="bg-[#FAFBF9] border-b border-stone-200 px-5 sm:px-6 py-4 max-h-64 overflow-y-auto"
+                >
+                  <legend className="sr-only">
+                    {isVi ? 'Cấu hình mã vạch nâng cao' : 'Advanced Barcode Configurations'}
+                  </legend>
+
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Barcode className="w-4 h-4 text-[#0F5C43] shrink-0" />
+                      <span className="font-display text-xs font-semibold text-stone-900">
+                        {isVi ? 'Cấu hình mã vạch nâng cao' : 'Advanced Barcode Configurations'}
+                      </span>
+                      <span className="text-[11px] text-stone-500 truncate">
+                        · {t.productTypes[productType]}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowBarcodes(false)}
+                      className="p-1 text-stone-400 hover:text-stone-700 rounded transition-colors"
+                      aria-label={t.common.close}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                    {/* Unit Barcode / SKU (All product types) */}
+                    <div className="md:col-span-5 space-y-1.5">
+                      <label
+                        htmlFor="pf-barcode"
+                        className="block text-xs font-medium text-stone-700"
+                      >
+                        {isVi ? 'Mã vạch đơn vị / SKU' : 'Unit Barcode / SKU'}
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          id="pf-barcode"
+                          type="text"
+                          maxLength={64}
+                          value={barcode}
+                          onChange={(e) => setBarcode(e.target.value)}
+                          placeholder="e.g. 8851959132012"
+                          className="flex-1 min-w-0 px-3 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setScannerTarget({ kind: 'unit' })}
+                          className="px-3 py-2 text-xs font-semibold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                        >
+                          <ScanBarcode className="w-3.5 h-3.5 text-[#0F5C43]" />
+                          {isVi ? 'Quét' : 'Scan'}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-stone-500">
+                        {isVi
+                          ? 'Áp dụng cho quét bán hàng POS và tìm kiếm nhanh.'
+                          : 'Works for quick POS scanning across made-to-order, packaged, and prepared items.'}
+                      </p>
+                    </div>
+
+                    {/* Carton / Pack / Multi-Unit Barcodes (All product types) */}
+                    <div className="md:col-span-7 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-stone-700">
+                          {isVi ? 'Mã vạch Thùng / Lốc / Gói' : 'Carton / Pack / Bundle Barcodes'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={addPackagingBarcode}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline whitespace-nowrap"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          {isVi ? 'Thêm mã gói' : 'Add Pack'}
+                        </button>
+                      </div>
+
+                      {packagingBarcodes.length === 0 ? (
+                        <p className="text-[11px] text-stone-500 py-1.5">
+                          {isVi
+                            ? 'Gắn thêm mã vạch thùng/lốc để tự động nhân số lượng khi quét POS hoặc nhập kho.'
+                            : 'Map multi-unit pack or tray barcodes to auto-multiply quantity on scan.'}
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {packagingBarcodes.map((pb, idx) => (
+                            <div
+                              key={idx}
+                              className="grid grid-cols-12 gap-1.5 items-center bg-white p-2 border border-stone-200 rounded-lg"
+                            >
+                              <input
+                                type="text"
+                                placeholder={isVi ? 'Mã vạch gói' : 'Pack barcode'}
+                                value={pb.barcode}
+                                onChange={(e) =>
+                                  updatePackagingBarcode(idx, { barcode: e.target.value })
+                                }
+                                className="col-span-4 px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded bg-white"
+                              />
+                              <input
+                                type="text"
+                                placeholder={isVi ? 'Tên gói (Lốc 6)' : 'Label (Pack 6)'}
+                                value={pb.label}
+                                onChange={(e) =>
+                                  updatePackagingBarcode(idx, { label: e.target.value })
+                                }
+                                className="col-span-4 px-2 py-1.5 text-xs border border-stone-200 rounded bg-white"
+                              />
+                              <input
+                                type="number"
+                                min={1}
+                                value={pb.unitsPerPack}
+                                onChange={(e) =>
+                                  updatePackagingBarcode(idx, {
+                                    unitsPerPack: Math.max(1, Number(e.target.value) || 1),
+                                  })
+                                }
+                                className="col-span-2 px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded bg-white"
+                                title={isVi ? 'Số đơn vị / gói' : 'Units per pack'}
+                              />
+                              <div className="col-span-2 flex items-center justify-end gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setScannerTarget({ kind: 'pack', index: idx })}
+                                  className="p-1.5 text-stone-500 hover:text-[#0F5C43]"
+                                  title={isVi ? 'Quét mã gói' : 'Scan pack barcode'}
+                                >
+                                  <ScanBarcode className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removePackagingBarcode(idx)}
+                                  className="p-1.5 text-stone-400 hover:text-red-700"
+                                  aria-label="Remove pack barcode"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </fieldset>
+              )}
+
+              {/* Bottom Action Bar: Price & Profit | Advanced Barcode Config | Cancel & Save */}
+              <div className="px-5 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
+                  <div className="hidden sm:flex items-center gap-2.5 text-xs text-stone-500 whitespace-nowrap">
+                    <span>
+                      {isVi ? 'Giá bán:' : 'Price:'}{' '}
+                      <strong className="font-mono-num text-stone-900">
+                        {formatKhr(liveSellingPrice)}
+                      </strong>
+                    </span>
+                    <span className="text-stone-300">|</span>
+                    <span>
+                      {isVi ? 'Lãi gộp:' : 'Profit:'}{' '}
+                      <strong
+                        className={`font-mono-num ${
+                          liveProfit >= 0 ? 'text-emerald-700' : 'text-red-700'
+                        }`}
+                      >
+                        {formatKhr(liveProfit)} ({liveMarginPct}%)
+                      </strong>
+                    </span>
+                  </div>
+
+                  <span className="hidden md:inline text-stone-200">|</span>
+
+                  <button
+                    type="button"
+                    aria-expanded={showBarcodes}
+                    aria-controls="pf-barcodes-panel"
+                    onClick={() => setShowBarcodes((prev) => !prev)}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
+                      showBarcodes || barcodeSummary
+                        ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
+                        : 'border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100'
                     }`}
                   >
-                    {formatKhr(liveProfit)} ({liveMarginPct}%)
-                  </strong>
-                </span>
-              </div>
+                    <Barcode className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {isVi ? 'Cấu hình mã vạch' : 'Advanced Barcode'}
+                    </span>
+                    {barcodeSummary && (
+                      <span className="font-mono-num text-[11px] font-medium opacity-80 max-w-[110px] truncate">
+                        ({barcodeSummary})
+                      </span>
+                    )}
+                    {showBarcodes ? (
+                      <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                    ) : (
+                      <ChevronUp className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                  </button>
+                </div>
 
-              <div className="flex items-center justify-end gap-3 ml-auto">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
-                >
-                  {t.common.cancel}
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors"
-                >
-                  {t.common.save}
-                </button>
+                <div className="flex items-center justify-end gap-2.5 ml-auto">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
+                  >
+                    {t.common.cancel}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors"
+                  >
+                    {t.common.save}
+                  </button>
+                </div>
               </div>
             </div>
           </form>
