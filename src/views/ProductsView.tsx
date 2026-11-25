@@ -1,6 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   Barcode,
+  ChevronDown,
+  ChevronRight,
   Edit2,
   HardDrive,
   ImagePlus,
@@ -80,6 +82,10 @@ export const ProductsView: React.FC = () => {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const [showNameVi, setShowNameVi] = useState(false);
+  const [showAdvancedPricing, setShowAdvancedPricing] = useState(false);
+  const [showBarcodes, setShowBarcodes] = useState(false);
+  const [showVariants, setShowVariants] = useState(false);
   const [scannerTarget, setScannerTarget] = useState<
     | { kind: 'unit' }
     | { kind: 'pack'; index: number }
@@ -133,6 +139,10 @@ export const ProductsView: React.FC = () => {
         : []
     );
     setVariants([]);
+    setShowNameVi(false);
+    setShowAdvancedPricing(false);
+    setShowBarcodes(false);
+    setShowVariants(false);
     setModalOpen(true);
   };
 
@@ -163,6 +173,14 @@ export const ProductsView: React.FC = () => {
         recipe: (v.recipe || []).map((r) => ({ ...r })),
       }))
     );
+    setShowNameVi(
+      Boolean(product.nameVi && product.nameVi.trim() && product.nameVi.trim() !== product.name.trim())
+    );
+    setShowAdvancedPricing(Boolean(product.brand || product.markupPercent !== undefined));
+    setShowBarcodes(
+      Boolean(product.barcode || (product.packagingBarcodes && product.packagingBarcodes.length > 0))
+    );
+    setShowVariants(Boolean(product.variants && product.variants.length > 0));
     setModalOpen(true);
   };
 
@@ -675,9 +693,10 @@ export const ProductsView: React.FC = () => {
 
       {/* Add / Edit Product Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="w-full max-w-2xl bg-white border border-stone-200 rounded-xl my-8 overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
+          <div className="w-full max-w-xl bg-white border border-stone-200 rounded-xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between shrink-0">
               <h2 className="font-display text-lg font-semibold text-stone-900">
                 {editingId ? t.products.editProduct : t.products.addProduct}
               </h2>
@@ -691,683 +710,746 @@ export const ProductsView: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-5 max-h-[82vh] overflow-y-auto">
-              {/* Product Classification Selector */}
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                  {isVi ? 'Phân loại tồn kho' : 'Inventory Classification'}
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['PREPARED_TO_ORDER', 'PACKAGED', 'PREPARED_STOCK'] as ProductType[]).map(
-                    (pt) => (
-                      <button
-                        key={pt}
-                        type="button"
-                        onClick={() => handleProductTypeChange(pt)}
-                        className={`px-3 py-2 text-xs font-semibold rounded-lg border text-left transition-colors ${
-                          productType === pt
-                            ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
-                            : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
-                        }`}
-                      >
-                        <div>{t.productTypes[pt]}</div>
-                        <div className="text-[10px] font-normal text-stone-500 mt-0.5">
-                          {pt === 'PACKAGED'
-                            ? isVi
-                              ? 'Trừ trực tiếp tồn SP'
-                              : 'Direct SKU stock'
-                            : pt === 'PREPARED_STOCK'
-                            ? isVi
-                              ? 'Pha sẵn trữ lạnh'
-                              : 'Pre-bottled / ready'
-                            : isVi
-                            ? 'Trừ NL theo công thức'
-                            : 'Deducts recipe on sale'}
-                        </div>
-                      </button>
-                    )
-                  )}
-                </div>
-              </div>
-
-              {/* Names & Brand */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
-                    {t.products.nameEn}
+            <form onSubmit={handleSave} className="flex-1 flex flex-col min-h-0">
+              {/* Spacious Scrollable Form Body */}
+              <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                {/* 1. Product Type */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-stone-700">
+                    {isVi ? 'Loại sản phẩm' : 'Product Type'}
                   </label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={100}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
-                    {t.products.nameVi}
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={100}
-                    value={nameVi}
-                    onChange={(e) => setNameVi(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
-                    {isVi ? 'Thương hiệu' : 'Brand'}
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={80}
-                    value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    placeholder="e.g. Coca-Cola, House"
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
-                  />
-                </div>
-              </div>
-
-              {/* Category, Pricing & Markup */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
-                    {t.products.category}
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as ProductCategory)}
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white"
-                  >
-                    {ALL_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {t.productCategories[c]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
-                    {isVi ? 'Giá vốn (KHR)' : 'Cost Price (KHR)'}
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={100}
-                    value={costPriceKhr}
-                    onChange={(e) => handleCostOrMarkupChange(e.target.value, markupPercent)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
-                    {isVi ? 'Lãi dự kiến (%)' : 'Markup % (opt)'}
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={5}
-                    placeholder="e.g. 50"
-                    value={markupPercent}
-                    onChange={(e) => handleCostOrMarkupChange(costPriceKhr, e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
-                    {t.products.sellingPrice}
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={100}
-                    required
-                    value={priceKhr}
-                    onChange={(e) => {
-                      setManualPriceOverride(true);
-                      setPriceKhr(e.target.value);
-                    }}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
-                  />
-                </div>
-              </div>
-
-              {/* Active toggle & Barcode */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-                <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
-                    {isVi ? 'Mã vạch sản phẩm (Unit Barcode)' : 'Unit Barcode / SKU'}
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      maxLength={64}
-                      value={barcode}
-                      onChange={(e) => setBarcode(e.target.value)}
-                      placeholder="e.g. 8851959132012"
-                      className="flex-1 px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setScannerTarget({ kind: 'unit' })}
-                      className="px-3 py-2 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg inline-flex items-center gap-1"
-                    >
-                      <ScanBarcode className="w-4 h-4 text-[#0F5C43]" />
-                      Scan
-                    </button>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {(['PREPARED_TO_ORDER', 'PACKAGED', 'PREPARED_STOCK'] as ProductType[]).map(
+                      (pt) => (
+                        <button
+                          key={pt}
+                          type="button"
+                          onClick={() => handleProductTypeChange(pt)}
+                          className={`px-3.5 py-2.5 text-xs font-semibold rounded-lg border text-left transition-colors ${
+                            productType === pt
+                              ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
+                              : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                          }`}
+                        >
+                          <div className="truncate">{t.productTypes[pt]}</div>
+                          <div className="text-[11px] font-normal text-stone-500 mt-0.5 truncate">
+                            {pt === 'PACKAGED'
+                              ? isVi
+                                ? 'Trừ tồn trực tiếp'
+                                : 'Direct stock'
+                              : pt === 'PREPARED_STOCK'
+                                ? isVi
+                                  ? 'Pha sẵn trữ lạnh'
+                                  : 'Pre-prepared'
+                                : isVi
+                                  ? 'Pha theo công thức'
+                                  : 'Uses recipe'}
+                          </div>
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pb-2">
-                  <label className="inline-flex items-center gap-2 text-sm text-stone-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={active}
-                      onChange={(e) => setActive(e.target.checked)}
-                      className="w-4 h-4 accent-[#0F5C43]"
-                    />
-                    {t.products.activeStatus}
-                  </label>
-
-                  {markupPercent !== '' && (
-                    <label className="inline-flex items-center gap-1.5 text-xs text-stone-500 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={manualPriceOverride}
-                        onChange={(e) => setManualPriceOverride(e.target.checked)}
-                        className="w-3.5 h-3.5 accent-[#0F5C43]"
-                      />
-                      {isVi ? 'Tự nhập giá bán' : 'Manual price'}
-                    </label>
-                  )}
-                </div>
-              </div>
-
-              {/* Direct Stock Fields for PACKAGED & PREPARED_STOCK */}
-              {(productType === 'PACKAGED' || productType === 'PREPARED_STOCK') && (
-                <div className="pt-3 border-t border-stone-200 space-y-3">
-                  <h3 className="text-xs font-semibold text-stone-800">
-                    {isVi ? 'Thông tin tồn kho & Nhà cung cấp' : 'Direct Stock & Supplier Details'}
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-stone-700 mb-1">
-                        {t.inventory.inStock}
+                {/* 2. Core Details: Name (+ Optional Vietnamese Toggle), Category & Price */}
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <label className="text-xs font-medium text-stone-700">
+                        {showNameVi
+                          ? t.products.nameEn
+                          : isVi
+                            ? 'Tên sản phẩm'
+                            : 'Product Name'}
                       </label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={stockQty}
-                        onChange={(e) => setStockQty(e.target.value)}
-                        className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-stone-700 mb-1">
-                        {t.inventory.reorderAt}
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="any"
-                        value={reorderLevel}
-                        onChange={(e) => setReorderLevel(e.target.value)}
-                        className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-stone-700 mb-1">
-                        {t.inventory.unit}
-                      </label>
-                      <select
-                        value={unit}
-                        onChange={(e) => setUnit(e.target.value as IngredientUnit)}
-                        className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white"
+                      <button
+                        type="button"
+                        onClick={() => setShowNameVi((prev) => !prev)}
+                        className="text-xs font-medium text-[#0F5C43] hover:underline whitespace-nowrap"
                       >
-                        {(['pcs', 'ml', 'L', 'g', 'kg'] as IngredientUnit[]).map((u) => (
-                          <option key={u} value={u}>
-                            {u}
-                          </option>
-                        ))}
-                      </select>
+                        {showNameVi
+                          ? isVi
+                            ? 'Ẩn tên tiếng Việt'
+                            : 'Hide Vietnamese name'
+                          : isVi
+                            ? '+ Thêm tên tiếng Việt'
+                            : '+ Add Vietnamese name'}
+                      </button>
                     </div>
+                    <input
+                      type="text"
+                      required
+                      maxLength={100}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={
+                        isVi ? 'VD: Nước cam tươi, Dasani 500ml...' : 'e.g. Fresh Orange Juice, Dasani 500ml'
+                      }
+                      className="w-full px-3.5 py-2.5 text-sm border border-stone-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                    />
+                  </div>
+
+                  {showNameVi && (
                     <div>
-                      <label className="block text-xs font-medium text-stone-700 mb-1">
-                        {t.inventory.supplier}
+                      <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                        {t.products.nameVi}
                       </label>
                       <input
                         type="text"
                         maxLength={100}
-                        value={supplier}
-                        onChange={(e) => setSupplier(e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                        value={nameVi}
+                        onChange={(e) => setNameVi(e.target.value)}
+                        placeholder={isVi ? 'Nhập tên tiếng Việt (tùy chọn)' : 'Optional Vietnamese display name'}
+                        className="w-full px-3.5 py-2.5 text-sm border border-stone-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                        {t.products.category}
+                      </label>
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value as ProductCategory)}
+                        className="w-full px-3.5 py-2.5 text-sm border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                      >
+                        {ALL_CATEGORIES.map((c) => (
+                          <option key={c} value={c}>
+                            {t.productCategories[c]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                        {t.products.sellingPrice}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={100}
+                        required
+                        value={priceKhr}
+                        onChange={(e) => {
+                          setManualPriceOverride(true);
+                          setPriceKhr(e.target.value);
+                        }}
+                        className="w-full px-3.5 py-2.5 text-sm font-mono-num border border-stone-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
                       />
                     </div>
                   </div>
 
-                  {/* Packaging / Carton Barcodes */}
-                  {productType === 'PACKAGED' && (
-                    <div className="pt-2">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-stone-700 flex items-center gap-1.5">
-                          <Barcode className="w-3.5 h-3.5 text-stone-500" />
-                          {isVi
-                            ? 'Mã vạch Thùng / Lốc (Quy đổi khi nhập kho)'
-                            : 'Carton / Pack Barcodes (Auto-multiply on Stock-In)'}
-                        </span>
+                  {/* Direct Cost & Stock Row for Packaged / Prepared Stock */}
+                  {(productType === 'PACKAGED' || productType === 'PREPARED_STOCK') && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                      <div>
+                        <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                          {isVi ? 'Giá vốn (KHR)' : 'Unit Cost (KHR)'}
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={100}
+                          value={costPriceKhr}
+                          onChange={(e) => handleCostOrMarkupChange(e.target.value, markupPercent)}
+                          className="w-full px-3.5 py-2.5 text-sm font-mono-num border border-stone-200 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                          {t.inventory.inStock}
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={stockQty}
+                          onChange={(e) => setStockQty(e.target.value)}
+                          className="w-full px-3.5 py-2.5 text-sm font-mono-num border border-stone-200 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                          {t.inventory.reorderAt}
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={reorderLevel}
+                          onChange={(e) => setReorderLevel(e.target.value)}
+                          className="w-full px-3.5 py-2.5 text-sm font-mono-num border border-stone-200 rounded-lg"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="inline-flex items-center gap-2 text-sm text-stone-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={active}
+                        onChange={(e) => setActive(e.target.checked)}
+                        className="w-4 h-4 accent-[#0F5C43]"
+                      />
+                      {isVi ? 'Hiển thị trên màn hình bán hàng (POS)' : 'Show on POS menu'}
+                    </label>
+                  </div>
+                </div>
+
+                {/* 3. Product Photo (Device Photos, Google Drive & Studio Presets) */}
+                <div className="pt-5 border-t border-stone-200 space-y-3">
+                  <label className="block text-xs font-semibold text-stone-700">
+                    {t.products.imagePreset}
+                  </label>
+
+                  <div className="flex flex-col sm:flex-row items-start gap-4">
+                    <div className="w-full sm:w-32 h-24 rounded-lg overflow-hidden border border-stone-200 shrink-0 relative bg-stone-100">
+                      <ProductPhoto
+                        src={imageUrl}
+                        alt={name || t.products.imagePreset}
+                        className="w-full h-full"
+                      />
+                      {uploadingPhoto && (
+                        <div className="absolute inset-0 bg-black/45 flex items-center justify-center text-white text-xs gap-1.5">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 w-full space-y-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={addPackagingBarcode}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline"
+                          disabled={uploadingPhoto}
+                          onClick={() => photoInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 rounded-lg transition-colors whitespace-nowrap shrink-0"
                         >
-                          <Plus className="w-3.5 h-3.5" />
-                          {isVi ? 'Thêm mã thùng' : 'Add Pack Barcode'}
+                          <ImagePlus className="w-3.5 h-3.5 text-[#0F5C43]" />
+                          {uploadingPhoto ? t.products.processingPhoto : t.products.uploadFromPhotos}
                         </button>
+
+                        <button
+                          type="button"
+                          disabled={uploadingPhoto}
+                          onClick={() => setDrivePickerOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                        >
+                          <HardDrive className="w-3.5 h-3.5 text-[#0F5C43]" />
+                          {t.products.pickFromDrive}
+                        </button>
+
+                        <input
+                          ref={photoInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLocalPhotoSelect}
+                          className="hidden"
+                        />
                       </div>
-                      {packagingBarcodes.map((pb, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-2 mb-2 items-center">
-                          <input
-                            type="text"
-                            placeholder="Carton barcode"
-                            value={pb.barcode}
-                            onChange={(e) =>
-                              updatePackagingBarcode(idx, { barcode: e.target.value })
-                            }
-                            className="col-span-4 px-2.5 py-1.5 text-xs font-mono-num border border-stone-200 rounded-lg"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Label (e.g. Carton 24)"
-                            value={pb.label}
-                            onChange={(e) => updatePackagingBarcode(idx, { label: e.target.value })}
-                            className="col-span-4 px-2.5 py-1.5 text-xs border border-stone-200 rounded-lg"
-                          />
-                          <input
-                            type="number"
-                            min={1}
-                            value={pb.unitsPerPack}
-                            onChange={(e) =>
-                              updatePackagingBarcode(idx, {
-                                unitsPerPack: Math.max(1, Number(e.target.value) || 1),
-                              })
-                            }
-                            className="col-span-2 px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded-lg"
-                            title="Units per pack"
-                          />
-                          <div className="col-span-2 flex items-center justify-end gap-1">
+
+                      {photoError && <p className="text-xs text-red-700 font-medium">{photoError}</p>}
+
+                      <div className="grid grid-cols-5 gap-2">
+                        {DRINK_IMAGE_PRESETS.map((preset) => (
+                          <button
+                            key={preset.url}
+                            type="button"
+                            onClick={() => {
+                              setPhotoError('');
+                              setImageUrl(preset.url);
+                            }}
+                            className={`rounded-lg overflow-hidden border-2 transition-colors ${
+                              imageUrl === preset.url ? 'border-[#0F5C43]' : 'border-transparent'
+                            }`}
+                            title={isVi ? preset.labelVi : preset.label}
+                          >
+                            <ProductPhoto src={preset.url} alt={preset.label} className="w-full h-11" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Recipe Builder (Shown for Made-to-Order & Prepared Stock) */}
+                {productType !== 'PACKAGED' && (
+                  <div className="pt-5 border-t border-stone-200 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-xs font-semibold text-stone-800">
+                        {productType === 'PREPARED_STOCK'
+                          ? isVi
+                            ? 'Công thức pha mẻ (cho 1 đơn vị)'
+                            : 'Batch Recipe (per 1 finished unit)'
+                          : t.products.recipeSection}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addRecipeRow}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline whitespace-nowrap"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        {t.products.addIngredientRow}
+                      </button>
+                    </div>
+
+                    {recipe.length === 0 ? (
+                      <p className="text-xs text-stone-400">{t.products.noRecipeYet}</p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {recipe.map((row, index) => {
+                          const chosenIng = ingMap.get(row.ingredientId);
+                          const compatibleUnits = chosenIng
+                            ? getCompatibleUnits(chosenIng.unit)
+                            : (['pcs'] as IngredientUnit[]);
+                          return (
+                            <div key={index} className="flex items-center gap-2">
+                              <select
+                                value={row.ingredientId}
+                                onChange={(e) =>
+                                  updateRecipeRow(index, { ingredientId: e.target.value })
+                                }
+                                className="flex-1 min-w-0 px-3 py-2 text-xs border border-stone-200 rounded-lg bg-white"
+                              >
+                                {ingredients.map((ing) => (
+                                  <option key={ing.id} value={ing.id}>
+                                    {isVi ? ing.nameVi || ing.name : ing.name} ({ing.unit})
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                min={0.001}
+                                step="any"
+                                value={row.quantity}
+                                onChange={(e) =>
+                                  updateRecipeRow(index, {
+                                    quantity: Math.max(0, Number(e.target.value) || 0),
+                                  })
+                                }
+                                className="w-20 px-2.5 py-2 text-xs font-mono-num border border-stone-200 rounded-lg"
+                              />
+                              <select
+                                value={row.unit || chosenIng?.unit || 'pcs'}
+                                onChange={(e) =>
+                                  updateRecipeRow(index, {
+                                    unit: e.target.value as IngredientUnit,
+                                  })
+                                }
+                                className="w-16 px-2 py-2 text-xs border border-stone-200 rounded-lg bg-white"
+                              >
+                                {compatibleUnits.map((u) => (
+                                  <option key={u} value={u}>
+                                    {u}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => removeRecipeRow(index)}
+                                className="p-1.5 text-stone-400 hover:text-red-700"
+                                aria-label="Remove ingredient"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 5. Collapsible Optional Sections (Keep the form light & uncluttered) */}
+                <div className="pt-4 border-t border-stone-200 divide-y divide-stone-100">
+                  {/* Optional: Barcode & Carton Codes */}
+                  <div className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowBarcodes((prev) => !prev)}
+                      className="w-full flex items-center justify-between text-left text-xs font-semibold text-stone-700 hover:text-stone-900"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        {showBarcodes ? (
+                          <ChevronDown className="w-4 h-4 text-stone-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-stone-400" />
+                        )}
+                        {isVi ? 'Mã vạch & Mã thùng (tùy chọn)' : 'Barcode & Pack Codes (optional)'}
+                      </span>
+                      {barcode && (
+                        <span className="font-mono-num text-[11px] font-normal text-stone-500">
+                          {barcode}
+                        </span>
+                      )}
+                    </button>
+
+                    {showBarcodes && (
+                      <div className="mt-3 space-y-3 pl-6">
+                        <div>
+                          <label className="block text-xs font-medium text-stone-600 mb-1.5">
+                            {isVi ? 'Mã vạch sản phẩm' : 'Unit Barcode / SKU'}
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              maxLength={64}
+                              value={barcode}
+                              onChange={(e) => setBarcode(e.target.value)}
+                              placeholder="e.g. 8851959132012"
+                              className="flex-1 px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                            />
                             <button
                               type="button"
-                              onClick={() => setScannerTarget({ kind: 'pack', index: idx })}
-                              className="p-1.5 text-stone-500 hover:text-[#0F5C43]"
-                              title="Scan carton barcode"
+                              onClick={() => setScannerTarget({ kind: 'unit' })}
+                              className="px-3 py-2 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap"
                             >
-                              <ScanBarcode className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => removePackagingBarcode(idx)}
-                              className="p-1.5 text-stone-400 hover:text-red-700"
-                            >
-                              <X className="w-4 h-4" />
+                              <ScanBarcode className="w-4 h-4 text-[#0F5C43]" />
+                              Scan
                             </button>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
 
-              {/* Beverage Photo Picker (Device Photos, Google Drive & Studio Presets — 100% Preserved!) */}
-              <div className="pt-3 border-t border-stone-200 space-y-3">
-                <label className="block text-xs font-medium text-stone-700">
-                  {t.products.imagePreset}
-                </label>
-
-                <div className="flex flex-col sm:flex-row items-start gap-4">
-                  <div className="w-full sm:w-36 h-24 rounded-lg overflow-hidden border border-stone-200 shrink-0 relative bg-stone-100">
-                    <ProductPhoto
-                      src={imageUrl}
-                      alt={name || t.products.imagePreset}
-                      className="w-full h-full"
-                    />
-                    {uploadingPhoto && (
-                      <div className="absolute inset-0 bg-black/45 flex items-center justify-center text-white text-xs gap-1.5">
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {productType === 'PACKAGED' && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-stone-600 flex items-center gap-1.5">
+                                <Barcode className="w-3.5 h-3.5 text-stone-400" />
+                                {isVi ? 'Mã vạch Thùng / Lốc' : 'Carton / Pack Barcodes'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={addPackagingBarcode}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                {isVi ? 'Thêm mã thùng' : 'Add Pack'}
+                              </button>
+                            </div>
+                            {packagingBarcodes.map((pb, idx) => (
+                              <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                                <input
+                                  type="text"
+                                  placeholder="Carton code"
+                                  value={pb.barcode}
+                                  onChange={(e) =>
+                                    updatePackagingBarcode(idx, { barcode: e.target.value })
+                                  }
+                                  className="col-span-4 px-2.5 py-2 text-xs font-mono-num border border-stone-200 rounded-lg"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Carton 24"
+                                  value={pb.label}
+                                  onChange={(e) =>
+                                    updatePackagingBarcode(idx, { label: e.target.value })
+                                  }
+                                  className="col-span-4 px-2.5 py-2 text-xs border border-stone-200 rounded-lg"
+                                />
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={pb.unitsPerPack}
+                                  onChange={(e) =>
+                                    updatePackagingBarcode(idx, {
+                                      unitsPerPack: Math.max(1, Number(e.target.value) || 1),
+                                    })
+                                  }
+                                  className="col-span-2 px-2 py-2 text-xs font-mono-num border border-stone-200 rounded-lg"
+                                  title="Units per pack"
+                                />
+                                <div className="col-span-2 flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setScannerTarget({ kind: 'pack', index: idx })}
+                                    className="p-1.5 text-stone-500 hover:text-[#0F5C43]"
+                                    title="Scan carton barcode"
+                                  >
+                                    <ScanBarcode className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removePackagingBarcode(idx)}
+                                    className="p-1.5 text-stone-400 hover:text-red-700"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  <div className="flex-1 w-full space-y-2.5">
-                    <div className="flex flex-wrap items-center gap-2">
+                  {/* Optional: Size Variants (Small / Medium / Large) for Made-to-Order */}
+                  {productType === 'PREPARED_TO_ORDER' && (
+                    <div className="py-3">
                       <button
                         type="button"
-                        disabled={uploadingPhoto}
-                        onClick={() => photoInputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                        onClick={() => setShowVariants((prev) => !prev)}
+                        className="w-full flex items-center justify-between text-left text-xs font-semibold text-stone-700 hover:text-stone-900"
                       >
-                        <ImagePlus className="w-3.5 h-3.5 text-[#0F5C43]" />
-                        {uploadingPhoto ? t.products.processingPhoto : t.products.uploadFromPhotos}
+                        <span className="inline-flex items-center gap-2">
+                          {showVariants ? (
+                            <ChevronDown className="w-4 h-4 text-stone-400" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-stone-400" />
+                          )}
+                          {isVi
+                            ? 'Kích cỡ S / M / L (tùy chọn)'
+                            : 'Size Variants S / M / L (optional)'}
+                        </span>
+                        {variants.length > 0 && (
+                          <span className="font-mono-num text-[11px] font-normal text-stone-500">
+                            {variants.length} {isVi ? 'cỡ' : 'sizes'}
+                          </span>
+                        )}
                       </button>
 
-                      <button
-                        type="button"
-                        disabled={uploadingPhoto}
-                        onClick={() => setDrivePickerOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 rounded-lg transition-colors whitespace-nowrap shrink-0"
-                      >
-                        <HardDrive className="w-3.5 h-3.5 text-[#0F5C43]" />
-                        {t.products.pickFromDrive}
-                      </button>
-
-                      <input
-                        ref={photoInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleLocalPhotoSelect}
-                        className="hidden"
-                      />
-                    </div>
-
-                    {photoError && <p className="text-xs text-red-700 font-medium">{photoError}</p>}
-
-                    <div className="grid grid-cols-5 gap-2">
-                      {DRINK_IMAGE_PRESETS.map((preset) => (
-                        <button
-                          key={preset.url}
-                          type="button"
-                          onClick={() => {
-                            setPhotoError('');
-                            setImageUrl(preset.url);
-                          }}
-                          className={`rounded-lg overflow-hidden border-2 transition-colors ${
-                            imageUrl === preset.url ? 'border-[#0F5C43]' : 'border-transparent'
-                          }`}
-                          title={isVi ? preset.labelVi : preset.label}
-                        >
-                          <ProductPhoto src={preset.url} alt={preset.label} className="w-full h-11" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Recipe Builder (for PREPARED_TO_ORDER default recipe & PREPARED_STOCK batch recipe) */}
-              {productType !== 'PACKAGED' && (
-                <div className="pt-3 border-t border-stone-200">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <label className="text-xs font-semibold text-stone-800">
-                      {productType === 'PREPARED_STOCK'
-                        ? isVi
-                          ? 'Công thức pha mẻ (cho 1 chai/phần thành phẩm)'
-                          : 'Batch Preparation Recipe (per 1 finished unit)'
-                        : variants.length > 0
-                        ? isVi
-                          ? 'Công thức mặc định (dự phòng)'
-                          : 'Default Recipe (fallback)'
-                        : t.products.recipeSection}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={addRecipeRow}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      {t.products.addIngredientRow}
-                    </button>
-                  </div>
-
-                  {recipe.length === 0 ? (
-                    <p className="text-xs text-stone-400 py-1">{t.products.noRecipeYet}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {recipe.map((row, index) => {
-                        const chosenIng = ingMap.get(row.ingredientId);
-                        const compatibleUnits = chosenIng
-                          ? getCompatibleUnits(chosenIng.unit)
-                          : (['pcs'] as IngredientUnit[]);
-                        return (
-                          <div key={index} className="flex items-center gap-2">
-                            <select
-                              value={row.ingredientId}
-                              onChange={(e) =>
-                                updateRecipeRow(index, { ingredientId: e.target.value })
-                              }
-                              className="flex-1 px-2.5 py-2 text-xs border border-stone-200 rounded-lg bg-white"
-                            >
-                              {ingredients.map((ing) => (
-                                <option key={ing.id} value={ing.id}>
-                                  {isVi ? ing.nameVi || ing.name : ing.name} ({ing.unit})
-                                </option>
-                              ))}
-                            </select>
-                            <input
-                              type="number"
-                              min={0.001}
-                              step="any"
-                              value={row.quantity}
-                              onChange={(e) =>
-                                updateRecipeRow(index, {
-                                  quantity: Math.max(0, Number(e.target.value) || 0),
-                                })
-                              }
-                              className="w-20 px-2.5 py-2 text-xs font-mono-num border border-stone-200 rounded-lg"
-                            />
-                            <select
-                              value={row.unit || chosenIng?.unit || 'pcs'}
-                              onChange={(e) =>
-                                updateRecipeRow(index, {
-                                  unit: e.target.value as IngredientUnit,
-                                })
-                              }
-                              className="w-16 px-2 py-2 text-xs border border-stone-200 rounded-lg bg-white"
-                            >
-                              {compatibleUnits.map((u) => (
-                                <option key={u} value={u}>
-                                  {u}
-                                </option>
-                              ))}
-                            </select>
+                      {showVariants && (
+                        <div className="mt-3 space-y-3 pl-6">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs text-stone-500">
+                              {isVi
+                                ? 'Mỗi cỡ có giá bán và công thức riêng.'
+                                : 'Give each size its own price and ingredient amounts.'}
+                            </p>
                             <button
                               type="button"
-                              onClick={() => removeRecipeRow(index)}
-                              className="p-1.5 text-stone-400 hover:text-red-700"
-                              aria-label="Remove ingredient"
+                              onClick={() => addVariant()}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline whitespace-nowrap shrink-0"
                             >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Multi-Variant Editor (Small / Medium / Large) for PREPARED_TO_ORDER */}
-              {productType === 'PREPARED_TO_ORDER' && (
-                <div className="pt-3 border-t border-stone-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xs font-semibold text-stone-800">
-                        {isVi
-                          ? 'Kích cỡ / Biến thể (Small, Medium, Large)'
-                          : 'Size Variants (Small, Medium, Large)'}
-                      </h3>
-                      <p className="text-[11px] text-stone-500">
-                        {isVi
-                          ? 'Mỗi kích cỡ có giá bán, mã vạch và định lượng nguyên liệu riêng.'
-                          : 'Each variant has its own selling price, optional barcode, and ingredient recipe.'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => addVariant()}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      {isVi ? 'Thêm kích cỡ' : 'Add Variant'}
-                    </button>
-                  </div>
-
-                  {variants.map((variant, vIdx) => {
-                    const vCost = Math.round(calculateRecipeCogs(variant.recipe, ingredients));
-                    return (
-                      <div
-                        key={variant.id}
-                        className="p-3.5 bg-stone-50 border border-stone-200 rounded-lg space-y-3"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="grid grid-cols-3 gap-2 flex-1">
-                            <input
-                              type="text"
-                              value={variant.name}
-                              onChange={(e) => updateVariant(vIdx, { name: e.target.value })}
-                              placeholder="Size (e.g. Small)"
-                              className="px-2.5 py-1.5 text-xs border border-stone-200 rounded-lg bg-white"
-                            />
-                            <input
-                              type="number"
-                              min={0}
-                              step={500}
-                              value={variant.priceKhr}
-                              onChange={(e) =>
-                                updateVariant(vIdx, {
-                                  priceKhr: Math.max(0, Number(e.target.value) || 0),
-                                })
-                              }
-                              placeholder="Price KHR"
-                              className="px-2.5 py-1.5 text-xs font-mono-num border border-stone-200 rounded-lg bg-white"
-                            />
-                            <div className="flex gap-1">
-                              <input
-                                type="text"
-                                value={variant.barcode || ''}
-                                onChange={(e) => updateVariant(vIdx, { barcode: e.target.value })}
-                                placeholder="Barcode (opt)"
-                                className="flex-1 min-w-0 px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded-lg bg-white"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setScannerTarget({ kind: 'variant', index: vIdx })}
-                                className="p-1.5 text-stone-500 hover:text-[#0F5C43]"
-                                title="Scan variant barcode"
-                              >
-                                <ScanBarcode className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeVariant(vIdx)}
-                            className="p-1.5 text-stone-400 hover:text-red-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-[11px] text-stone-500">
-                            <span>
-                              {isVi ? 'Công thức cho cỡ này' : 'Variant Recipe'} ·{' '}
-                              <span className="font-mono-num text-stone-700 font-semibold">
-                                COGS {formatKhr(vCost)}
-                              </span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => addVariantRecipeRow(vIdx)}
-                              className="text-[#0F5C43] font-semibold hover:underline"
-                            >
-                              + {t.products.addIngredientRow}
+                              <Plus className="w-3.5 h-3.5" />
+                              {isVi ? 'Thêm cỡ' : 'Add Size'}
                             </button>
                           </div>
 
-                          {variant.recipe.map((row, rIdx) => {
-                            const chosenIng = ingMap.get(row.ingredientId);
-                            const compatibleUnits = chosenIng
-                              ? getCompatibleUnits(chosenIng.unit)
-                              : (['pcs'] as IngredientUnit[]);
+                          {variants.map((variant, vIdx) => {
+                            const vCost = Math.round(calculateRecipeCogs(variant.recipe, ingredients));
                             return (
-                              <div key={rIdx} className="flex items-center gap-1.5">
-                                <select
-                                  value={row.ingredientId}
-                                  onChange={(e) =>
-                                    updateVariantRecipeRow(vIdx, rIdx, {
-                                      ingredientId: e.target.value,
-                                    })
-                                  }
-                                  className="flex-1 px-2 py-1.5 text-xs border border-stone-200 rounded bg-white"
-                                >
-                                  {ingredients.map((ing) => (
-                                    <option key={ing.id} value={ing.id}>
-                                      {isVi ? ing.nameVi || ing.name : ing.name} ({ing.unit})
-                                    </option>
-                                  ))}
-                                </select>
-                                <input
-                                  type="number"
-                                  min={0.001}
-                                  step="any"
-                                  value={row.quantity}
-                                  onChange={(e) =>
-                                    updateVariantRecipeRow(vIdx, rIdx, {
-                                      quantity: Math.max(0, Number(e.target.value) || 0),
-                                    })
-                                  }
-                                  className="w-16 px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded bg-white"
-                                />
-                                <select
-                                  value={row.unit || chosenIng?.unit || 'pcs'}
-                                  onChange={(e) =>
-                                    updateVariantRecipeRow(vIdx, rIdx, {
-                                      unit: e.target.value as IngredientUnit,
-                                    })
-                                  }
-                                  className="w-14 px-1.5 py-1.5 text-xs border border-stone-200 rounded bg-white"
-                                >
-                                  {compatibleUnits.map((u) => (
-                                    <option key={u} value={u}>
-                                      {u}
-                                    </option>
-                                  ))}
-                                </select>
-                                <button
-                                  type="button"
-                                  onClick={() => removeVariantRecipeRow(vIdx, rIdx)}
-                                  className="p-1 text-stone-400 hover:text-red-700"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
+                              <div
+                                key={variant.id}
+                                className="p-3.5 bg-stone-50 border border-stone-200 rounded-lg space-y-3"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={variant.name}
+                                    onChange={(e) => updateVariant(vIdx, { name: e.target.value })}
+                                    placeholder="Size (e.g. Small)"
+                                    className="flex-1 min-w-0 px-2.5 py-2 text-xs border border-stone-200 rounded-lg bg-white"
+                                  />
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={500}
+                                    value={variant.priceKhr}
+                                    onChange={(e) =>
+                                      updateVariant(vIdx, {
+                                        priceKhr: Math.max(0, Number(e.target.value) || 0),
+                                      })
+                                    }
+                                    placeholder="Price KHR"
+                                    className="w-28 px-2.5 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeVariant(vIdx)}
+                                    className="p-1.5 text-stone-400 hover:text-red-700"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between text-[11px] text-stone-500">
+                                    <span>
+                                      {isVi ? 'Công thức' : 'Recipe'} ·{' '}
+                                      <span className="font-mono-num text-stone-700 font-semibold">
+                                        COGS {formatKhr(vCost)}
+                                      </span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => addVariantRecipeRow(vIdx)}
+                                      className="text-[#0F5C43] font-semibold hover:underline"
+                                    >
+                                      + {t.products.addIngredientRow}
+                                    </button>
+                                  </div>
+
+                                  {variant.recipe.map((row, rIdx) => {
+                                    const chosenIng = ingMap.get(row.ingredientId);
+                                    const compatibleUnits = chosenIng
+                                      ? getCompatibleUnits(chosenIng.unit)
+                                      : (['pcs'] as IngredientUnit[]);
+                                    return (
+                                      <div key={rIdx} className="flex items-center gap-1.5">
+                                        <select
+                                          value={row.ingredientId}
+                                          onChange={(e) =>
+                                            updateVariantRecipeRow(vIdx, rIdx, {
+                                              ingredientId: e.target.value,
+                                            })
+                                          }
+                                          className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-stone-200 rounded bg-white"
+                                        >
+                                          {ingredients.map((ing) => (
+                                            <option key={ing.id} value={ing.id}>
+                                              {isVi ? ing.nameVi || ing.name : ing.name} ({ing.unit})
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <input
+                                          type="number"
+                                          min={0.001}
+                                          step="any"
+                                          value={row.quantity}
+                                          onChange={(e) =>
+                                            updateVariantRecipeRow(vIdx, rIdx, {
+                                              quantity: Math.max(0, Number(e.target.value) || 0),
+                                            })
+                                          }
+                                          className="w-16 px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded bg-white"
+                                        />
+                                        <select
+                                          value={row.unit || chosenIng?.unit || 'pcs'}
+                                          onChange={(e) =>
+                                            updateVariantRecipeRow(vIdx, rIdx, {
+                                              unit: e.target.value as IngredientUnit,
+                                            })
+                                          }
+                                          className="w-14 px-1.5 py-1.5 text-xs border border-stone-200 rounded bg-white"
+                                        >
+                                          {compatibleUnits.map((u) => (
+                                            <option key={u} value={u}>
+                                              {u}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          type="button"
+                                          onClick={() => removeVariantRecipeRow(vIdx, rIdx)}
+                                          className="p-1 text-stone-400 hover:text-red-700"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             );
                           })}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      )}
+                    </div>
+                  )}
 
-              <div className="pt-4 border-t border-stone-200 flex items-center justify-end gap-3">
+                  {/* Optional: Brand, Unit, Supplier & Markup Calculator */}
+                  <div className="py-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedPricing((prev) => !prev)}
+                      className="w-full flex items-center justify-between text-left text-xs font-semibold text-stone-700 hover:text-stone-900"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        {showAdvancedPricing ? (
+                          <ChevronDown className="w-4 h-4 text-stone-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-stone-400" />
+                        )}
+                        {isVi
+                          ? 'Thông tin thêm (Thương hiệu, NCC, % Lãi)'
+                          : 'More Details (Brand, Supplier, Markup %)'}
+                      </span>
+                    </button>
+
+                    {showAdvancedPricing && (
+                      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3.5 pl-6">
+                        <div>
+                          <label className="block text-xs font-medium text-stone-600 mb-1">
+                            {isVi ? 'Thương hiệu' : 'Brand'}
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={80}
+                            value={brand}
+                            onChange={(e) => setBrand(e.target.value)}
+                            placeholder="e.g. Coca-Cola, House"
+                            className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-stone-600 mb-1">
+                            {isVi ? 'Tự tính giá từ % lãi' : 'Auto-price Markup (%)'}
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={5}
+                            placeholder="e.g. 50"
+                            value={markupPercent}
+                            onChange={(e) => handleCostOrMarkupChange(costPriceKhr, e.target.value)}
+                            className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                          />
+                        </div>
+
+                        {productType !== 'PREPARED_TO_ORDER' && (
+                          <>
+                            <div>
+                              <label className="block text-xs font-medium text-stone-600 mb-1">
+                                {t.inventory.unit}
+                              </label>
+                              <select
+                                value={unit}
+                                onChange={(e) => setUnit(e.target.value as IngredientUnit)}
+                                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white"
+                              >
+                                {(['pcs', 'ml', 'L', 'g', 'kg'] as IngredientUnit[]).map((u) => (
+                                  <option key={u} value={u}>
+                                    {u}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-stone-600 mb-1">
+                                {t.inventory.supplier}
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={100}
+                                value={supplier}
+                                onChange={(e) => setSupplier(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Sticky Bottom Action Bar */}
+              <div className="px-6 py-4 border-t border-stone-200 bg-white flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg"
+                  className="px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
                 >
                   {t.common.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg"
+                  className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors"
                 >
                   {t.common.save}
                 </button>
