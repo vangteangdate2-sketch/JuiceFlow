@@ -13,6 +13,7 @@ import { useStore } from '../context/StoreContext';
 import type { AppTab, IngredientUnit, StockClassification } from '../types';
 import { daysAgoIso, formatKhr, formatQty, formatUsdRef, todayIso } from '../utils/format';
 import { computeFinancialReport } from '../utils/inventoryEngine';
+import { DailySummary } from '../components/DailySummary';
 
 interface DashboardViewProps {
   onNavigate: (tab: AppTab) => void;
@@ -120,6 +121,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     });
   }, [products, ingredients, isVi]);
 
+  const activeDirectProductsCount = useMemo(
+    () =>
+      products.filter(
+        (p) => p.active && (p.productType === 'PACKAGED' || p.productType === 'PREPARED_STOCK')
+      ).length,
+    [products]
+  );
+
+  const activeInventoryCount = activeDirectProductsCount + ingredients.length;
+
+  const todayExpensesTotalKhr =
+    todayReport.operatingExpensesKhr + todayReport.inventoryPurchasesCashOutKhr;
+
+  const todayExpenseEntriesCount = useMemo(() => {
+    const expCount = expenses.filter(
+      (e) => e.expenseDate === today && e.scope === 'business'
+    ).length;
+    const purCount = purchases.filter((p) => p.purchaseDate === today).length;
+    return expCount + purCount;
+  }, [expenses, purchases, today]);
+
   const topProducts = useMemo(
     () => periodReport.productProfitability.slice(0, 5),
     [periodReport.productProfitability]
@@ -162,6 +184,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </button>
         </div>
       </div>
+
+      {/* Daily Summary KPI Cards (Today) */}
+      <DailySummary
+        dateLabel={today}
+        isVi={isVi}
+        usdRate={settings.usdRate}
+        todaySalesKhr={todayReport.netRevenueKhr}
+        todayOrderCount={todayReport.completedOrderCount}
+        todayUnitsSold={todayReport.unitsSoldNet}
+        activeInventoryCount={activeInventoryCount}
+        activeDirectProductsCount={activeDirectProductsCount}
+        activeIngredientsCount={ingredients.length}
+        lowStockCount={lowStockList.length}
+        todayExpensesKhr={todayExpensesTotalKhr}
+        todayOperatingExpensesKhr={todayReport.operatingExpensesKhr}
+        todayStockPurchasesKhr={todayReport.inventoryPurchasesCashOutKhr}
+        todayExpenseEntriesCount={todayExpenseEntriesCount}
+        onNavigate={onNavigate}
+      />
 
       {/* 4-Column KPI Strip (reconciled with ReportsView Accrual P&L) */}
       <div className="bg-white border border-stone-200 rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-stone-200">

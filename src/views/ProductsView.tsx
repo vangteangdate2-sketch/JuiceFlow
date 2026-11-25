@@ -343,6 +343,7 @@ export const ProductsView: React.FC = () => {
       <ProductFormModal
         open={modalOpen}
         editingProduct={editingProduct}
+        existingProducts={products}
         ingredients={ingredients}
         settings={settings}
         t={t}

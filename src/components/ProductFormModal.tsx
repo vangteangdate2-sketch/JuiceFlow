@@ -9,6 +9,7 @@ import {
   Layers,
   Loader2,
   Plus,
+  RefreshCw,
   ScanBarcode,
   Trash2,
   X,
@@ -129,6 +130,7 @@ export type ProductFormPayload = Omit<Product, 'id'> & { id?: string };
 interface ProductFormModalProps {
   open: boolean;
   editingProduct: Product | null;
+  existingProducts?: Product[];
   ingredients: Ingredient[];
   settings: WorkspaceSettings;
   t: StoreContextValue['t'];
@@ -139,6 +141,7 @@ interface ProductFormModalProps {
 export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   open,
   editingProduct,
+  existingProducts = [],
   ingredients,
   settings,
   t,
@@ -534,6 +537,50 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       updateVariant(scannerTarget.index, { barcode: code });
     }
     setScannerTarget(null);
+  };
+
+  const handleAutoGenerateSku = () => {
+    const usedCodes = new Set<string>();
+    for (const p of existingProducts) {
+      if (p.barcode?.trim()) usedCodes.add(p.barcode.trim().toUpperCase());
+      for (const pb of p.packagingBarcodes || []) {
+        if (pb.barcode?.trim()) usedCodes.add(pb.barcode.trim().toUpperCase());
+      }
+      for (const v of p.variants || []) {
+        if (v.barcode?.trim()) usedCodes.add(v.barcode.trim().toUpperCase());
+      }
+    }
+    if (barcode.trim()) usedCodes.add(barcode.trim().toUpperCase());
+    for (const pb of packagingBarcodes) {
+      if (pb.barcode?.trim()) usedCodes.add(pb.barcode.trim().toUpperCase());
+    }
+    for (const v of variants) {
+      if (v.barcode?.trim()) usedCodes.add(v.barcode.trim().toUpperCase());
+    }
+
+    const typePrefix =
+      productType === 'PACKAGED' ? 'PKG' : productType === 'PREPARED_STOCK' ? 'PRP' : 'MTO';
+
+    const cleanNameSlug = name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toUpperCase()
+      .slice(0, 3);
+
+    const catSlug = category.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 3);
+    const segment = cleanNameSlug.length >= 2 ? cleanNameSlug : catSlug || 'PRD';
+
+    let candidate = '';
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const numPart = String(Math.floor(1000 + Math.random() * 9000));
+      candidate = `JF-${typePrefix}-${segment}-${numPart}`;
+      if (!usedCodes.has(candidate)) break;
+    }
+    if (!candidate || usedCodes.has(candidate)) {
+      candidate = `JF-${typePrefix}-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+    }
+    setBarcode(candidate);
   };
 
   const secondaryNamingSummary = [
@@ -1425,14 +1472,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                     {/* Unit Barcode / SKU (All product types) */}
-                    <div className="md:col-span-5 space-y-1.5">
+                    <div className="md:col-span-6 space-y-1.5">
                       <label
                         htmlFor="pf-barcode"
                         className="block text-xs font-medium text-stone-700"
                       >
                         {isVi ? 'Mã vạch đơn vị / SKU' : 'Unit Barcode / SKU'}
                       </label>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap sm:flex-nowrap gap-1.5">
                         <input
                           id="pf-barcode"
                           type="text"
@@ -1440,12 +1487,25 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           value={barcode}
                           onChange={(e) => setBarcode(e.target.value)}
                           placeholder="e.g. 8851959132012"
-                          className="flex-1 min-w-0 px-3 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                          className="flex-1 min-w-[140px] px-3 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
                         />
                         <button
                           type="button"
+                          onClick={handleAutoGenerateSku}
+                          className="px-2.5 py-2 text-xs font-semibold text-[#0F5C43] bg-emerald-50/80 border border-emerald-200 hover:bg-emerald-100/70 rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                          title={
+                            isVi
+                              ? 'Tự động tạo mã SKU duy nhất'
+                              : 'Automatically generate a unique SKU'
+                          }
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          {isVi ? 'Tạo mã SKU' : 'Auto-Generate SKU'}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setScannerTarget({ kind: 'unit' })}
-                          className="px-3 py-2 text-xs font-semibold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                          className="px-2.5 py-2 text-xs font-semibold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
                         >
                           <ScanBarcode className="w-3.5 h-3.5 text-[#0F5C43]" />
                           {isVi ? 'Quét' : 'Scan'}
@@ -1459,7 +1519,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     </div>
 
                     {/* Carton / Pack / Multi-Unit Barcodes (All product types) */}
-                    <div className="md:col-span-7 space-y-2">
+                    <div className="md:col-span-6 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-medium text-stone-700">
                           {isVi ? 'Mã vạch Thùng / Lốc / Gói' : 'Carton / Pack / Bundle Barcodes'}
