@@ -66,6 +66,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [shopLocation, setShopLocation] = useState(settings.location);
   const [usdRate, setUsdRate] = useState(String(settings.usdRate));
   const [lowStockDefault, setLowStockDefault] = useState(String(settings.lowStockDefault));
+  const [allowNegativeStock, setAllowNegativeStock] = useState(Boolean(settings.allowNegativeStock));
   const [savedNotice, setSavedNotice] = useState('');
 
   // Family members
@@ -105,7 +106,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setShopLocation(settings.location);
     setUsdRate(String(settings.usdRate));
     setLowStockDefault(String(settings.lowStockDefault));
-  }, [settings.name, settings.location, settings.usdRate, settings.lowStockDefault]);
+    setAllowNegativeStock(Boolean(settings.allowNegativeStock));
+  }, [
+    settings.name,
+    settings.location,
+    settings.usdRate,
+    settings.lowStockDefault,
+    settings.allowNegativeStock,
+  ]);
 
   useEffect(() => {
     isBiometricSupported().then(setBioAvailable);
@@ -118,6 +126,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       location: shopLocation.trim(),
       usdRate: Math.max(100, Number(usdRate) || 4050),
       lowStockDefault: Math.max(0, Number(lowStockDefault) || 15),
+      allowNegativeStock,
     });
     setSavedNotice(t.settings.savedSuccess);
     window.setTimeout(() => setSavedNotice(''), 2500);
@@ -412,6 +421,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
               />
             </div>
+          </div>
+
+          <div className="pt-3 border-t border-stone-100 space-y-3">
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allowNegativeStock}
+                onChange={(e) => setAllowNegativeStock(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-stone-300 accent-[#0F5C43]"
+              />
+              <span>
+                <span className="block text-sm font-medium text-stone-900">
+                  {t.settings.allowNegativeStockLabel}
+                </span>
+                <span className="block text-xs text-stone-500">
+                  {t.settings.allowNegativeStockDesc}
+                </span>
+              </span>
+            </label>
+
+            <p className="text-xs text-stone-500 font-mono-num">
+              Timezone: {settings.timezone || 'Asia/Phnom_Penh'}
+            </p>
           </div>
 
           <div className="flex items-center gap-3 pt-2">

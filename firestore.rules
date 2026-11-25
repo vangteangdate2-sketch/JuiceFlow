@@ -62,6 +62,10 @@ service cloud.firestore {
       return u is string && u in ['g', 'kg', 'ml', 'L', 'pcs'];
     }
 
+    function isValidClassification(c) {
+      return c is string && c in ['packaged', 'ingredient', 'prepared_stock'];
+    }
+
     function isWorkspaceMember(workspaceId) {
       return exists(/databases/$(database)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid));
     }
@@ -98,7 +102,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'name', 'location', 'inviteCode', 'ownerId', 'memberUids',
           'currency', 'usdRate', 'language', 'familyMembers', 'lowStockDefault',
-          'createdAt', 'updatedAt'
+          'allowNegativeStock', 'timezone', 'createdAt', 'updatedAt'
         ])
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
         && data.location is string && data.location.size() <= 120
@@ -110,6 +114,8 @@ service cloud.firestore {
         && data.language is string && data.language in ['en', 'vi']
         && isValidFamilyNames(data.familyMembers)
         && data.lowStockDefault is number && data.lowStockDefault >= 0 && data.lowStockDefault <= 1000000
+        && (!('allowNegativeStock' in data) || data.allowNegativeStock is bool)
+        && (!('timezone' in data) || (data.timezone is string && data.timezone.size() <= 64))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -130,19 +136,36 @@ service cloud.firestore {
           'priceKhr', 'imageUrl', 'active', 'recipe', 'createdBy', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'workspaceId', 'memberUids', 'name', 'nameVi', 'category',
-          'priceKhr', 'imageUrl', 'active', 'recipe', 'createdBy', 'createdAt', 'updatedAt'
+          'workspaceId', 'memberUids', 'name', 'nameVi', 'brand', 'category', 'productType',
+          'priceKhr', 'costPriceKhr', 'markupPercent', 'manualPriceOverride',
+          'imageUrl', 'active', 'barcode', 'packagingBarcodes',
+          'stockQty', 'reorderLevel', 'unit', 'supplier',
+          'recipe', 'recipeVersion', 'variants',
+          'createdBy', 'createdAt', 'updatedAt'
         ])
         && data.workspaceId == workspaceId
         && isValidMemberUids(data.memberUids)
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
         && data.nameVi is string && data.nameVi.size() <= 100
-        && data.category is string && data.category in ['juice', 'smoothie', 'tea', 'coffee', 'specialty']
+        && (!('brand' in data) || (data.brand is string && data.brand.size() <= 80))
+        && data.category is string && data.category in ['juice', 'smoothie', 'tea', 'coffee', 'specialty', 'packaged', 'snack']
+        && (!('productType' in data) || (data.productType is string && data.productType in ['PACKAGED', 'PREPARED_TO_ORDER', 'PREPARED_STOCK']))
         && data.priceKhr is number && data.priceKhr >= 0 && data.priceKhr <= 100000000
+        && (!('costPriceKhr' in data) || (data.costPriceKhr is number && data.costPriceKhr >= 0 && data.costPriceKhr <= 100000000))
+        && (!('markupPercent' in data) || (data.markupPercent is number && data.markupPercent >= 0 && data.markupPercent <= 10000))
+        && (!('manualPriceOverride' in data) || data.manualPriceOverride is bool)
         && data.imageUrl is string && data.imageUrl.size() <= 200000
         && data.active is bool
-        && data.recipe is list && data.recipe.size() <= 20
+        && (!('barcode' in data) || (data.barcode is string && data.barcode.size() <= 64))
+        && (!('packagingBarcodes' in data) || (data.packagingBarcodes is list && data.packagingBarcodes.size() <= 10))
+        && (!('stockQty' in data) || (data.stockQty is number && data.stockQty >= -1000000 && data.stockQty <= 100000000))
+        && (!('reorderLevel' in data) || (data.reorderLevel is number && data.reorderLevel >= 0 && data.reorderLevel <= 100000000))
+        && (!('unit' in data) || isValidUnit(data.unit))
+        && (!('supplier' in data) || (data.supplier is string && data.supplier.size() <= 100))
+        && data.recipe is list && data.recipe.size() <= 25
         && (data.recipe.size() == 0 || data.recipe[0] is map)
+        && (!('recipeVersion' in data) || (data.recipeVersion is number && data.recipeVersion >= 1 && data.recipeVersion <= 10000))
+        && (!('variants' in data) || (data.variants is list && data.variants.size() <= 10))
         && isValidId(data.createdBy)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -180,22 +203,33 @@ service cloud.firestore {
           'recordedBy', 'status', 'createdBy', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'workspaceId', 'memberUids', 'orderNumber', 'saleDate', 'items',
-          'totalKhr', 'cogsKhr', 'paymentMethod', 'customerName', 'note',
-          'recordedBy', 'status', 'createdBy', 'createdAt', 'updatedAt'
+          'workspaceId', 'memberUids', 'clientTxId', 'orderNumber', 'saleDate', 'items',
+          'subtotalKhr', 'totalKhr', 'refundedKhr', 'netTotalKhr', 'cogsKhr', 'refundedCogsKhr',
+          'paymentMethod', 'customerName', 'note', 'recordedBy', 'status',
+          'returns', 'voidedAt', 'voidedBy', 'voidReason',
+          'createdBy', 'createdAt', 'updatedAt'
         ])
         && data.workspaceId == workspaceId
         && isValidMemberUids(data.memberUids)
+        && (!('clientTxId' in data) || (data.clientTxId is string && data.clientTxId.size() <= 128))
         && data.orderNumber is string && data.orderNumber.size() >= 1 && data.orderNumber.size() <= 32
         && isValidDateStr(data.saleDate)
-        && data.items is list && data.items.size() >= 1 && data.items.size() <= 30 && data.items[0] is map
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 40 && data.items[0] is map
+        && (!('subtotalKhr' in data) || (data.subtotalKhr is number && data.subtotalKhr >= 0 && data.subtotalKhr <= 1000000000))
         && data.totalKhr is number && data.totalKhr >= 0 && data.totalKhr <= 1000000000
+        && (!('refundedKhr' in data) || (data.refundedKhr is number && data.refundedKhr >= 0 && data.refundedKhr <= data.totalKhr))
+        && (!('netTotalKhr' in data) || (data.netTotalKhr is number && data.netTotalKhr >= 0 && data.netTotalKhr <= data.totalKhr))
         && data.cogsKhr is number && data.cogsKhr >= 0 && data.cogsKhr <= 1000000000
+        && (!('refundedCogsKhr' in data) || (data.refundedCogsKhr is number && data.refundedCogsKhr >= 0 && data.refundedCogsKhr <= data.cogsKhr))
         && isValidPaymentMethod(data.paymentMethod)
         && data.customerName is string && data.customerName.size() <= 80
         && data.note is string && data.note.size() <= 200
         && data.recordedBy is string && data.recordedBy.size() >= 1 && data.recordedBy.size() <= 80
-        && data.status is string && data.status in ['completed', 'voided']
+        && data.status is string && data.status in ['completed', 'partially_returned', 'refunded', 'voided']
+        && (!('returns' in data) || (data.returns is list && data.returns.size() <= 20))
+        && (!('voidedAt' in data) || (data.voidedAt is string && data.voidedAt.size() <= 64))
+        && (!('voidedBy' in data) || (data.voidedBy is string && data.voidedBy.size() <= 80))
+        && (!('voidReason' in data) || (data.voidReason is string && data.voidReason.size() <= 200))
         && isValidId(data.createdBy)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -210,7 +244,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'workspaceId', 'memberUids', 'expenseDate', 'title', 'category',
           'scope', 'amountKhr', 'paymentMethod', 'vendor', 'note',
-          'linkedIngredientId', 'recordedBy', 'createdBy', 'createdAt', 'updatedAt'
+          'linkedIngredientId', 'isInventoryPurchase', 'recordedBy', 'createdBy', 'createdAt', 'updatedAt'
         ])
         && data.workspaceId == workspaceId
         && isValidMemberUids(data.memberUids)
@@ -226,10 +260,45 @@ service cloud.firestore {
         && data.vendor is string && data.vendor.size() <= 100
         && data.note is string && data.note.size() <= 200
         && data.linkedIngredientId is string && data.linkedIngredientId.size() <= 128
+        && (!('isInventoryPurchase' in data) || data.isInventoryPurchase is bool)
         && data.recordedBy is string && data.recordedBy.size() >= 1 && data.recordedBy.size() <= 80
         && isValidId(data.createdBy)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function isValidPurchase(data, workspaceId) {
+      return data.keys().hasAll([
+          'workspaceId', 'memberUids', 'purchaseDate', 'itemId', 'itemName',
+          'itemClassification', 'quantity', 'unit', 'totalCostKhr', 'unitCostKhr',
+          'paymentMethod', 'supplier', 'note', 'recordedBy', 'createdBy', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'workspaceId', 'memberUids', 'purchaseDate', 'itemId', 'itemName',
+          'itemClassification', 'quantity', 'packCount', 'unitsPerPack',
+          'unit', 'totalCostKhr', 'unitCostKhr',
+          'paymentMethod', 'supplier', 'barcodeScanned', 'note',
+          'recordedBy', 'createdBy', 'createdAt'
+        ])
+        && data.workspaceId == workspaceId
+        && isValidMemberUids(data.memberUids)
+        && isValidDateStr(data.purchaseDate)
+        && isValidId(data.itemId)
+        && data.itemName is string && data.itemName.size() >= 1 && data.itemName.size() <= 100
+        && isValidClassification(data.itemClassification)
+        && data.quantity is number && data.quantity > 0 && data.quantity <= 10000000
+        && (!('packCount' in data) || (data.packCount is number && data.packCount >= 0 && data.packCount <= 100000))
+        && (!('unitsPerPack' in data) || (data.unitsPerPack is number && data.unitsPerPack >= 1 && data.unitsPerPack <= 10000))
+        && isValidUnit(data.unit)
+        && data.totalCostKhr is number && data.totalCostKhr >= 0 && data.totalCostKhr <= 1000000000
+        && data.unitCostKhr is number && data.unitCostKhr >= 0 && data.unitCostKhr <= 100000000
+        && isValidPaymentMethod(data.paymentMethod)
+        && data.supplier is string && data.supplier.size() <= 100
+        && (!('barcodeScanned' in data) || (data.barcodeScanned is string && data.barcodeScanned.size() <= 64))
+        && data.note is string && data.note.size() <= 200
+        && data.recordedBy is string && data.recordedBy.size() >= 1 && data.recordedBy.size() <= 80
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp;
     }
 
     function isValidStockMovement(data, workspaceId) {
@@ -239,17 +308,27 @@ service cloud.firestore {
           'movementDate', 'note', 'recordedBy', 'createdBy', 'createdAt'
         ])
         && data.keys().hasOnly([
-          'workspaceId', 'memberUids', 'ingredientId', 'ingredientName',
-          'movementType', 'deltaQty', 'unit', 'totalCostKhr', 'referenceId',
+          'workspaceId', 'memberUids', 'itemId', 'itemName', 'itemClassification',
+          'ingredientId', 'ingredientName',
+          'movementType', 'deltaQty', 'unit', 'unitCostKhr', 'totalCostKhr', 'referenceId',
           'movementDate', 'note', 'recordedBy', 'createdBy', 'createdAt'
         ])
         && data.workspaceId == workspaceId
         && isValidMemberUids(data.memberUids)
+        && (!('itemId' in data) || isValidId(data.itemId))
+        && (!('itemName' in data) || (data.itemName is string && data.itemName.size() >= 1 && data.itemName.size() <= 100))
+        && (!('itemClassification' in data) || isValidClassification(data.itemClassification))
         && isValidId(data.ingredientId)
         && data.ingredientName is string && data.ingredientName.size() >= 1 && data.ingredientName.size() <= 100
-        && data.movementType is string && data.movementType in ['purchase', 'sale_consumption', 'void_restore', 'adjustment']
+        && data.movementType is string && data.movementType in [
+          'opening_stock', 'purchase', 'sale_consumption',
+          'batch_prep_in', 'batch_prep_consume',
+          'void_restore', 'return_restore',
+          'stock_count', 'adjustment', 'damaged', 'expired'
+        ]
         && data.deltaQty is number && data.deltaQty >= -10000000 && data.deltaQty <= 10000000
         && isValidUnit(data.unit)
+        && (!('unitCostKhr' in data) || (data.unitCostKhr is number && data.unitCostKhr >= 0 && data.unitCostKhr <= 100000000))
         && data.totalCostKhr is number && data.totalCostKhr >= 0 && data.totalCostKhr <= 1000000000
         && data.referenceId is string && data.referenceId.size() <= 128
         && isValidDateStr(data.movementDate)
@@ -321,7 +400,8 @@ service cloud.firestore {
             && incoming().inviteCode == existing().inviteCode
             && incoming().memberUids == existing().memberUids
             && incoming().diff(existing()).affectedKeys().hasOnly([
-              'name', 'location', 'usdRate', 'language', 'familyMembers', 'lowStockDefault', 'updatedAt'
+              'name', 'location', 'usdRate', 'language', 'familyMembers',
+              'lowStockDefault', 'allowNegativeStock', 'timezone', 'updatedAt'
             ])
           ) ||
           (
@@ -361,7 +441,7 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // 5. Beverage Products
+      // 5. Products (Packaged, Made-to-Order, Prepared Stock)
       match /products/{productId} {
         allow get: if isVerified() && isValidId(workspaceId) && isValidId(productId) && isWorkspaceMember(workspaceId);
         allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
@@ -384,8 +464,14 @@ service cloud.firestore {
           && isWorkspaceMember(workspaceId)
           && (
             incoming().diff(existing()).affectedKeys().hasOnly([
-              'name', 'nameVi', 'category', 'priceKhr', 'imageUrl', 'active', 'recipe', 'updatedAt'
+              'name', 'nameVi', 'brand', 'category', 'productType',
+              'priceKhr', 'costPriceKhr', 'markupPercent', 'manualPriceOverride',
+              'imageUrl', 'active', 'barcode', 'packagingBarcodes',
+              'stockQty', 'reorderLevel', 'unit', 'supplier',
+              'recipe', 'recipeVersion', 'variants', 'updatedAt'
             ]) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'costPriceKhr', 'supplier', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'updatedAt']) ||
             (
               incoming().memberUids.hasAll(existing().memberUids)
               && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
@@ -394,7 +480,7 @@ service cloud.firestore {
         allow delete: if isVerified() && isValidId(workspaceId) && isValidId(productId) && isWorkspaceMember(workspaceId);
       }
 
-      // 6. Ingredients & Inventory
+      // 6. Ingredients & Raw Materials
       match /ingredients/{ingredientId} {
         allow get: if isVerified() && isValidId(workspaceId) && isValidId(ingredientId) && isWorkspaceMember(workspaceId);
         allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
@@ -419,7 +505,9 @@ service cloud.firestore {
             incoming().diff(existing()).affectedKeys().hasOnly([
               'name', 'nameVi', 'unit', 'stockQty', 'reorderLevel', 'unitCostKhr', 'supplier', 'updatedAt'
             ]) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'unitCostKhr', 'supplier', 'updatedAt']) ||
             incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'unitCostKhr', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'updatedAt']) ||
             (
               incoming().memberUids.hasAll(existing().memberUids)
               && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
@@ -428,7 +516,7 @@ service cloud.firestore {
         allow delete: if isVerified() && isValidId(workspaceId) && isValidId(ingredientId) && isWorkspaceMember(workspaceId);
       }
 
-      // 7. Sales & Orders (with Terminal State Locking on voided)
+      // 7. Sales & Orders (with Terminal State Locking on voided & refunded)
       match /sales/{saleId} {
         allow get: if isVerified() && isValidId(workspaceId) && isValidId(saleId) && isWorkspaceMember(workspaceId);
         allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
@@ -447,16 +535,32 @@ service cloud.firestore {
           && isValidSale(incoming(), workspaceId)
           && incoming().workspaceId == existing().workspaceId
           && incoming().orderNumber == existing().orderNumber
+          && incoming().totalKhr == existing().totalKhr
+          && incoming().cogsKhr == existing().cogsKhr
           && incoming().createdBy == existing().createdBy
           && incoming().createdAt == existing().createdAt
           && incoming().updatedAt == request.time
           && isWorkspaceMember(workspaceId)
           && (
+            // Void transition from completed or partially_returned
             (
-              existing().status == 'completed'
+              existing().status in ['completed', 'partially_returned']
               && incoming().status == 'voided'
-              && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'status', 'refundedKhr', 'netTotalKhr', 'refundedCogsKhr',
+                'voidedAt', 'voidedBy', 'voidReason', 'updatedAt'
+              ])
             ) ||
+            // Partial or full return transition from completed or partially_returned
+            (
+              existing().status in ['completed', 'partially_returned']
+              && incoming().status in ['partially_returned', 'refunded']
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'status', 'items', 'refundedKhr', 'netTotalKhr', 'refundedCogsKhr',
+                'returns', 'updatedAt'
+              ])
+            ) ||
+            // Family member UID propagation only (never mutates financial fields or status)
             (
               incoming().status == existing().status
               && incoming().memberUids.hasAll(existing().memberUids)
@@ -490,7 +594,7 @@ service cloud.firestore {
           && (
             incoming().diff(existing()).affectedKeys().hasOnly([
               'expenseDate', 'title', 'category', 'scope', 'amountKhr',
-              'paymentMethod', 'vendor', 'note', 'recordedBy', 'updatedAt'
+              'paymentMethod', 'vendor', 'note', 'isInventoryPurchase', 'recordedBy', 'updatedAt'
             ]) ||
             (
               incoming().memberUids.hasAll(existing().memberUids)
@@ -500,7 +604,31 @@ service cloud.firestore {
         allow delete: if isVerified() && isValidId(workspaceId) && isValidId(expenseId) && isWorkspaceMember(workspaceId);
       }
 
-      // 9. Stock Movements (Immutable Audit Log)
+      // 9. Inventory Purchases (Immutable Cash Outflow Records)
+      match /purchases/{purchaseId} {
+        allow get: if isVerified() && isValidId(workspaceId) && isValidId(purchaseId) && isWorkspaceMember(workspaceId);
+        allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
+        allow create: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(purchaseId)
+          && isValidPurchase(incoming(), workspaceId)
+          && incoming().createdBy == request.auth.uid
+          && incoming().createdAt == request.time
+          && isWorkspaceMember(workspaceId);
+        allow update: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(purchaseId)
+          && isValidPurchase(incoming(), workspaceId)
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().createdBy == existing().createdBy
+          && incoming().createdAt == existing().createdAt
+          && isWorkspaceMember(workspaceId)
+          && incoming().memberUids.hasAll(existing().memberUids)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids']);
+        allow delete: if false;
+      }
+
+      // 10. Stock Movements (Immutable Audit Ledger across all 3 tiers)
       match /stockMovements/{movementId} {
         allow get: if isVerified() && isValidId(workspaceId) && isValidId(movementId) && isWorkspaceMember(workspaceId);
         allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);

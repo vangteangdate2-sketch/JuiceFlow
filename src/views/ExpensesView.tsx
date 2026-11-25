@@ -1,23 +1,25 @@
 import React, { useMemo, useState } from 'react';
-import { Edit2, Plus, Search, Trash2, X } from 'lucide-react';
+import { Edit2, Info, Plus, Search, Trash2, X } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import type { Expense, ExpenseCategory, ExpenseScope, PaymentMethod } from '../types';
 import { formatKhr, formatUsdRef, todayIso } from '../utils/format';
+import { isLegacyInventoryPurchaseExpense } from '../utils/inventoryEngine';
 
 const ALL_CATEGORIES: ExpenseCategory[] = [
-  'ingredients',
-  'packaging',
   'utilities',
   'rent',
+  'packaging',
   'equipment',
   'transport',
+  'ingredients',
   'household',
   'travel',
   'other',
 ];
 
 export const ExpensesView: React.FC = () => {
-  const { settings, expenses, saveExpense, deleteExpense, t } = useStore();
+  const { settings, expenses, purchases, saveExpense, deleteExpense, t } = useStore();
+  const isVi = settings.language === 'vi';
 
   const [scopeFilter, setScopeFilter] = useState<'all' | ExpenseScope>('all');
   const [categoryFilter, setCategoryFilter] = useState<'all' | ExpenseCategory>('all');
@@ -29,7 +31,7 @@ export const ExpensesView: React.FC = () => {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [title, setTitle] = useState('');
   const [scope, setScope] = useState<ExpenseScope>('business');
-  const [category, setCategory] = useState<ExpenseCategory>('ingredients');
+  const [category, setCategory] = useState<ExpenseCategory>('utilities');
   const [amountKhr, setAmountKhr] = useState('');
   const [expenseDate, setExpenseDate] = useState(todayIso());
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
@@ -37,14 +39,19 @@ export const ExpensesView: React.FC = () => {
   const [note, setNote] = useState('');
 
   const totals = useMemo(() => {
-    const biz = expenses
-      .filter((e) => e.scope === 'business')
+    const operating = expenses
+      .filter((e) => e.scope === 'business' && !isLegacyInventoryPurchaseExpense(e))
       .reduce((sum, e) => sum + e.amountKhr, 0);
+    const legacyStockPurchases = expenses
+      .filter((e) => e.scope === 'business' && isLegacyInventoryPurchaseExpense(e))
+      .reduce((sum, e) => sum + e.amountKhr, 0);
+    const stockPurchasesTotal =
+      legacyStockPurchases + purchases.reduce((sum, p) => sum + p.totalCostKhr, 0);
     const household = expenses
       .filter((e) => e.scope === 'household')
       .reduce((sum, e) => sum + e.amountKhr, 0);
-    return { biz, household, combined: biz + household };
-  }, [expenses]);
+    return { operating, stockPurchasesTotal, household };
+  }, [expenses, purchases]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -104,6 +111,7 @@ export const ExpensesView: React.FC = () => {
       title: title.trim(),
       scope,
       category,
+      isInventoryPurchase: scope === 'business' && category === 'ingredients',
       amountKhr: Math.max(0, Number(amountKhr) || 0),
       expenseDate,
       paymentMethod,
@@ -134,15 +142,38 @@ export const ExpensesView: React.FC = () => {
         </button>
       </div>
 
+      {/* Accounting Separation Notice */}
+      <div className="bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs text-stone-600">
+        <Info className="w-4 h-4 text-[#0F5C43] shrink-0 mt-0.5" />
+        <p>
+          {isVi
+            ? 'Ghi nhận chi phí vận hành (điện, thuê mặt bằng, vận chuyển, gia đình) tại đây. Để nhập hàng tồn kho & nguyên liệu, hãy dùng mục Kho hàng để tự động cập nhật tồn kho và không bị tính trùng với giá vốn (COGS).'
+            : 'Record operating costs (rent, utilities, transport, household) here. Record stock & ingredient restocks in Inventory Management so quantities update automatically and never double-count against COGS.'}
+        </p>
+      </div>
+
       {/* 3-Column Summary Strip */}
       <div className="bg-white border border-stone-200 rounded-xl grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-stone-200">
         <div className="p-5">
-          <p className="text-xs font-medium text-stone-500">{t.expenses.businessTotal}</p>
+          <p className="text-xs font-medium text-stone-500">
+            {isVi ? 'Chi phí vận hành (P&L)' : 'Operating Expenses (P&L)'}
+          </p>
           <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900">
-            {formatKhr(totals.biz)}
+            {formatKhr(totals.operating)}
           </p>
           <p className="mt-1 text-xs text-stone-400 font-mono-num">
-            {formatUsdRef(totals.biz, settings.usdRate)}
+            {formatUsdRef(totals.operating, settings.usdRate)}
+          </p>
+        </div>
+        <div className="p-5">
+          <p className="text-xs font-medium text-stone-500">
+            {isVi ? 'Nhập kho (Chỉ tính dòng tiền)' : 'Inventory Purchases (Cash Flow Only)'}
+          </p>
+          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900">
+            {formatKhr(totals.stockPurchasesTotal)}
+          </p>
+          <p className="mt-1 text-xs text-stone-400 font-mono-num">
+            {formatUsdRef(totals.stockPurchasesTotal, settings.usdRate)}
           </p>
         </div>
         <div className="p-5">
@@ -152,15 +183,6 @@ export const ExpensesView: React.FC = () => {
           </p>
           <p className="mt-1 text-xs text-stone-400 font-mono-num">
             {formatUsdRef(totals.household, settings.usdRate)}
-          </p>
-        </div>
-        <div className="p-5">
-          <p className="text-xs font-medium text-stone-500">{t.expenses.combinedTotal}</p>
-          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900">
-            {formatKhr(totals.combined)}
-          </p>
-          <p className="mt-1 text-xs text-stone-400 font-mono-num">
-            {formatUsdRef(totals.combined, settings.usdRate)}
           </p>
         </div>
       </div>
@@ -233,89 +255,104 @@ export const ExpensesView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 text-sm">
-                {filtered.map((exp) => (
-                  <tr key={exp.id} className="hover:bg-stone-50/60 transition-colors">
-                    <td className="py-3.5 px-5 font-mono-num text-xs text-stone-600 whitespace-nowrap">
-                      {exp.expenseDate}
-                    </td>
-                    <td className="py-3.5 px-4 max-w-xs">
-                      <p className="font-medium text-stone-900">{exp.title}</p>
-                      <p className="text-xs text-stone-500 truncate mt-0.5">
-                        {[
-                          exp.vendor,
-                          exp.note,
-                          exp.linkedIngredientId ? t.expenses.linkedPurchase : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </p>
-                    </td>
-                    <td className="py-3.5 px-4 text-xs whitespace-nowrap">
-                      <span className="text-stone-800">{t.expenseCategories[exp.category]}</span>
-                      <span className="text-stone-400"> · </span>
-                      <span
-                        className={
-                          exp.scope === 'household' ? 'text-amber-700 font-medium' : 'text-stone-500'
-                        }
-                      >
-                        {exp.scope === 'household'
-                          ? t.expenses.scopeHousehold
-                          : t.expenses.scopeBusiness}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
-                      {t.paymentMethods[exp.paymentMethod]}
-                    </td>
-                    <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
-                      {exp.recordedBy}
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-mono-num font-semibold text-stone-900 whitespace-nowrap">
-                      {formatKhr(exp.amountKhr)}
-                    </td>
-                    <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(exp)}
-                          className="p-1 text-stone-400 hover:text-stone-900"
-                          aria-label={t.common.edit}
+                {filtered.map((exp) => {
+                  const isInvPurchase = isLegacyInventoryPurchaseExpense(exp);
+                  return (
+                    <tr key={exp.id} className="hover:bg-stone-50/60 transition-colors">
+                      <td className="py-3.5 px-5 font-mono-num text-xs text-stone-600 whitespace-nowrap">
+                        {exp.expenseDate}
+                      </td>
+                      <td className="py-3.5 px-4 max-w-xs">
+                        <p className="font-medium text-stone-900">{exp.title}</p>
+                        <p className="text-xs text-stone-500 truncate mt-0.5">
+                          {[
+                            exp.vendor,
+                            exp.note,
+                            isInvPurchase
+                              ? isVi
+                                ? 'Nhập kho (chỉ tính dòng tiền)'
+                                : 'Inventory purchase (cash flow only)'
+                              : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                      </td>
+                      <td className="py-3.5 px-4 text-xs whitespace-nowrap">
+                        <span className="text-stone-800">{t.expenseCategories[exp.category]}</span>
+                        <span className="text-stone-400"> · </span>
+                        <span
+                          className={
+                            exp.scope === 'household'
+                              ? 'text-amber-700 font-medium'
+                              : isInvPurchase
+                                ? 'text-emerald-700 font-medium'
+                                : 'text-stone-500'
+                          }
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        {confirmDeleteId === exp.id ? (
-                          <span className="inline-flex items-center gap-2 text-xs">
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                await deleteExpense(exp.id);
-                                setConfirmDeleteId(null);
-                              }}
-                              className="font-semibold text-red-700 hover:underline"
-                            >
-                              {t.common.delete}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="text-stone-500"
-                            >
-                              {t.common.cancel}
-                            </button>
-                          </span>
-                        ) : (
+                          {exp.scope === 'household'
+                            ? t.expenses.scopeHousehold
+                            : isInvPurchase
+                              ? isVi
+                                ? 'Nhập kho'
+                                : 'Stock Purchase'
+                              : t.expenses.scopeBusiness}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
+                        {t.paymentMethods[exp.paymentMethod]}
+                      </td>
+                      <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
+                        {exp.recordedBy}
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-mono-num font-semibold text-stone-900 whitespace-nowrap">
+                        {formatKhr(exp.amountKhr)}
+                      </td>
+                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-3">
                           <button
                             type="button"
-                            onClick={() => setConfirmDeleteId(exp.id)}
-                            className="p-1 text-stone-400 hover:text-red-700"
-                            aria-label={t.common.delete}
+                            onClick={() => openEdit(exp)}
+                            className="p-1 text-stone-400 hover:text-stone-900"
+                            aria-label={t.common.edit}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {confirmDeleteId === exp.id ? (
+                            <span className="inline-flex items-center gap-2 text-xs">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await deleteExpense(exp.id);
+                                  setConfirmDeleteId(null);
+                                }}
+                                className="font-semibold text-red-700 hover:underline"
+                              >
+                                {t.common.delete}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="text-stone-500"
+                              >
+                                {t.common.cancel}
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(exp.id)}
+                              className="p-1 text-stone-400 hover:text-red-700"
+                              aria-label={t.common.delete}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -2,34 +2,14 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "Private user profile linking an authenticated Google account to their active family workspace.",
+      "description": "Private user profile linking an authenticated account to their active family workspace.",
       "type": "object",
       "properties": {
-        "uid": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "displayName": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100
-        },
-        "workspaceId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "displayName", "workspaceId", "createdAt", "updatedAt"]
     },
@@ -38,28 +18,10 @@
       "description": "Lookup map from a family invite code to a workspace ID so 2-3 family members can pair devices.",
       "type": "object",
       "properties": {
-        "inviteCode": {
-          "type": "string",
-          "minLength": 6,
-          "maxLength": 16,
-          "pattern": "^[A-Z0-9]+$"
-        },
-        "workspaceId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "createdBy": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "inviteCode": { "type": "string", "minLength": 6, "maxLength": 16, "pattern": "^[A-Z0-9]+$" },
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["inviteCode", "workspaceId", "createdBy", "createdAt"]
     },
@@ -68,71 +30,25 @@
       "description": "Shared family beverage business workspace configuration and settings.",
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100
-        },
-        "location": {
-          "type": "string",
-          "maxLength": 120
-        },
-        "inviteCode": {
-          "type": "string",
-          "minLength": 6,
-          "maxLength": 16,
-          "pattern": "^[A-Z0-9]+$"
-        },
-        "ownerId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "memberUids": {
-          "type": "array",
-          "description": "Bounded list (max 10) of family member UIDs with full access."
-        },
-        "currency": {
-          "type": "string",
-          "enum": ["KHR"]
-        },
-        "usdRate": {
-          "type": "number"
-        },
-        "language": {
-          "type": "string",
-          "enum": ["en", "vi"]
-        },
-        "familyMembers": {
-          "type": "array",
-          "description": "Bounded list (max 10) of family operator display names."
-        },
-        "lowStockDefault": {
-          "type": "number"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "location": { "type": "string", "maxLength": 120 },
+        "inviteCode": { "type": "string", "minLength": 6, "maxLength": 16, "pattern": "^[A-Z0-9]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUids": { "type": "array", "description": "Bounded list (max 10) of family member UIDs with full access." },
+        "currency": { "type": "string", "enum": ["KHR"] },
+        "usdRate": { "type": "number" },
+        "language": { "type": "string", "enum": ["en", "vi"] },
+        "familyMembers": { "type": "array", "description": "Bounded list (max 10) of family operator display names." },
+        "lowStockDefault": { "type": "number" },
+        "allowNegativeStock": { "type": "boolean" },
+        "timezone": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": [
-        "name",
-        "location",
-        "inviteCode",
-        "ownerId",
-        "memberUids",
-        "currency",
-        "usdRate",
-        "language",
-        "familyMembers",
-        "lowStockDefault",
-        "createdAt",
-        "updatedAt"
+        "name", "location", "inviteCode", "ownerId", "memberUids",
+        "currency", "usdRate", "language", "familyMembers", "lowStockDefault",
+        "createdAt", "updatedAt"
       ]
     },
     "WorkspaceMember": {
@@ -140,100 +56,47 @@
       "description": "Membership record granting full equal access to a family member within a workspace.",
       "type": "object",
       "properties": {
-        "uid": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "displayName": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100
-        },
-        "inviteCode": {
-          "type": "string",
-          "minLength": 6,
-          "maxLength": 16,
-          "pattern": "^[A-Z0-9]+$"
-        },
-        "joinedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "inviteCode": { "type": "string", "minLength": 6, "maxLength": 16, "pattern": "^[A-Z0-9]+$" },
+        "joinedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "displayName", "inviteCode", "joinedAt"]
     },
     "Product": {
       "title": "Product",
-      "description": "Beverage product with KHR price and ingredient recipe for automatic consumption tracking.",
+      "description": "Packaged, made-to-order, or prepared-stock product with barcodes, pricing, stock balance, variants, and versioned recipes.",
       "type": "object",
       "properties": {
-        "workspaceId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "memberUids": {
-          "type": "array",
-          "description": "Bounded list (max 10) of workspace member UIDs for secure list queries."
-        },
-        "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100
-        },
-        "nameVi": {
-          "type": "string",
-          "maxLength": 100
-        },
-        "category": {
-          "type": "string",
-          "enum": ["juice", "smoothie", "tea", "coffee", "specialty"]
-        },
-        "priceKhr": {
-          "type": "number"
-        },
-        "imageUrl": {
-          "type": "string",
-          "maxLength": 200000
-        },
-        "active": {
-          "type": "boolean"
-        },
-        "recipe": {
-          "type": "array",
-          "description": "Bounded list (max 20) of recipe items { ingredientId, quantity }."
-        },
-        "createdBy": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUids": { "type": "array" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "nameVi": { "type": "string", "maxLength": 100 },
+        "brand": { "type": "string", "maxLength": 80 },
+        "category": { "type": "string", "enum": ["juice", "smoothie", "tea", "coffee", "specialty", "packaged", "snack"] },
+        "productType": { "type": "string", "enum": ["PACKAGED", "PREPARED_TO_ORDER", "PREPARED_STOCK"] },
+        "priceKhr": { "type": "number" },
+        "costPriceKhr": { "type": "number" },
+        "markupPercent": { "type": "number" },
+        "manualPriceOverride": { "type": "boolean" },
+        "imageUrl": { "type": "string", "maxLength": 200000 },
+        "active": { "type": "boolean" },
+        "barcode": { "type": "string", "maxLength": 64 },
+        "packagingBarcodes": { "type": "array", "description": "Bounded list (max 10) of carton/pack barcodes with unitsPerPack." },
+        "stockQty": { "type": "number" },
+        "reorderLevel": { "type": "number" },
+        "unit": { "type": "string", "enum": ["g", "kg", "ml", "L", "pcs"] },
+        "supplier": { "type": "string", "maxLength": 100 },
+        "recipe": { "type": "array", "description": "Bounded list (max 25) of recipe items." },
+        "recipeVersion": { "type": "number" },
+        "variants": { "type": "array", "description": "Bounded list (max 10) of product size/flavor variants." },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": [
-        "workspaceId",
-        "memberUids",
-        "name",
-        "nameVi",
-        "category",
-        "priceKhr",
-        "imageUrl",
-        "active",
-        "recipe",
-        "createdBy",
-        "createdAt",
-        "updatedAt"
+        "workspaceId", "memberUids", "name", "nameVi", "category",
+        "priceKhr", "imageUrl", "active", "recipe", "createdBy", "createdAt", "updatedAt"
       ]
     },
     "Ingredient": {
@@ -241,334 +104,156 @@
       "description": "Raw ingredient or packaging item tracked in inventory with unit cost in KHR.",
       "type": "object",
       "properties": {
-        "workspaceId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "memberUids": {
-          "type": "array"
-        },
-        "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100
-        },
-        "nameVi": {
-          "type": "string",
-          "maxLength": 100
-        },
-        "unit": {
-          "type": "string",
-          "enum": ["g", "kg", "ml", "L", "pcs"]
-        },
-        "stockQty": {
-          "type": "number"
-        },
-        "reorderLevel": {
-          "type": "number"
-        },
-        "unitCostKhr": {
-          "type": "number"
-        },
-        "supplier": {
-          "type": "string",
-          "maxLength": 100
-        },
-        "createdBy": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUids": { "type": "array" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "nameVi": { "type": "string", "maxLength": 100 },
+        "unit": { "type": "string", "enum": ["g", "kg", "ml", "L", "pcs"] },
+        "stockQty": { "type": "number" },
+        "reorderLevel": { "type": "number" },
+        "unitCostKhr": { "type": "number" },
+        "supplier": { "type": "string", "maxLength": 100 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": [
-        "workspaceId",
-        "memberUids",
-        "name",
-        "nameVi",
-        "unit",
-        "stockQty",
-        "reorderLevel",
-        "unitCostKhr",
-        "supplier",
-        "createdBy",
-        "createdAt",
-        "updatedAt"
+        "workspaceId", "memberUids", "name", "nameVi", "unit",
+        "stockQty", "reorderLevel", "unitCostKhr", "supplier",
+        "createdBy", "createdAt", "updatedAt"
       ]
     },
     "Sale": {
       "title": "Sale",
-      "description": "Customer beverage order with line items, KHR total, computed COGS, and terminal void lock.",
+      "description": "Customer POS order with immutable deduction snapshots, KHR totals, COGS, partial returns, and terminal void/refund locks.",
       "type": "object",
       "properties": {
-        "workspaceId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "memberUids": {
-          "type": "array"
-        },
-        "orderNumber": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 32
-        },
-        "saleDate": {
-          "type": "string",
-          "minLength": 10,
-          "maxLength": 10,
-          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-        },
-        "items": {
-          "type": "array",
-          "description": "Bounded list (max 30) of sold beverage items."
-        },
-        "totalKhr": {
-          "type": "number"
-        },
-        "cogsKhr": {
-          "type": "number"
-        },
-        "paymentMethod": {
-          "type": "string",
-          "enum": ["cash", "khqr", "aba", "wing"]
-        },
-        "customerName": {
-          "type": "string",
-          "maxLength": 80
-        },
-        "note": {
-          "type": "string",
-          "maxLength": 200
-        },
-        "recordedBy": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 80
-        },
-        "status": {
-          "type": "string",
-          "enum": ["completed", "voided"]
-        },
-        "createdBy": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUids": { "type": "array" },
+        "clientTxId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "saleDate": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "items": { "type": "array", "description": "Bounded list (max 40) of sold items with deduction snapshots." },
+        "subtotalKhr": { "type": "number" },
+        "totalKhr": { "type": "number" },
+        "refundedKhr": { "type": "number" },
+        "netTotalKhr": { "type": "number" },
+        "cogsKhr": { "type": "number" },
+        "refundedCogsKhr": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["cash", "khqr", "aba", "wing"] },
+        "customerName": { "type": "string", "maxLength": 80 },
+        "note": { "type": "string", "maxLength": 200 },
+        "recordedBy": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "status": { "type": "string", "enum": ["completed", "partially_returned", "refunded", "voided"] },
+        "returns": { "type": "array", "description": "Bounded list (max 20) of partial return records." },
+        "voidedAt": { "type": "string", "maxLength": 64 },
+        "voidedBy": { "type": "string", "maxLength": 80 },
+        "voidReason": { "type": "string", "maxLength": 200 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": [
-        "workspaceId",
-        "memberUids",
-        "orderNumber",
-        "saleDate",
-        "items",
-        "totalKhr",
-        "cogsKhr",
-        "paymentMethod",
-        "customerName",
-        "note",
-        "recordedBy",
-        "status",
-        "createdBy",
-        "createdAt",
-        "updatedAt"
+        "workspaceId", "memberUids", "orderNumber", "saleDate", "items",
+        "totalKhr", "cogsKhr", "paymentMethod", "customerName", "note",
+        "recordedBy", "status", "createdBy", "createdAt", "updatedAt"
       ]
     },
     "Expense": {
       "title": "Expense",
-      "description": "Business operational, ingredient purchase, or household/travel expense in KHR.",
+      "description": "Business operating or household/travel expense in KHR.",
       "type": "object",
       "properties": {
-        "workspaceId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "memberUids": {
-          "type": "array"
-        },
-        "expenseDate": {
-          "type": "string",
-          "minLength": 10,
-          "maxLength": 10,
-          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-        },
-        "title": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 120
-        },
-        "category": {
-          "type": "string",
-          "enum": ["ingredients", "packaging", "utilities", "rent", "equipment", "transport", "household", "travel", "other"]
-        },
-        "scope": {
-          "type": "string",
-          "enum": ["business", "household"]
-        },
-        "amountKhr": {
-          "type": "number"
-        },
-        "paymentMethod": {
-          "type": "string",
-          "enum": ["cash", "khqr", "aba", "wing"]
-        },
-        "vendor": {
-          "type": "string",
-          "maxLength": 100
-        },
-        "note": {
-          "type": "string",
-          "maxLength": 200
-        },
-        "linkedIngredientId": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "recordedBy": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 80
-        },
-        "createdBy": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUids": { "type": "array" },
+        "expenseDate": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "category": { "type": "string", "enum": ["ingredients", "packaging", "utilities", "rent", "equipment", "transport", "household", "travel", "other"] },
+        "scope": { "type": "string", "enum": ["business", "household"] },
+        "amountKhr": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["cash", "khqr", "aba", "wing"] },
+        "vendor": { "type": "string", "maxLength": 100 },
+        "note": { "type": "string", "maxLength": 200 },
+        "linkedIngredientId": { "type": "string", "maxLength": 128 },
+        "isInventoryPurchase": { "type": "boolean" },
+        "recordedBy": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": [
-        "workspaceId",
-        "memberUids",
-        "expenseDate",
-        "title",
-        "category",
-        "scope",
-        "amountKhr",
-        "paymentMethod",
-        "vendor",
-        "note",
-        "linkedIngredientId",
-        "recordedBy",
-        "createdBy",
-        "createdAt",
-        "updatedAt"
+        "workspaceId", "memberUids", "expenseDate", "title", "category",
+        "scope", "amountKhr", "paymentMethod", "vendor", "note",
+        "linkedIngredientId", "recordedBy", "createdBy", "createdAt", "updatedAt"
+      ]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "Inventory stock-in purchase record (cash outflow & valuation increase, separated from operating expenses).",
+      "type": "object",
+      "properties": {
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUids": { "type": "array" },
+        "purchaseDate": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "itemId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "itemName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "itemClassification": { "type": "string", "enum": ["packaged", "ingredient", "prepared_stock"] },
+        "quantity": { "type": "number" },
+        "packCount": { "type": "number" },
+        "unitsPerPack": { "type": "number" },
+        "unit": { "type": "string", "enum": ["g", "kg", "ml", "L", "pcs"] },
+        "totalCostKhr": { "type": "number" },
+        "unitCostKhr": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["cash", "khqr", "aba", "wing"] },
+        "supplier": { "type": "string", "maxLength": 100 },
+        "barcodeScanned": { "type": "string", "maxLength": 64 },
+        "note": { "type": "string", "maxLength": 200 },
+        "recordedBy": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "workspaceId", "memberUids", "purchaseDate", "itemId", "itemName",
+        "itemClassification", "quantity", "unit", "totalCostKhr", "unitCostKhr",
+        "paymentMethod", "supplier", "note", "recordedBy", "createdBy", "createdAt"
       ]
     },
     "StockMovement": {
       "title": "StockMovement",
-      "description": "Audit log of ingredient stock purchases, automatic sale deductions, and manual adjustments.",
+      "description": "Immutable audit ledger of all packaged, ingredient, and prepared-stock inventory changes.",
       "type": "object",
       "properties": {
-        "workspaceId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "memberUids": {
-          "type": "array"
-        },
-        "ingredientId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "ingredientName": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100
-        },
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUids": { "type": "array" },
+        "itemId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "itemName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "itemClassification": { "type": "string", "enum": ["packaged", "ingredient", "prepared_stock"] },
+        "ingredientId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ingredientName": { "type": "string", "minLength": 1, "maxLength": 100 },
         "movementType": {
           "type": "string",
-          "enum": ["purchase", "sale_consumption", "void_restore", "adjustment"]
+          "enum": [
+            "opening_stock", "purchase", "sale_consumption",
+            "batch_prep_in", "batch_prep_consume",
+            "void_restore", "return_restore",
+            "stock_count", "adjustment", "damaged", "expired"
+          ]
         },
-        "deltaQty": {
-          "type": "number"
-        },
-        "unit": {
-          "type": "string",
-          "enum": ["g", "kg", "ml", "L", "pcs"]
-        },
-        "totalCostKhr": {
-          "type": "number"
-        },
-        "referenceId": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "movementDate": {
-          "type": "string",
-          "minLength": 10,
-          "maxLength": 10,
-          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-        },
-        "note": {
-          "type": "string",
-          "maxLength": 200
-        },
-        "recordedBy": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 80
-        },
-        "createdBy": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "deltaQty": { "type": "number" },
+        "unit": { "type": "string", "enum": ["g", "kg", "ml", "L", "pcs"] },
+        "unitCostKhr": { "type": "number" },
+        "totalCostKhr": { "type": "number" },
+        "referenceId": { "type": "string", "maxLength": 128 },
+        "movementDate": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "note": { "type": "string", "maxLength": 200 },
+        "recordedBy": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": [
-        "workspaceId",
-        "memberUids",
-        "ingredientId",
-        "ingredientName",
-        "movementType",
-        "deltaQty",
-        "unit",
-        "totalCostKhr",
-        "referenceId",
-        "movementDate",
-        "note",
-        "recordedBy",
-        "createdBy",
-        "createdAt"
+        "workspaceId", "memberUids", "ingredientId", "ingredientName",
+        "movementType", "deltaQty", "unit", "totalCostKhr", "referenceId",
+        "movementDate", "note", "recordedBy", "createdBy", "createdAt"
       ]
     }
   },
@@ -591,23 +276,27 @@
     },
     "/workspaces/{workspaceId}/products/{productId}": {
       "schema": { "$ref": "#/entities/Product" },
-      "description": "Beverage product catalog and recipe definitions."
+      "description": "Product catalog (Packaged, Made-to-Order, Prepared Stock) with variants, barcodes, and recipes."
     },
     "/workspaces/{workspaceId}/ingredients/{ingredientId}": {
       "schema": { "$ref": "#/entities/Ingredient" },
-      "description": "Ingredient and packaging inventory records."
+      "description": "Raw ingredient and packaging inventory records."
     },
     "/workspaces/{workspaceId}/sales/{saleId}": {
       "schema": { "$ref": "#/entities/Sale" },
-      "description": "Customer sales ledger and order line items."
+      "description": "Customer sales ledger, deduction snapshots, partial returns, and void records."
     },
     "/workspaces/{workspaceId}/expenses/{expenseId}": {
       "schema": { "$ref": "#/entities/Expense" },
-      "description": "Business operational, ingredient purchase, and household/travel expenses."
+      "description": "Business operating and household/travel expenses."
+    },
+    "/workspaces/{workspaceId}/purchases/{purchaseId}": {
+      "schema": { "$ref": "#/entities/Purchase" },
+      "description": "Immutable inventory purchase records for accurate cash flow reporting."
     },
     "/workspaces/{workspaceId}/stockMovements/{movementId}": {
       "schema": { "$ref": "#/entities/StockMovement" },
-      "description": "Immutable stock movement audit log."
+      "description": "Immutable stock movement audit ledger across all 3 inventory tiers."
     }
   }
 }

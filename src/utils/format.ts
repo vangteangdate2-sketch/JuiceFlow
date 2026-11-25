@@ -1,4 +1,6 @@
-import type { Ingredient, Product } from '../types';
+import type { Ingredient, IngredientUnit, Product, ProductVariant, RecipeItem } from '../types';
+
+export const BUSINESS_TIMEZONE = 'Asia/Phnom_Penh';
 
 export function formatKhr(amount: number): string {
   const rounded = Math.round(Number.isFinite(amount) ? amount : 0);
@@ -20,21 +22,75 @@ export function formatQty(qty: number, unit: string): string {
   return `${formatted} ${unit}`;
 }
 
-export function todayIso(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
+/**
+ * Formats a Date into YYYY-MM-DD in Asia/Phnom_Penh (UTC+7) business timezone.
+ */
+export function formatDateInPhnomPenh(date: Date): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: BUSINESS_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const y = parts.find((p) => p.type === 'year')?.value;
+    const m = parts.find((p) => p.type === 'month')?.value;
+    const d = parts.find((p) => p.type === 'day')?.value;
+    if (y && m && d) return `${y}-${m}-${d}`;
+  } catch {
+    // Fallback to UTC+7 math if Intl timezone data unavailable
+  }
+  const utcMs = date.getTime() + 7 * 60 * 60 * 1000;
+  const shifted = new Date(utcMs);
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(shifted.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
 
+export function formatDateTimeInPhnomPenh(isoOrDate: string | Date): string {
+  const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+  if (Number.isNaN(d.getTime())) return String(isoOrDate);
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: BUSINESS_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(d);
+  } catch {
+    return `${formatDateInPhnomPenh(d)} ${d.toISOString().slice(11, 16)}`;
+  }
+}
+
+export function todayIso(): string {
+  return formatDateInPhnomPenh(new Date());
+}
+
 export function daysAgoIso(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  const ms = Date.now() - days * 24 * 60 * 60 * 1000;
+  return formatDateInPhnomPenh(new Date(ms));
+}
+
+export function getPhnomPenhMonthBounds(offsetMonths: number): { start: string; end: string } {
+  const today = todayIso();
+  const [yStr, mStr] = today.split('-');
+  const baseYear = Number(yStr);
+  const baseMonthIndex = Number(mStr) - 1 + offsetMonths;
+  const first = new Date(Date.UTC(baseYear, baseMonthIndex, 1));
+  const last = new Date(Date.UTC(baseYear, baseMonthIndex + 1, 0));
+  const fmt = (d: Date) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  return { start: fmt(first), end: fmt(last) };
+}
+
+export function getPhnomPenhYearBounds(offsetYears = 0): { start: string; end: string } {
+  const today = todayIso();
+  const year = Number(today.slice(0, 4)) + offsetYears;
+  return { start: `${year}-01-01`, end: `${year}-12-31` };
 }
 
 export function generateId(prefix: string): string {
@@ -63,13 +119,64 @@ export function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
-export function calculateProductCogs(product: Product, ingredients: Ingredient[]): number {
+/**
+ * Converts a quantity between compatible units (g <-> kg, ml <-> L).
+ * If units are identical or incompatible (e.g., pcs -> g), returns qty unchanged.
+ */
+export function convertUnitQty(
+  qty: number,
+  fromUnit: IngredientUnit | undefined,
+  toUnit: IngredientUnit
+): number {
+  if (!fromUnit || fromUnit === toUnit) return qty;
+  if (fromUnit === 'kg' && toUnit === 'g') return qty * 1000;
+  if (fromUnit === 'g' && toUnit === 'kg') return qty / 1000;
+  if (fromUnit === 'L' && toUnit === 'ml') return qty * 1000;
+  if (fromUnit === 'ml' && toUnit === 'L') return qty / 1000;
+  return qty;
+}
+
+export function getCompatibleUnits(baseUnit: IngredientUnit): IngredientUnit[] {
+  if (baseUnit === 'g' || baseUnit === 'kg') return ['g', 'kg'];
+  if (baseUnit === 'ml' || baseUnit === 'L') return ['ml', 'L'];
+  return ['pcs'];
+}
+
+export function calculateRecipeCogs(recipe: RecipeItem[], ingredients: Ingredient[]): number {
   const ingMap = new Map(ingredients.map((ing) => [ing.id, ing]));
-  return product.recipe.reduce((sum, item) => {
+  return recipe.reduce((sum, item) => {
     const ing = ingMap.get(item.ingredientId);
     if (!ing) return sum;
-    return sum + ing.unitCostKhr * item.quantity;
+    const qtyInStockUnit = convertUnitQty(item.quantity, item.unit ?? ing.unit, ing.unit);
+    return sum + ing.unitCostKhr * qtyInStockUnit;
   }, 0);
+}
+
+export function calculateProductCogs(
+  product: Product,
+  ingredients: Ingredient[],
+  variant?: ProductVariant
+): number {
+  if (product.productType === 'PACKAGED') {
+    return Math.max(0, Number(variant?.costPriceKhr ?? product.costPriceKhr) || 0);
+  }
+  if (product.productType === 'PREPARED_STOCK') {
+    if ((variant?.costPriceKhr ?? product.costPriceKhr) > 0) {
+      return Math.max(0, Number(variant?.costPriceKhr ?? product.costPriceKhr) || 0);
+    }
+    const recipe = variant?.recipe?.length ? variant.recipe : product.recipe;
+    return calculateRecipeCogs(recipe, ingredients);
+  }
+  const activeRecipe = variant?.recipe ?? product.recipe;
+  return calculateRecipeCogs(activeRecipe, ingredients);
+}
+
+export function computePriceFromMarkup(costPriceKhr: number, markupPercent: number): number {
+  const cost = Math.max(0, Number(costPriceKhr) || 0);
+  const markup = Math.max(0, Number(markupPercent) || 0);
+  const raw = cost * (1 + markup / 100);
+  // Round neatly to nearest 100 KHR for Cambodian Riel retail pricing
+  return Math.round(raw / 100) * 100;
 }
 
 export function downloadCsv(filename: string, rows: (string | number)[][]): void {

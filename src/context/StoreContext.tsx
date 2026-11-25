@@ -7,6 +7,7 @@ import {
   getDoc,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -37,24 +38,48 @@ import type {
   ExpenseCategory,
   ExpenseScope,
   Ingredient,
+  MovementType,
   PaymentMethod,
   Product,
+  PurchaseRecord,
   Sale,
-  SaleItem,
+  StockClassification,
   StockMovement,
   WorkspaceSettings,
 } from '../types';
 import {
-  calculateProductCogs,
+  BUSINESS_TIMEZONE,
   clampNumber,
   generateId,
   generateInviteCode,
   sanitizeString,
   todayIso,
 } from '../utils/format';
-import { createInitialSettings, createSeedData } from '../utils/seedData';
+import {
+  buildAdjustmentPlan,
+  buildBatchPreparationPlan,
+  buildCheckoutPlan,
+  buildOpeningStockPlan,
+  buildPartialReturnPlan,
+  buildPurchasePlan,
+  buildStockCountPlan,
+  buildVoidPlan,
+  normalizeProduct,
+  normalizeSale,
+  normalizeSettings,
+  normalizeStockMovement,
+  type BatchPrepMode,
+  type PartialReturnRequest,
+  type StockShortage,
+} from '../utils/inventoryEngine';
+import {
+  createInitialSettings,
+  createSeedData,
+  getEnhancedSampleAdditions,
+} from '../utils/seedData';
 
 const LOCAL_STORAGE_KEY = 'juiceflow_store_v1';
+const SAMPLE_PACK_MIGRATION_KEY = 'juiceflow_sample_pack_v2_migrated';
 
 interface LocalSnapshot {
   settings: WorkspaceSettings;
@@ -62,7 +87,24 @@ interface LocalSnapshot {
   products: Product[];
   sales: Sale[];
   expenses: Expense[];
+  purchases: PurchaseRecord[];
   stockMovements: StockMovement[];
+}
+
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefined(item)) as unknown as T;
+  }
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v !== undefined) {
+        out[k] = stripUndefined(v);
+      }
+    }
+    return out as T;
+  }
+  return value;
 }
 
 function loadLocalSnapshot(): LocalSnapshot {
@@ -71,18 +113,59 @@ function loadLocalSnapshot(): LocalSnapshot {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<LocalSnapshot>;
       if (parsed.settings && Array.isArray(parsed.ingredients) && Array.isArray(parsed.products)) {
+        const settings = normalizeSettings(parsed.settings, createInitialSettings());
+        let ingredients = parsed.ingredients;
+        let products = parsed.products.map((p) => normalizeProduct(p));
+        const sales = Array.isArray(parsed.sales) ? parsed.sales.map((s) => normalizeSale(s)) : [];
+        const expenses = Array.isArray(parsed.expenses) ? parsed.expenses : [];
+        const purchases = Array.isArray(parsed.purchases) ? parsed.purchases : [];
+        const stockMovements = Array.isArray(parsed.stockMovements)
+          ? parsed.stockMovements.map((m) => normalizeStockMovement(m))
+          : [];
+
+        // Preserve 100% of existing data & append sample packaged/prepared items once
+        let alreadyMigrated = false;
+        try {
+          alreadyMigrated = localStorage.getItem(SAMPLE_PACK_MIGRATION_KEY) === 'true';
+        } catch {
+          alreadyMigrated = false;
+        }
+
+        if (!alreadyMigrated) {
+          const additions = getEnhancedSampleAdditions();
+          const existingIngIds = new Set(ingredients.map((i) => i.id));
+          const existingProdIds = new Set(products.map((p) => p.id));
+
+          const newIngs = additions.ingredients.filter((i) => !existingIngIds.has(i.id));
+          const newProds = additions.products.filter((p) => !existingProdIds.has(p.id));
+          if (newIngs.length > 0) ingredients = [...ingredients, ...newIngs];
+          if (newProds.length > 0) products = [...products, ...newProds];
+
+          try {
+            localStorage.setItem(SAMPLE_PACK_MIGRATION_KEY, 'true');
+          } catch {
+            // Ignore storage errors
+          }
+        }
+
         return {
-          settings: { ...createInitialSettings(), ...parsed.settings },
-          ingredients: parsed.ingredients,
-          products: parsed.products,
-          sales: Array.isArray(parsed.sales) ? parsed.sales : [],
-          expenses: Array.isArray(parsed.expenses) ? parsed.expenses : [],
-          stockMovements: Array.isArray(parsed.stockMovements) ? parsed.stockMovements : [],
+          settings,
+          ingredients,
+          products,
+          sales,
+          expenses,
+          purchases,
+          stockMovements,
         };
       }
     }
   } catch {
     // Fallback to clean seed data
+  }
+  try {
+    localStorage.setItem(SAMPLE_PACK_MIGRATION_KEY, 'true');
+  } catch {
+    // Ignore
   }
   const seed = createSeedData();
   return {
@@ -104,12 +187,36 @@ function tsToIso(value: unknown): string {
   return new Date().toISOString();
 }
 
+function isOfflineNetworkError(err: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  if (typeof err === 'object' && err !== null && 'code' in err) {
+    const code = String((err as { code?: unknown }).code || '');
+    return code === 'unavailable' || code === 'failed-precondition';
+  }
+  return false;
+}
+
 export interface RecordSaleInput {
-  items: { productId: string; quantity: number }[];
+  clientTxId?: string;
+  items: { productId: string; variantId?: string; quantity: number }[];
   paymentMethod: PaymentMethod;
   customerName: string;
   note: string;
   saleDate?: string;
+}
+
+export interface SaleOperationResult {
+  ok: boolean;
+  sale?: Sale;
+  idempotentDuplicate?: boolean;
+  shortages?: StockShortage[];
+  error?: string;
+}
+
+export interface OperationResult {
+  ok: boolean;
+  shortages?: StockShortage[];
+  error?: string;
 }
 
 export interface RecordPurchaseInput {
@@ -120,6 +227,61 @@ export interface RecordPurchaseInput {
   vendor: string;
   note: string;
   purchaseDate?: string;
+}
+
+export interface RecordStockPurchaseInput {
+  itemId: string;
+  itemClassification: StockClassification;
+  quantity: number;
+  packCount?: number;
+  unitsPerPack?: number;
+  totalCostKhr: number;
+  paymentMethod: PaymentMethod;
+  supplier: string;
+  barcodeScanned?: string;
+  note: string;
+  purchaseDate?: string;
+}
+
+export interface RecordOpeningStockInput {
+  itemId: string;
+  itemClassification: StockClassification;
+  quantity: number;
+  unitCostKhr: number;
+  note?: string;
+  movementDate?: string;
+}
+
+export interface PrepareBatchStockInput {
+  productId: string;
+  batchQty: number;
+  mode: BatchPrepMode;
+  directUnitCostKhr?: number;
+  note?: string;
+  movementDate?: string;
+}
+
+export interface RecordStockCountInput {
+  itemId: string;
+  itemClassification: StockClassification;
+  countedQty: number;
+  note?: string;
+  movementDate?: string;
+}
+
+export interface RecordStockAdjustmentInput {
+  itemId: string;
+  itemClassification: StockClassification;
+  movementType: Extract<MovementType, 'adjustment' | 'damaged' | 'expired'>;
+  deltaQty: number;
+  note?: string;
+  movementDate?: string;
+}
+
+export interface ReturnSaleItemsInput {
+  saleId: string;
+  returnItems: PartialReturnRequest[];
+  reason?: string;
 }
 
 export interface CloudAuthResult {
@@ -135,6 +297,7 @@ export interface StoreContextValue {
   products: Product[];
   sales: Sale[];
   expenses: Expense[];
+  purchases: PurchaseRecord[];
   stockMovements: StockMovement[];
   user: User | null;
   authReady: boolean;
@@ -150,10 +313,16 @@ export interface StoreContextValue {
   deleteProduct: (productId: string) => Promise<void>;
   saveIngredient: (ingredient: Omit<Ingredient, 'id'> & { id?: string }) => Promise<void>;
   deleteIngredient: (ingredientId: string) => Promise<void>;
-  recordIngredientPurchase: (input: RecordPurchaseInput) => Promise<void>;
-  adjustIngredientStock: (ingredientId: string, deltaQty: number, note: string) => Promise<void>;
-  recordSale: (input: RecordSaleInput) => Promise<Sale>;
-  voidSale: (saleId: string) => Promise<void>;
+  recordIngredientPurchase: (input: RecordPurchaseInput) => Promise<OperationResult>;
+  recordStockPurchase: (input: RecordStockPurchaseInput) => Promise<OperationResult>;
+  recordOpeningStock: (input: RecordOpeningStockInput) => Promise<OperationResult>;
+  prepareBatchStock: (input: PrepareBatchStockInput) => Promise<OperationResult>;
+  recordStockCount: (input: RecordStockCountInput) => Promise<OperationResult>;
+  recordStockAdjustment: (input: RecordStockAdjustmentInput) => Promise<OperationResult>;
+  adjustIngredientStock: (ingredientId: string, deltaQty: number, note: string) => Promise<OperationResult>;
+  recordSale: (input: RecordSaleInput) => Promise<SaleOperationResult>;
+  voidSale: (saleId: string, reason?: string) => Promise<OperationResult>;
+  returnSaleItems: (input: ReturnSaleItemsInput) => Promise<SaleOperationResult>;
   saveExpense: (
     expense: Omit<Expense, 'id' | 'createdAt' | 'recordedBy' | 'linkedIngredientId'> & {
       id?: string;
@@ -173,6 +342,157 @@ export interface StoreContextValue {
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
+function productToFirestoreFields(clean: Product) {
+  return stripUndefined({
+    name: sanitizeString(clean.name, 100),
+    nameVi: sanitizeString(clean.nameVi || clean.name, 100),
+    brand: sanitizeString(clean.brand || '', 80),
+    category: clean.category,
+    productType: clean.productType,
+    priceKhr: clampNumber(clean.priceKhr, 0, 100000000),
+    costPriceKhr: clampNumber(clean.costPriceKhr, 0, 100000000),
+    ...(clean.markupPercent !== undefined
+      ? { markupPercent: clampNumber(clean.markupPercent, 0, 10000) }
+      : {}),
+    manualPriceOverride: Boolean(clean.manualPriceOverride),
+    imageUrl: sanitizeString(clean.imageUrl, 200000),
+    active: Boolean(clean.active),
+    barcode: sanitizeString(clean.barcode || '', 64),
+    packagingBarcodes: (clean.packagingBarcodes || []).slice(0, 10).map((pb) => ({
+      barcode: sanitizeString(pb.barcode, 64),
+      label: sanitizeString(pb.label, 60),
+      unitsPerPack: clampNumber(Math.round(pb.unitsPerPack), 1, 10000),
+    })),
+    stockQty: clampNumber(clean.stockQty, -1000000, 100000000),
+    reorderLevel: clampNumber(clean.reorderLevel, 0, 100000000),
+    unit: clean.unit || 'pcs',
+    supplier: sanitizeString(clean.supplier || '', 100),
+    recipe: (clean.recipe || []).slice(0, 25).map((r) =>
+      stripUndefined({
+        ingredientId: r.ingredientId,
+        quantity: clampNumber(r.quantity, 0.0001, 1000000),
+        ...(r.unit ? { unit: r.unit } : {}),
+      })
+    ),
+    recipeVersion: Math.max(1, Math.round(clean.recipeVersion || 1)),
+    variants: (clean.variants || []).slice(0, 10).map((v) =>
+      stripUndefined({
+        id: sanitizeString(v.id, 64),
+        name: sanitizeString(v.name, 60),
+        nameVi: sanitizeString(v.nameVi || v.name, 60),
+        priceKhr: clampNumber(v.priceKhr, 0, 100000000),
+        ...(v.costPriceKhr !== undefined
+          ? { costPriceKhr: clampNumber(v.costPriceKhr, 0, 100000000) }
+          : {}),
+        ...(v.barcode ? { barcode: sanitizeString(v.barcode, 64) } : {}),
+        recipe: (v.recipe || []).slice(0, 25).map((r) =>
+          stripUndefined({
+            ingredientId: r.ingredientId,
+            quantity: clampNumber(r.quantity, 0.0001, 1000000),
+            ...(r.unit ? { unit: r.unit } : {}),
+          })
+        ),
+        recipeVersion: Math.max(1, Math.round(v.recipeVersion || 1)),
+      })
+    ),
+  });
+}
+
+function movementToFirestoreDoc(
+  mov: StockMovement,
+  workspaceId: string,
+  memberUids: string[],
+  createdByUid: string
+) {
+  return stripUndefined({
+    workspaceId,
+    memberUids,
+    itemId: mov.itemId || mov.ingredientId,
+    itemName: sanitizeString(mov.itemName || mov.ingredientName, 100),
+    itemClassification: mov.itemClassification || 'ingredient',
+    ingredientId: mov.ingredientId || mov.itemId || 'unknown',
+    ingredientName: sanitizeString(mov.ingredientName || mov.itemName || 'Unknown', 100),
+    movementType: mov.movementType,
+    deltaQty: clampNumber(mov.deltaQty, -10000000, 10000000),
+    unit: mov.unit,
+    ...(mov.unitCostKhr !== undefined
+      ? { unitCostKhr: clampNumber(mov.unitCostKhr, 0, 100000000) }
+      : {}),
+    totalCostKhr: clampNumber(mov.totalCostKhr, 0, 1000000000),
+    referenceId: sanitizeString(mov.referenceId, 128),
+    movementDate: mov.movementDate,
+    note: sanitizeString(mov.note, 200),
+    recordedBy: sanitizeString(mov.recordedBy, 80),
+    createdBy: createdByUid,
+    createdAt: serverTimestamp(),
+  });
+}
+
+function purchaseToFirestoreDoc(
+  pur: PurchaseRecord,
+  workspaceId: string,
+  memberUids: string[],
+  createdByUid: string
+) {
+  return stripUndefined({
+    workspaceId,
+    memberUids,
+    purchaseDate: pur.purchaseDate,
+    itemId: pur.itemId,
+    itemName: sanitizeString(pur.itemName, 100),
+    itemClassification: pur.itemClassification,
+    quantity: clampNumber(pur.quantity, 0.0001, 10000000),
+    ...(pur.packCount !== undefined ? { packCount: clampNumber(pur.packCount, 0, 100000) } : {}),
+    ...(pur.unitsPerPack !== undefined
+      ? { unitsPerPack: clampNumber(pur.unitsPerPack, 1, 10000) }
+      : {}),
+    unit: pur.unit,
+    totalCostKhr: clampNumber(pur.totalCostKhr, 0, 1000000000),
+    unitCostKhr: clampNumber(pur.unitCostKhr, 0, 100000000),
+    paymentMethod: pur.paymentMethod,
+    supplier: sanitizeString(pur.supplier, 100),
+    ...(pur.barcodeScanned ? { barcodeScanned: sanitizeString(pur.barcodeScanned, 64) } : {}),
+    note: sanitizeString(pur.note, 200),
+    recordedBy: sanitizeString(pur.recordedBy, 80),
+    createdBy: createdByUid,
+    createdAt: serverTimestamp(),
+  });
+}
+
+function saleToFirestoreDoc(
+  sale: Sale,
+  workspaceId: string,
+  memberUids: string[],
+  createdByUid: string
+) {
+  return stripUndefined({
+    workspaceId,
+    memberUids,
+    clientTxId: sanitizeString(sale.clientTxId || sale.id, 128),
+    orderNumber: sanitizeString(sale.orderNumber, 32),
+    saleDate: sale.saleDate,
+    items: sale.items.slice(0, 40),
+    subtotalKhr: clampNumber(sale.subtotalKhr ?? sale.totalKhr, 0, 1000000000),
+    totalKhr: clampNumber(sale.totalKhr, 0, 1000000000),
+    refundedKhr: clampNumber(sale.refundedKhr ?? 0, 0, sale.totalKhr),
+    netTotalKhr: clampNumber(sale.netTotalKhr ?? sale.totalKhr, 0, sale.totalKhr),
+    cogsKhr: clampNumber(sale.cogsKhr, 0, 1000000000),
+    refundedCogsKhr: clampNumber(sale.refundedCogsKhr ?? 0, 0, sale.cogsKhr),
+    paymentMethod: sale.paymentMethod,
+    customerName: sanitizeString(sale.customerName, 80),
+    note: sanitizeString(sale.note, 200),
+    recordedBy: sanitizeString(sale.recordedBy, 80),
+    status: sale.status,
+    returns: (sale.returns || []).slice(0, 20),
+    ...(sale.voidedAt ? { voidedAt: sale.voidedAt } : {}),
+    ...(sale.voidedBy ? { voidedBy: sanitizeString(sale.voidedBy, 80) } : {}),
+    ...(sale.voidReason ? { voidReason: sanitizeString(sale.voidReason, 200) } : {}),
+    createdBy: createdByUid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const initial = useMemo(() => loadLocalSnapshot(), []);
 
@@ -181,6 +501,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [products, setProducts] = useState<Product[]>(initial.products);
   const [sales, setSales] = useState<Sale[]>(initial.sales);
   const [expenses, setExpenses] = useState<Expense[]>(initial.expenses);
+  const [purchases, setPurchases] = useState<PurchaseRecord[]>(initial.purchases);
   const [stockMovements, setStockMovements] = useState<StockMovement[]>(initial.stockMovements);
 
   const [user, setUser] = useState<User | null>(null);
@@ -196,7 +517,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     void applyAuthPersistence(value);
   }, []);
 
-  // Prevents auto-creating a personal workspace while a pre-login "Join with Code" flow is in progress
   const pendingDirectJoinRef = useRef(false);
 
   const latestRef = useRef({
@@ -205,6 +525,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     products,
     sales,
     expenses,
+    purchases,
     stockMovements,
     memberUids,
   });
@@ -215,6 +536,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     products,
     sales,
     expenses,
+    purchases,
     stockMovements,
     memberUids,
   };
@@ -228,13 +550,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         products,
         sales,
         expenses,
+        purchases,
         stockMovements,
       };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(snapshot));
     } catch {
       // Ignore storage quota errors
     }
-  }, [settings, ingredients, products, sales, expenses, stockMovements]);
+  }, [settings, ingredients, products, sales, expenses, purchases, stockMovements]);
 
   // Listen to Firebase Auth state & resolve any pending redirect sign-in
   useEffect(() => {
@@ -303,6 +626,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           language: cur.settings.language === 'vi' ? 'vi' : 'en',
           familyMembers: familyList,
           lowStockDefault: clampNumber(cur.settings.lowStockDefault, 0, 1000000),
+          allowNegativeStock: Boolean(cur.settings.allowNegativeStock),
+          timezone: cur.settings.timezone || BUSINESS_TIMEZONE,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -354,36 +679,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           seedBatch.set(doc(db, 'workspaces', wsId, 'products', prod.id), {
             workspaceId: wsId,
             memberUids: uids,
-            name: sanitizeString(prod.name, 100),
-            nameVi: sanitizeString(prod.nameVi, 100),
-            category: prod.category,
-            priceKhr: clampNumber(prod.priceKhr, 0, 100000000),
-            imageUrl: sanitizeString(prod.imageUrl, 200000),
-            active: Boolean(prod.active),
-            recipe: prod.recipe.slice(0, 20),
+            ...productToFirestoreFields(prod),
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
         }
         for (const sale of cur.sales) {
-          seedBatch.set(doc(db, 'workspaces', wsId, 'sales', sale.id), {
-            workspaceId: wsId,
-            memberUids: uids,
-            orderNumber: sanitizeString(sale.orderNumber, 32),
-            saleDate: sale.saleDate,
-            items: sale.items.slice(0, 30),
-            totalKhr: clampNumber(sale.totalKhr, 0, 1000000000),
-            cogsKhr: clampNumber(sale.cogsKhr, 0, 1000000000),
-            paymentMethod: sale.paymentMethod,
-            customerName: sanitizeString(sale.customerName, 80),
-            note: sanitizeString(sale.note, 200),
-            recordedBy: sanitizeString(sale.recordedBy, 80),
-            status: 'completed',
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
+          seedBatch.set(
+            doc(db, 'workspaces', wsId, 'sales', sale.id),
+            saleToFirestoreDoc({ ...sale, status: 'completed' }, wsId, uids, user.uid)
+          );
         }
         for (const exp of cur.expenses) {
           seedBatch.set(doc(db, 'workspaces', wsId, 'expenses', exp.id), {
@@ -398,29 +704,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             vendor: sanitizeString(exp.vendor, 100),
             note: sanitizeString(exp.note, 200),
             linkedIngredientId: sanitizeString(exp.linkedIngredientId, 128),
+            isInventoryPurchase: Boolean(exp.isInventoryPurchase),
             recordedBy: sanitizeString(exp.recordedBy, 80),
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
         }
+        for (const pur of cur.purchases) {
+          seedBatch.set(
+            doc(db, 'workspaces', wsId, 'purchases', pur.id),
+            purchaseToFirestoreDoc(pur, wsId, uids, user.uid)
+          );
+        }
         for (const mov of cur.stockMovements) {
-          seedBatch.set(doc(db, 'workspaces', wsId, 'stockMovements', mov.id), {
-            workspaceId: wsId,
-            memberUids: uids,
-            ingredientId: mov.ingredientId,
-            ingredientName: sanitizeString(mov.ingredientName, 100),
-            movementType: mov.movementType,
-            deltaQty: clampNumber(mov.deltaQty, -10000000, 10000000),
-            unit: mov.unit,
-            totalCostKhr: clampNumber(mov.totalCostKhr, 0, 1000000000),
-            referenceId: sanitizeString(mov.referenceId, 128),
-            movementDate: mov.movementDate,
-            note: sanitizeString(mov.note, 200),
-            recordedBy: sanitizeString(mov.recordedBy, 80),
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-          });
+          seedBatch.set(
+            doc(db, 'workspaces', wsId, 'stockMovements', mov.id),
+            movementToFirestoreDoc(mov, wsId, uids, user.uid)
+          );
         }
         await seedBatch.commit();
 
@@ -455,21 +756,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const d = snap.data();
         const uids = Array.isArray(d.memberUids) ? (d.memberUids as string[]) : [user.uid];
         setMemberUids(uids);
-        setSettings((prev) => ({
-          ...prev,
-          workspaceId: cloudWorkspaceId,
-          inviteCode: String(d.inviteCode || prev.inviteCode),
-          name: String(d.name || prev.name),
-          location: String(d.location ?? prev.location),
-          currency: 'KHR',
-          usdRate: Number(d.usdRate) || prev.usdRate,
-          language: d.language === 'vi' ? 'vi' : 'en',
-          familyMembers:
-            Array.isArray(d.familyMembers) && d.familyMembers.length > 0
-              ? (d.familyMembers as string[])
-              : prev.familyMembers,
-          lowStockDefault: Number(d.lowStockDefault ?? prev.lowStockDefault),
-        }));
+        setSettings((prev) =>
+          normalizeSettings(
+            {
+              ...prev,
+              workspaceId: cloudWorkspaceId,
+              inviteCode: String(d.inviteCode || prev.inviteCode),
+              name: String(d.name || prev.name),
+              location: String(d.location ?? prev.location),
+              currency: 'KHR',
+              usdRate: Number(d.usdRate) || prev.usdRate,
+              language: d.language === 'vi' ? 'vi' : 'en',
+              familyMembers:
+                Array.isArray(d.familyMembers) && d.familyMembers.length > 0
+                  ? (d.familyMembers as string[])
+                  : prev.familyMembers,
+              lowStockDefault: Number(d.lowStockDefault ?? prev.lowStockDefault),
+              allowNegativeStock: Boolean(d.allowNegativeStock ?? prev.allowNegativeStock ?? false),
+              timezone: String(d.timezone || BUSINESS_TIMEZONE),
+            },
+            prev
+          )
+        );
       },
       (err) => handleFirestoreError(err, OperationType.GET, `workspaces/${cloudWorkspaceId}`)
     );
@@ -480,18 +788,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (snap) => {
         const list: Product[] = snap.docs.map((docSnap) => {
           const d = docSnap.data();
-          return {
+          return normalizeProduct({
             id: docSnap.id,
-            name: String(d.name || ''),
-            nameVi: String(d.nameVi || ''),
-            category: d.category,
-            priceKhr: Number(d.priceKhr) || 0,
-            imageUrl: String(d.imageUrl || ''),
-            active: Boolean(d.active),
-            recipe: Array.isArray(d.recipe) ? d.recipe : [],
+            ...d,
             createdAt: tsToIso(d.createdAt),
             updatedAt: tsToIso(d.updatedAt),
-          };
+          } as Partial<Product> & { id: string });
         });
         setProducts(list);
       },
@@ -529,20 +831,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const list: Sale[] = snap.docs
           .map((docSnap) => {
             const d = docSnap.data();
-            return {
+            return normalizeSale({
               id: docSnap.id,
-              orderNumber: String(d.orderNumber || ''),
-              saleDate: String(d.saleDate || todayIso()),
-              items: Array.isArray(d.items) ? (d.items as SaleItem[]) : [],
-              totalKhr: Number(d.totalKhr) || 0,
-              cogsKhr: Number(d.cogsKhr) || 0,
-              paymentMethod: d.paymentMethod,
-              customerName: String(d.customerName || ''),
-              note: String(d.note || ''),
-              recordedBy: String(d.recordedBy || ''),
-              status: (d.status === 'voided' ? 'voided' : 'completed') as 'completed' | 'voided',
+              ...d,
               createdAt: tsToIso(d.createdAt),
-            };
+            } as Partial<Sale> & { id: string });
           })
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         setSales(list);
@@ -568,6 +861,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               vendor: String(d.vendor || ''),
               note: String(d.note || ''),
               linkedIngredientId: String(d.linkedIngredientId || ''),
+              isInventoryPurchase: Boolean(d.isInventoryPurchase),
               recordedBy: String(d.recordedBy || ''),
               createdAt: tsToIso(d.createdAt),
             };
@@ -578,6 +872,39 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (err) => handleFirestoreError(err, OperationType.LIST, expPath)
     );
 
+    const purPath = `workspaces/${cloudWorkspaceId}/purchases`;
+    const unsubPurchases = onSnapshot(
+      query(collection(db, purPath), where('memberUids', 'array-contains', user.uid)),
+      (snap) => {
+        const list: PurchaseRecord[] = snap.docs
+          .map((docSnap) => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              purchaseDate: String(d.purchaseDate || todayIso()),
+              itemId: String(d.itemId || ''),
+              itemName: String(d.itemName || ''),
+              itemClassification: d.itemClassification as StockClassification,
+              quantity: Number(d.quantity) || 0,
+              ...(d.packCount !== undefined ? { packCount: Number(d.packCount) } : {}),
+              ...(d.unitsPerPack !== undefined ? { unitsPerPack: Number(d.unitsPerPack) } : {}),
+              unit: d.unit,
+              totalCostKhr: Number(d.totalCostKhr) || 0,
+              unitCostKhr: Number(d.unitCostKhr) || 0,
+              paymentMethod: d.paymentMethod as PaymentMethod,
+              supplier: String(d.supplier || ''),
+              ...(d.barcodeScanned ? { barcodeScanned: String(d.barcodeScanned) } : {}),
+              note: String(d.note || ''),
+              recordedBy: String(d.recordedBy || ''),
+              createdAt: tsToIso(d.createdAt),
+            };
+          })
+          .sort((a, b) => b.purchaseDate.localeCompare(a.purchaseDate) || b.createdAt.localeCompare(a.createdAt));
+        setPurchases(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, purPath)
+    );
+
     const movPath = `workspaces/${cloudWorkspaceId}/stockMovements`;
     const unsubMovements = onSnapshot(
       query(collection(db, movPath), where('memberUids', 'array-contains', user.uid)),
@@ -585,20 +912,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const list: StockMovement[] = snap.docs
           .map((docSnap) => {
             const d = docSnap.data();
-            return {
+            return normalizeStockMovement({
               id: docSnap.id,
-              ingredientId: String(d.ingredientId || ''),
-              ingredientName: String(d.ingredientName || ''),
-              movementType: d.movementType,
-              deltaQty: Number(d.deltaQty) || 0,
-              unit: d.unit,
-              totalCostKhr: Number(d.totalCostKhr) || 0,
-              referenceId: String(d.referenceId || ''),
-              movementDate: String(d.movementDate || todayIso()),
-              note: String(d.note || ''),
-              recordedBy: String(d.recordedBy || ''),
+              ...d,
               createdAt: tsToIso(d.createdAt),
-            };
+            } as Partial<StockMovement> & { id: string });
           })
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         setStockMovements(list);
@@ -612,6 +930,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       unsubIngredients();
       unsubSales();
       unsubExpenses();
+      unsubPurchases();
       unsubMovements();
     };
   }, [authReady, user, cloudWorkspaceId]);
@@ -649,6 +968,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'expenses', e.id), {
             memberUids,
             updatedAt: serverTimestamp(),
+          });
+          ops++;
+        }
+        for (const pur of cur.purchases) {
+          batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'purchases', pur.id), {
+            memberUids,
           });
           ops++;
         }
@@ -707,6 +1032,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             language: next.language === 'vi' ? 'vi' : 'en',
             familyMembers: next.familyMembers.slice(0, 10),
             lowStockDefault: clampNumber(next.lowStockDefault, 0, 1000000),
+            allowNegativeStock: Boolean(next.allowNegativeStock),
+            timezone: next.timezone || BUSINESS_TIMEZONE,
             updatedAt: serverTimestamp(),
           });
         } catch (err) {
@@ -721,48 +1048,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     async (input: Omit<Product, 'id'> & { id?: string }) => {
       const isEdit = Boolean(input.id);
       const id = input.id || generateId('prod');
-      const clean: Product = {
+      const existingProd = isEdit ? latestRef.current.products.find((p) => p.id === id) : undefined;
+
+      // Increment recipeVersion whenever recipe changes on edit
+      const recipeChanged =
+        existingProd && JSON.stringify(existingProd.recipe) !== JSON.stringify(input.recipe);
+      const nextRecipeVersion = recipeChanged
+        ? (existingProd?.recipeVersion ?? 1) + 1
+        : Math.max(1, input.recipeVersion ?? existingProd?.recipeVersion ?? 1);
+
+      const clean = normalizeProduct({
+        ...input,
         id,
-        name: sanitizeString(input.name, 100),
-        nameVi: sanitizeString(input.nameVi || input.name, 100),
-        category: input.category,
-        priceKhr: clampNumber(input.priceKhr, 0, 100000000),
-        imageUrl: sanitizeString(input.imageUrl, 200000),
-        active: Boolean(input.active),
-        recipe: input.recipe
-          .filter((r) => r.ingredientId && r.quantity > 0)
-          .slice(0, 20)
-          .map((r) => ({ ingredientId: r.ingredientId, quantity: clampNumber(r.quantity, 0.001, 1000000) })),
+        recipeVersion: nextRecipeVersion,
         updatedAt: new Date().toISOString(),
-      };
+      });
 
       setProducts((prev) => (isEdit ? prev.map((p) => (p.id === id ? clean : p)) : [clean, ...prev]));
 
       if (user && cloudWorkspaceId) {
         const path = `workspaces/${cloudWorkspaceId}/products/${id}`;
+        const fields = productToFirestoreFields(clean);
         try {
           if (isEdit) {
             await updateDoc(doc(db, 'workspaces', cloudWorkspaceId, 'products', id), {
-              name: clean.name,
-              nameVi: clean.nameVi,
-              category: clean.category,
-              priceKhr: clean.priceKhr,
-              imageUrl: clean.imageUrl,
-              active: clean.active,
-              recipe: clean.recipe,
+              ...fields,
               updatedAt: serverTimestamp(),
             });
           } else {
             await setDoc(doc(db, 'workspaces', cloudWorkspaceId, 'products', id), {
               workspaceId: cloudWorkspaceId,
               memberUids: activeMemberUids(),
-              name: clean.name,
-              nameVi: clean.nameVi,
-              category: clean.category,
-              priceKhr: clean.priceKhr,
-              imageUrl: clean.imageUrl,
-              active: clean.active,
-              recipe: clean.recipe,
+              ...fields,
               createdBy: user.uid,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
@@ -862,420 +1179,964 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [user, cloudWorkspaceId]
   );
 
-  const recordIngredientPurchase = useCallback(
-    async (input: RecordPurchaseInput) => {
+  // Unified Stock-In / Purchase across Packaged, Ingredients, and Prepared Stock
+  // Writes to `purchases` + `stockMovements` (NEVER creates a duplicate operating Expense!)
+  const recordStockPurchase = useCallback(
+    async (input: RecordStockPurchaseInput): Promise<OperationResult> => {
       const cur = latestRef.current;
-      const ing = cur.ingredients.find((i) => i.id === input.ingredientId);
-      if (!ing) return;
-
-      const addedQty = clampNumber(input.addedQty, 0.001, 10000000);
-      const totalCostKhr = clampNumber(input.totalCostKhr, 0, 1000000000);
-      const purchaseDate = input.purchaseDate || todayIso();
-      const operator = sanitizeString(cur.settings.activeOperator || 'Family', 80);
-
-      const existingVal = Math.max(0, ing.stockQty) * ing.unitCostKhr;
-      const newStockQty = Number((ing.stockQty + addedQty).toFixed(3));
-      const newUnitCostKhr =
-        newStockQty > 0 ? Math.round((existingVal + totalCostKhr) / newStockQty) : ing.unitCostKhr;
-
-      const expId = generateId('exp');
-      const movId = generateId('mov');
-      const nowIso = new Date().toISOString();
-
-      const newExpense: Expense = {
-        id: expId,
-        expenseDate: purchaseDate,
-        title: sanitizeString(`Purchase: ${ing.name} (${addedQty} ${ing.unit})`, 120),
-        category: 'ingredients',
-        scope: 'business',
-        amountKhr: totalCostKhr,
+      const plan = buildPurchasePlan({
+        itemId: input.itemId,
+        itemClassification: input.itemClassification,
+        quantity: input.quantity,
+        packCount: input.packCount,
+        unitsPerPack: input.unitsPerPack,
+        totalCostKhr: input.totalCostKhr,
         paymentMethod: input.paymentMethod,
-        vendor: sanitizeString(input.vendor || ing.supplier, 100),
-        note: sanitizeString(input.note, 200),
-        linkedIngredientId: ing.id,
-        recordedBy: operator,
-        createdAt: nowIso,
-      };
-
-      const newMovement: StockMovement = {
-        id: movId,
-        ingredientId: ing.id,
-        ingredientName: sanitizeString(ing.name, 100),
-        movementType: 'purchase',
-        deltaQty: addedQty,
-        unit: ing.unit,
-        totalCostKhr,
-        referenceId: expId,
-        movementDate: purchaseDate,
-        note: sanitizeString(input.note || `Restock from ${input.vendor || ing.supplier || 'market'}`, 200),
-        recordedBy: operator,
-        createdAt: nowIso,
-      };
-
-      setIngredients((prev) =>
-        prev.map((i) =>
-          i.id === ing.id ? { ...i, stockQty: newStockQty, unitCostKhr: newUnitCostKhr } : i
-        )
-      );
-      setExpenses((prev) => [newExpense, ...prev]);
-      setStockMovements((prev) => [newMovement, ...prev]);
-
-      if (user && cloudWorkspaceId) {
-        const uids = activeMemberUids();
-        const batchPath = `workspaces/${cloudWorkspaceId}/ingredients/${ing.id}`;
-        try {
-          const batch = writeBatch(db);
-          batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ing.id), {
-            stockQty: newStockQty,
-            unitCostKhr: newUnitCostKhr,
-            updatedAt: serverTimestamp(),
-          });
-          batch.set(doc(db, 'workspaces', cloudWorkspaceId, 'expenses', expId), {
-            workspaceId: cloudWorkspaceId,
-            memberUids: uids,
-            expenseDate: newExpense.expenseDate,
-            title: newExpense.title,
-            category: newExpense.category,
-            scope: newExpense.scope,
-            amountKhr: newExpense.amountKhr,
-            paymentMethod: newExpense.paymentMethod,
-            vendor: newExpense.vendor,
-            note: newExpense.note,
-            linkedIngredientId: newExpense.linkedIngredientId,
-            recordedBy: newExpense.recordedBy,
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-          batch.set(doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', movId), {
-            workspaceId: cloudWorkspaceId,
-            memberUids: uids,
-            ingredientId: newMovement.ingredientId,
-            ingredientName: newMovement.ingredientName,
-            movementType: newMovement.movementType,
-            deltaQty: newMovement.deltaQty,
-            unit: newMovement.unit,
-            totalCostKhr: newMovement.totalCostKhr,
-            referenceId: newMovement.referenceId,
-            movementDate: newMovement.movementDate,
-            note: newMovement.note,
-            recordedBy: newMovement.recordedBy,
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-          });
-          await batch.commit();
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, batchPath);
-        }
-      }
-    },
-    [user, cloudWorkspaceId, activeMemberUids]
-  );
-
-  const adjustIngredientStock = useCallback(
-    async (ingredientId: string, deltaQty: number, note: string) => {
-      const cur = latestRef.current;
-      const ing = cur.ingredients.find((i) => i.id === ingredientId);
-      if (!ing || !Number.isFinite(deltaQty) || deltaQty === 0) return;
-
-      const newStockQty = Number((ing.stockQty + deltaQty).toFixed(3));
-      const movId = generateId('mov');
-      const nowIso = new Date().toISOString();
-      const operator = sanitizeString(cur.settings.activeOperator || 'Family', 80);
-
-      const movement: StockMovement = {
-        id: movId,
-        ingredientId: ing.id,
-        ingredientName: sanitizeString(ing.name, 100),
-        movementType: 'adjustment',
-        deltaQty,
-        unit: ing.unit,
-        totalCostKhr: Math.round(Math.abs(deltaQty) * ing.unitCostKhr),
-        referenceId: '',
-        movementDate: todayIso(),
-        note: sanitizeString(note || 'Manual stock adjustment', 200),
-        recordedBy: operator,
-        createdAt: nowIso,
-      };
-
-      setIngredients((prev) =>
-        prev.map((i) => (i.id === ing.id ? { ...i, stockQty: newStockQty } : i))
-      );
-      setStockMovements((prev) => [movement, ...prev]);
-
-      if (user && cloudWorkspaceId) {
-        const uids = activeMemberUids();
-        const batchPath = `workspaces/${cloudWorkspaceId}/ingredients/${ing.id}`;
-        try {
-          const batch = writeBatch(db);
-          batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ing.id), {
-            stockQty: newStockQty,
-            unitCostKhr: ing.unitCostKhr,
-            updatedAt: serverTimestamp(),
-          });
-          batch.set(doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', movId), {
-            workspaceId: cloudWorkspaceId,
-            memberUids: uids,
-            ingredientId: movement.ingredientId,
-            ingredientName: movement.ingredientName,
-            movementType: movement.movementType,
-            deltaQty: movement.deltaQty,
-            unit: movement.unit,
-            totalCostKhr: movement.totalCostKhr,
-            referenceId: movement.referenceId,
-            movementDate: movement.movementDate,
-            note: movement.note,
-            recordedBy: movement.recordedBy,
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-          });
-          await batch.commit();
-        } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, batchPath);
-        }
-      }
-    },
-    [user, cloudWorkspaceId, activeMemberUids]
-  );
-
-  const recordSale = useCallback(
-    async (input: RecordSaleInput): Promise<Sale> => {
-      const cur = latestRef.current;
-      const prodMap = new Map(cur.products.map((p) => [p.id, p]));
-      const ingMap = new Map(cur.ingredients.map((i) => [i.id, i]));
-
-      const saleItems: SaleItem[] = [];
-      const ingredientDeductions = new Map<string, number>();
-
-      for (const reqItem of input.items) {
-        const product = prodMap.get(reqItem.productId);
-        if (!product || reqItem.quantity <= 0) continue;
-        const qty = Math.round(reqItem.quantity);
-        const unitCogsKhr = Math.round(calculateProductCogs(product, cur.ingredients));
-        saleItems.push({
-          productId: product.id,
-          productName: sanitizeString(product.name, 100),
-          productNameVi: sanitizeString(product.nameVi || product.name, 100),
-          quantity: qty,
-          unitPriceKhr: product.priceKhr,
-          unitCogsKhr,
-          lineTotalKhr: product.priceKhr * qty,
-        });
-
-        for (const recipeRow of product.recipe) {
-          const prevDeduct = ingredientDeductions.get(recipeRow.ingredientId) || 0;
-          ingredientDeductions.set(recipeRow.ingredientId, prevDeduct + recipeRow.quantity * qty);
-        }
-      }
-
-      const saleId = generateId('sale');
-      const orderNum = `JF-${String(1043 + cur.sales.length).padStart(4, '0')}`;
-      const saleDate = input.saleDate || todayIso();
-      const nowIso = new Date().toISOString();
-      const operator = sanitizeString(cur.settings.activeOperator || 'Family', 80);
-
-      const totalKhr = saleItems.reduce((s, item) => s + item.lineTotalKhr, 0);
-      const cogsKhr = saleItems.reduce((s, item) => s + item.unitCogsKhr * item.quantity, 0);
-
-      const newSale: Sale = {
-        id: saleId,
-        orderNumber: orderNum,
-        saleDate,
-        items: saleItems.slice(0, 30),
-        totalKhr,
-        cogsKhr,
-        paymentMethod: input.paymentMethod,
-        customerName: sanitizeString(input.customerName, 80),
-        note: sanitizeString(input.note, 200),
-        recordedBy: operator,
-        status: 'completed',
-        createdAt: nowIso,
-      };
-
-      const newMovements: StockMovement[] = [];
-      const updatedIngredients = cur.ingredients.map((ing) => {
-        const usedQty = ingredientDeductions.get(ing.id);
-        if (!usedQty) return ing;
-        const roundedUsed = Number(usedQty.toFixed(3));
-        newMovements.push({
-          id: generateId('mov'),
-          ingredientId: ing.id,
-          ingredientName: sanitizeString(ing.name, 100),
-          movementType: 'sale_consumption',
-          deltaQty: -roundedUsed,
-          unit: ing.unit,
-          totalCostKhr: Math.round(roundedUsed * ing.unitCostKhr),
-          referenceId: saleId,
-          movementDate: saleDate,
-          note: sanitizeString(`Auto deduction for order ${orderNum}`, 200),
-          recordedBy: operator,
-          createdAt: nowIso,
-        });
-        return {
-          ...ing,
-          stockQty: Number((ing.stockQty - roundedUsed).toFixed(3)),
-        };
+        supplier: input.supplier,
+        barcodeScanned: input.barcodeScanned,
+        note: input.note,
+        recordedBy: cur.settings.activeOperator || 'Family',
+        purchaseDate: input.purchaseDate,
+        products: cur.products,
+        ingredients: cur.ingredients,
       });
 
-      setSales((prev) => [newSale, ...prev]);
-      setIngredients(updatedIngredients);
-      if (newMovements.length > 0) {
-        setStockMovements((prev) => [...newMovements, ...prev]);
+      if (!plan.ok || !plan.purchase || !plan.movement) {
+        return { ok: false, error: plan.error || 'Could not record purchase.' };
       }
+
+      if (plan.updatedIngredient) {
+        const updated = plan.updatedIngredient;
+        setIngredients((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      }
+      if (plan.updatedProduct) {
+        const updated = plan.updatedProduct;
+        setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      }
+      setPurchases((prev) => [plan.purchase!, ...prev]);
+      setStockMovements((prev) => [plan.movement!, ...prev]);
 
       if (user && cloudWorkspaceId) {
         const uids = activeMemberUids();
-        const path = `workspaces/${cloudWorkspaceId}/sales/${saleId}`;
+        const colName = input.itemClassification === 'ingredient' ? 'ingredients' : 'products';
+        const path = `workspaces/${cloudWorkspaceId}/${colName}/${input.itemId}`;
         try {
           const batch = writeBatch(db);
-          batch.set(doc(db, 'workspaces', cloudWorkspaceId, 'sales', saleId), {
-            workspaceId: cloudWorkspaceId,
-            memberUids: uids,
-            orderNumber: newSale.orderNumber,
-            saleDate: newSale.saleDate,
-            items: newSale.items,
-            totalKhr: newSale.totalKhr,
-            cogsKhr: newSale.cogsKhr,
-            paymentMethod: newSale.paymentMethod,
-            customerName: newSale.customerName,
-            note: newSale.note,
-            recordedBy: newSale.recordedBy,
-            status: 'completed',
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-
-          for (const [ingId] of ingredientDeductions.entries()) {
-            const updatedIng = updatedIngredients.find((i) => i.id === ingId);
-            if (!updatedIng || !ingMap.has(ingId)) continue;
-            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ingId), {
-              stockQty: updatedIng.stockQty,
-              unitCostKhr: updatedIng.unitCostKhr,
+          if (plan.updatedIngredient) {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', plan.updatedIngredient.id), {
+              stockQty: plan.updatedIngredient.stockQty,
+              unitCostKhr: plan.updatedIngredient.unitCostKhr,
+              supplier: plan.updatedIngredient.supplier,
+              updatedAt: serverTimestamp(),
+            });
+          } else if (plan.updatedProduct) {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', plan.updatedProduct.id), {
+              stockQty: plan.updatedProduct.stockQty,
+              costPriceKhr: plan.updatedProduct.costPriceKhr,
+              supplier: plan.updatedProduct.supplier,
               updatedAt: serverTimestamp(),
             });
           }
-
-          for (const mov of newMovements) {
-            batch.set(doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', mov.id), {
-              workspaceId: cloudWorkspaceId,
-              memberUids: uids,
-              ingredientId: mov.ingredientId,
-              ingredientName: mov.ingredientName,
-              movementType: mov.movementType,
-              deltaQty: mov.deltaQty,
-              unit: mov.unit,
-              totalCostKhr: mov.totalCostKhr,
-              referenceId: mov.referenceId,
-              movementDate: mov.movementDate,
-              note: mov.note,
-              recordedBy: mov.recordedBy,
-              createdBy: user.uid,
-              createdAt: serverTimestamp(),
-            });
-          }
+          batch.set(
+            doc(db, 'workspaces', cloudWorkspaceId, 'purchases', plan.purchase.id),
+            purchaseToFirestoreDoc(plan.purchase, cloudWorkspaceId, uids, user.uid)
+          );
+          batch.set(
+            doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', plan.movement.id),
+            movementToFirestoreDoc(plan.movement, cloudWorkspaceId, uids, user.uid)
+          );
           await batch.commit();
         } catch (err) {
           handleFirestoreError(err, OperationType.WRITE, path);
         }
       }
 
-      return newSale;
+      return { ok: true };
     },
     [user, cloudWorkspaceId, activeMemberUids]
   );
 
-  const voidSale = useCallback(
-    async (saleId: string) => {
+  // Backward-compatible wrapper for legacy callers
+  const recordIngredientPurchase = useCallback(
+    async (input: RecordPurchaseInput): Promise<OperationResult> => {
+      return recordStockPurchase({
+        itemId: input.ingredientId,
+        itemClassification: 'ingredient',
+        quantity: input.addedQty,
+        totalCostKhr: input.totalCostKhr,
+        paymentMethod: input.paymentMethod,
+        supplier: input.vendor,
+        note: input.note,
+        purchaseDate: input.purchaseDate,
+      });
+    },
+    [recordStockPurchase]
+  );
+
+  // Opening Stock across all 3 tiers (Valuation only — NEVER an expense or cash outflow!)
+  const recordOpeningStock = useCallback(
+    async (input: RecordOpeningStockInput): Promise<OperationResult> => {
       const cur = latestRef.current;
-      const targetSale = cur.sales.find((s) => s.id === saleId);
-      if (!targetSale || targetSale.status === 'voided') return;
-
-      const prodMap = new Map(cur.products.map((p) => [p.id, p]));
-      const restoreMap = new Map<string, number>();
-
-      for (const item of targetSale.items) {
-        const prod = prodMap.get(item.productId);
-        if (!prod) continue;
-        for (const r of prod.recipe) {
-          restoreMap.set(r.ingredientId, (restoreMap.get(r.ingredientId) || 0) + r.quantity * item.quantity);
-        }
-      }
-
-      const nowIso = new Date().toISOString();
-      const operator = sanitizeString(cur.settings.activeOperator || 'Family', 80);
-      const restoreMovements: StockMovement[] = [];
-
-      const updatedIngredients = cur.ingredients.map((ing) => {
-        const qty = restoreMap.get(ing.id);
-        if (!qty) return ing;
-        const rounded = Number(qty.toFixed(3));
-        restoreMovements.push({
-          id: generateId('mov'),
-          ingredientId: ing.id,
-          ingredientName: sanitizeString(ing.name, 100),
-          movementType: 'void_restore',
-          deltaQty: rounded,
-          unit: ing.unit,
-          totalCostKhr: Math.round(rounded * ing.unitCostKhr),
-          referenceId: saleId,
-          movementDate: todayIso(),
-          note: sanitizeString(`Restored from voided order ${targetSale.orderNumber}`, 200),
-          recordedBy: operator,
-          createdAt: nowIso,
-        });
-        return {
-          ...ing,
-          stockQty: Number((ing.stockQty + rounded).toFixed(3)),
-        };
+      const plan = buildOpeningStockPlan({
+        itemId: input.itemId,
+        itemClassification: input.itemClassification,
+        quantity: input.quantity,
+        unitCostKhr: input.unitCostKhr,
+        note: input.note,
+        recordedBy: cur.settings.activeOperator || 'Family',
+        movementDate: input.movementDate,
+        products: cur.products,
+        ingredients: cur.ingredients,
       });
 
-      setSales((prev) => prev.map((s) => (s.id === saleId ? { ...s, status: 'voided' } : s)));
-      setIngredients(updatedIngredients);
-      if (restoreMovements.length > 0) {
-        setStockMovements((prev) => [...restoreMovements, ...prev]);
+      if (!plan.ok || !plan.movement) {
+        return { ok: false, error: plan.error || 'Could not record opening stock.' };
       }
+
+      if (plan.updatedIngredient) {
+        const updated = plan.updatedIngredient;
+        setIngredients((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      }
+      if (plan.updatedProduct) {
+        const updated = plan.updatedProduct;
+        setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      }
+      setStockMovements((prev) => [plan.movement!, ...prev]);
 
       if (user && cloudWorkspaceId) {
         const uids = activeMemberUids();
-        const path = `workspaces/${cloudWorkspaceId}/sales/${saleId}`;
+        const colName = input.itemClassification === 'ingredient' ? 'ingredients' : 'products';
+        const path = `workspaces/${cloudWorkspaceId}/${colName}/${input.itemId}`;
         try {
           const batch = writeBatch(db);
-          batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'sales', saleId), {
-            status: 'voided',
-            updatedAt: serverTimestamp(),
-          });
-          for (const [ingId] of restoreMap.entries()) {
-            const updatedIng = updatedIngredients.find((i) => i.id === ingId);
-            if (!updatedIng) continue;
-            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ingId), {
-              stockQty: updatedIng.stockQty,
-              unitCostKhr: updatedIng.unitCostKhr,
+          if (plan.updatedIngredient) {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', plan.updatedIngredient.id), {
+              stockQty: plan.updatedIngredient.stockQty,
+              unitCostKhr: plan.updatedIngredient.unitCostKhr,
+              updatedAt: serverTimestamp(),
+            });
+          } else if (plan.updatedProduct) {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', plan.updatedProduct.id), {
+              stockQty: plan.updatedProduct.stockQty,
+              costPriceKhr: plan.updatedProduct.costPriceKhr,
+              supplier: plan.updatedProduct.supplier,
               updatedAt: serverTimestamp(),
             });
           }
-          for (const mov of restoreMovements) {
-            batch.set(doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', mov.id), {
-              workspaceId: cloudWorkspaceId,
-              memberUids: uids,
-              ingredientId: mov.ingredientId,
-              ingredientName: mov.ingredientName,
-              movementType: mov.movementType,
-              deltaQty: mov.deltaQty,
-              unit: mov.unit,
-              totalCostKhr: mov.totalCostKhr,
-              referenceId: mov.referenceId,
-              movementDate: mov.movementDate,
-              note: mov.note,
-              recordedBy: mov.recordedBy,
-              createdBy: user.uid,
-              createdAt: serverTimestamp(),
-            });
-          }
+          batch.set(
+            doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', plan.movement.id),
+            movementToFirestoreDoc(plan.movement, cloudWorkspaceId, uids, user.uid)
+          );
           await batch.commit();
         } catch (err) {
-          handleFirestoreError(err, OperationType.UPDATE, path);
+          handleFirestoreError(err, OperationType.WRITE, path);
         }
+      }
+
+      return { ok: true };
+    },
+    [user, cloudWorkspaceId, activeMemberUids]
+  );
+
+  // Prepared Stock Batch Preparation (Deduct Raw Ingredients OR Direct Add)
+  const prepareBatchStock = useCallback(
+    async (input: PrepareBatchStockInput): Promise<OperationResult> => {
+      const cur = latestRef.current;
+      const recordedBy = cur.settings.activeOperator || 'Family';
+
+      const applyLocal = (): OperationResult => {
+        const plan = buildBatchPreparationPlan({
+          productId: input.productId,
+          batchQty: input.batchQty,
+          mode: input.mode,
+          directUnitCostKhr: input.directUnitCostKhr,
+          note: input.note,
+          recordedBy,
+          movementDate: input.movementDate,
+          products: cur.products,
+          ingredients: cur.ingredients,
+          allowNegativeStock: Boolean(cur.settings.allowNegativeStock),
+        });
+        if (!plan.ok || !plan.updatedProduct || !plan.movements) {
+          return { ok: false, error: plan.error, shortages: plan.shortages };
+        }
+        setProducts(plan.updatedProducts!);
+        setIngredients(plan.updatedIngredients!);
+        setStockMovements((prev) => [...plan.movements!, ...prev]);
+        return { ok: true };
+      };
+
+      if (!user || !cloudWorkspaceId) {
+        return applyLocal();
+      }
+
+      const uids = activeMemberUids();
+      const prodPath = `workspaces/${cloudWorkspaceId}/products/${input.productId}`;
+      try {
+        let txResult: OperationResult = { ok: false };
+        await runTransaction(db, async (tx) => {
+          const prodRef = doc(db, 'workspaces', cloudWorkspaceId, 'products', input.productId);
+          const prodSnap = await tx.get(prodRef);
+          if (!prodSnap.exists()) {
+            txResult = { ok: false, error: 'Prepared product not found.' };
+            return;
+          }
+          const liveProd = normalizeProduct({
+            id: prodSnap.id,
+            ...prodSnap.data(),
+          } as Partial<Product> & { id: string });
+
+          const ingIds =
+            input.mode === 'deduct_ingredients'
+              ? Array.from(new Set((liveProd.recipe || []).map((r) => r.ingredientId)))
+              : [];
+
+          const liveIngredients: Ingredient[] = [];
+          for (const ingId of ingIds) {
+            const ingSnap = await tx.get(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ingId));
+            if (ingSnap.exists()) {
+              const d = ingSnap.data();
+              liveIngredients.push({
+                id: ingSnap.id,
+                name: String(d.name || ''),
+                nameVi: String(d.nameVi || ''),
+                unit: d.unit,
+                stockQty: Number(d.stockQty) || 0,
+                reorderLevel: Number(d.reorderLevel) || 0,
+                unitCostKhr: Number(d.unitCostKhr) || 0,
+                supplier: String(d.supplier || ''),
+              });
+            }
+          }
+
+          const plan = buildBatchPreparationPlan({
+            productId: liveProd.id,
+            batchQty: input.batchQty,
+            mode: input.mode,
+            directUnitCostKhr: input.directUnitCostKhr,
+            note: input.note,
+            recordedBy,
+            movementDate: input.movementDate,
+            products: [liveProd],
+            ingredients: liveIngredients,
+            allowNegativeStock: Boolean(cur.settings.allowNegativeStock),
+          });
+
+          if (!plan.ok || !plan.updatedProduct || !plan.movements) {
+            txResult = { ok: false, error: plan.error, shortages: plan.shortages };
+            return;
+          }
+
+          tx.update(prodRef, {
+            stockQty: plan.updatedProduct.stockQty,
+            costPriceKhr: plan.updatedProduct.costPriceKhr,
+            supplier: plan.updatedProduct.supplier,
+            updatedAt: serverTimestamp(),
+          });
+
+          for (const ingId of plan.touchedIngredientIds || []) {
+            const updatedIng = plan.updatedIngredients?.find((i) => i.id === ingId);
+            if (!updatedIng) continue;
+            tx.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ingId), {
+              stockQty: updatedIng.stockQty,
+              updatedAt: serverTimestamp(),
+            });
+          }
+
+          for (const mov of plan.movements) {
+            tx.set(
+              doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', mov.id),
+              movementToFirestoreDoc(mov, cloudWorkspaceId, uids, user.uid)
+            );
+          }
+
+          txResult = { ok: true };
+        });
+
+        return txResult;
+      } catch (err) {
+        if (isOfflineNetworkError(err)) {
+          return applyLocal();
+        }
+        handleFirestoreError(err, OperationType.WRITE, prodPath);
+        return { ok: false, error: 'Failed to prepare batch stock.' };
+      }
+    },
+    [user, cloudWorkspaceId, activeMemberUids]
+  );
+
+  // Physical Stock Count
+  const recordStockCount = useCallback(
+    async (input: RecordStockCountInput): Promise<OperationResult> => {
+      const cur = latestRef.current;
+      const plan = buildStockCountPlan({
+        itemId: input.itemId,
+        itemClassification: input.itemClassification,
+        countedQty: input.countedQty,
+        note: input.note,
+        recordedBy: cur.settings.activeOperator || 'Family',
+        movementDate: input.movementDate,
+        products: cur.products,
+        ingredients: cur.ingredients,
+      });
+
+      if (!plan.ok || !plan.movement) {
+        return { ok: false, error: plan.error || 'Could not record stock count.' };
+      }
+
+      if (plan.updatedIngredient) {
+        const updated = plan.updatedIngredient;
+        setIngredients((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      }
+      if (plan.updatedProduct) {
+        const updated = plan.updatedProduct;
+        setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      }
+      setStockMovements((prev) => [plan.movement!, ...prev]);
+
+      if (user && cloudWorkspaceId) {
+        const uids = activeMemberUids();
+        const colName = input.itemClassification === 'ingredient' ? 'ingredients' : 'products';
+        const path = `workspaces/${cloudWorkspaceId}/${colName}/${input.itemId}`;
+        try {
+          const batch = writeBatch(db);
+          if (plan.updatedIngredient) {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', plan.updatedIngredient.id), {
+              stockQty: plan.updatedIngredient.stockQty,
+              updatedAt: serverTimestamp(),
+            });
+          } else if (plan.updatedProduct) {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', plan.updatedProduct.id), {
+              stockQty: plan.updatedProduct.stockQty,
+              updatedAt: serverTimestamp(),
+            });
+          }
+          batch.set(
+            doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', plan.movement.id),
+            movementToFirestoreDoc(plan.movement, cloudWorkspaceId, uids, user.uid)
+          );
+          await batch.commit();
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, path);
+        }
+      }
+
+      return { ok: true };
+    },
+    [user, cloudWorkspaceId, activeMemberUids]
+  );
+
+  // Manual Adjustment / Damaged / Expired write-off across all 3 tiers
+  const recordStockAdjustment = useCallback(
+    async (input: RecordStockAdjustmentInput): Promise<OperationResult> => {
+      const cur = latestRef.current;
+      const plan = buildAdjustmentPlan({
+        itemId: input.itemId,
+        itemClassification: input.itemClassification,
+        movementType: input.movementType,
+        deltaQty: input.deltaQty,
+        note: input.note,
+        recordedBy: cur.settings.activeOperator || 'Family',
+        movementDate: input.movementDate,
+        products: cur.products,
+        ingredients: cur.ingredients,
+        allowNegativeStock: Boolean(cur.settings.allowNegativeStock),
+      });
+
+      if (!plan.ok || !plan.movement) {
+        return { ok: false, error: plan.error || 'Could not adjust stock.' };
+      }
+
+      if (plan.updatedIngredient) {
+        const updated = plan.updatedIngredient;
+        setIngredients((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      }
+      if (plan.updatedProduct) {
+        const updated = plan.updatedProduct;
+        setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      }
+      setStockMovements((prev) => [plan.movement!, ...prev]);
+
+      if (user && cloudWorkspaceId) {
+        const uids = activeMemberUids();
+        const colName = input.itemClassification === 'ingredient' ? 'ingredients' : 'products';
+        const path = `workspaces/${cloudWorkspaceId}/${colName}/${input.itemId}`;
+        try {
+          const batch = writeBatch(db);
+          if (plan.updatedIngredient) {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', plan.updatedIngredient.id), {
+              stockQty: plan.updatedIngredient.stockQty,
+              updatedAt: serverTimestamp(),
+            });
+          } else if (plan.updatedProduct) {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', plan.updatedProduct.id), {
+              stockQty: plan.updatedProduct.stockQty,
+              updatedAt: serverTimestamp(),
+            });
+          }
+          batch.set(
+            doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', plan.movement.id),
+            movementToFirestoreDoc(plan.movement, cloudWorkspaceId, uids, user.uid)
+          );
+          await batch.commit();
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, path);
+        }
+      }
+
+      return { ok: true };
+    },
+    [user, cloudWorkspaceId, activeMemberUids]
+  );
+
+  // Backward-compatible wrapper
+  const adjustIngredientStock = useCallback(
+    async (ingredientId: string, deltaQty: number, note: string): Promise<OperationResult> => {
+      return recordStockAdjustment({
+        itemId: ingredientId,
+        itemClassification: 'ingredient',
+        movementType: 'adjustment',
+        deltaQty,
+        note,
+      });
+    },
+    [recordStockAdjustment]
+  );
+
+  // Atomic Concurrency-Safe Checkout (Firestore runTransaction online + deterministic idempotent offline fallback)
+  const recordSale = useCallback(
+    async (input: RecordSaleInput): Promise<SaleOperationResult> => {
+      const cur = latestRef.current;
+      const clientTxId = input.clientTxId || generateId('sale');
+      const orderNumber = `JF-${String(1043 + cur.sales.length).padStart(4, '0')}`;
+      const operator = sanitizeString(cur.settings.activeOperator || 'Family', 80);
+
+      const applyLocalCheckout = (queueOfflineBatch: boolean): SaleOperationResult => {
+        const plan = buildCheckoutPlan({
+          clientTxId,
+          orderNumber,
+          saleDate: input.saleDate,
+          items: input.items,
+          paymentMethod: input.paymentMethod,
+          customerName: input.customerName,
+          note: input.note,
+          recordedBy: operator,
+          products: cur.products,
+          ingredients: cur.ingredients,
+          existingSales: cur.sales,
+          allowNegativeStock: Boolean(cur.settings.allowNegativeStock),
+        });
+
+        if (!plan.ok) {
+          return { ok: false, error: plan.error, shortages: plan.shortages };
+        }
+        if (plan.idempotentDuplicate) {
+          return { ok: true, idempotentDuplicate: true, sale: plan.sale };
+        }
+
+        setSales((prev) => [plan.sale!, ...prev]);
+        setProducts(plan.updatedProducts!);
+        setIngredients(plan.updatedIngredients!);
+        if (plan.movements && plan.movements.length > 0) {
+          setStockMovements((prev) => [...plan.movements!, ...prev]);
+        }
+
+        if (queueOfflineBatch && user && cloudWorkspaceId && plan.sale) {
+          const uids = activeMemberUids();
+          const batch = writeBatch(db);
+          batch.set(
+            doc(db, 'workspaces', cloudWorkspaceId, 'sales', plan.sale.id),
+            saleToFirestoreDoc(plan.sale, cloudWorkspaceId, uids, user.uid)
+          );
+          for (const pid of plan.touchedProductIds || []) {
+            const p = plan.updatedProducts?.find((x) => x.id === pid);
+            if (p) {
+              batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', pid), {
+                stockQty: p.stockQty,
+                updatedAt: serverTimestamp(),
+              });
+            }
+          }
+          for (const iid of plan.touchedIngredientIds || []) {
+            const i = plan.updatedIngredients?.find((x) => x.id === iid);
+            if (i) {
+              batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', iid), {
+                stockQty: i.stockQty,
+                updatedAt: serverTimestamp(),
+              });
+            }
+          }
+          for (const mov of plan.movements || []) {
+            batch.set(
+              doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', mov.id),
+              movementToFirestoreDoc(mov, cloudWorkspaceId, uids, user.uid)
+            );
+          }
+          void batch.commit().catch(() => {
+            // Firestore offline cache will retry on reconnect
+          });
+        }
+
+        return { ok: true, sale: plan.sale };
+      };
+
+      if (!user || !cloudWorkspaceId) {
+        return applyLocalCheckout(false);
+      }
+
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return applyLocalCheckout(true);
+      }
+
+      const uids = activeMemberUids();
+      const salePath = `workspaces/${cloudWorkspaceId}/sales/${clientTxId}`;
+
+      try {
+        let txResult: SaleOperationResult = { ok: false, error: 'Checkout failed.' };
+
+        await runTransaction(db, async (tx) => {
+          // 1. Idempotency check on deterministic saleId = clientTxId
+          const saleRef = doc(db, 'workspaces', cloudWorkspaceId, 'sales', clientTxId);
+          const existingSaleSnap = await tx.get(saleRef);
+          if (existingSaleSnap.exists()) {
+            txResult = {
+              ok: true,
+              idempotentDuplicate: true,
+              sale: normalizeSale({
+                id: existingSaleSnap.id,
+                ...existingSaleSnap.data(),
+                createdAt: tsToIso(existingSaleSnap.data().createdAt),
+              } as Partial<Sale> & { id: string }),
+            };
+            return;
+          }
+
+          // 2. Read authoritative workspace negative-stock policy
+          const wsSnap = await tx.get(doc(db, 'workspaces', cloudWorkspaceId));
+          const allowNegativeStock = wsSnap.exists()
+            ? Boolean(wsSnap.data().allowNegativeStock ?? cur.settings.allowNegativeStock ?? false)
+            : Boolean(cur.settings.allowNegativeStock);
+
+          // 3. Read all referenced products inside transaction
+          const uniqueProdIds = Array.from(new Set(input.items.map((i) => i.productId)));
+          const liveProducts: Product[] = [];
+          const neededIngIds = new Set<string>();
+
+          for (const pid of uniqueProdIds) {
+            const pSnap = await tx.get(doc(db, 'workspaces', cloudWorkspaceId, 'products', pid));
+            if (pSnap.exists()) {
+              const norm = normalizeProduct({
+                id: pSnap.id,
+                ...pSnap.data(),
+              } as Partial<Product> & { id: string });
+              liveProducts.push(norm);
+              if (norm.productType === 'PREPARED_TO_ORDER') {
+                for (const r of norm.recipe || []) neededIngIds.add(r.ingredientId);
+                for (const v of norm.variants || []) {
+                  for (const r of v.recipe || []) neededIngIds.add(r.ingredientId);
+                }
+              }
+            }
+          }
+
+          // 4. Read all referenced ingredients inside transaction (ALL reads BEFORE any writes!)
+          const liveIngredients: Ingredient[] = [];
+          for (const iid of neededIngIds) {
+            const iSnap = await tx.get(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', iid));
+            if (iSnap.exists()) {
+              const d = iSnap.data();
+              liveIngredients.push({
+                id: iSnap.id,
+                name: String(d.name || ''),
+                nameVi: String(d.nameVi || ''),
+                unit: d.unit,
+                stockQty: Number(d.stockQty) || 0,
+                reorderLevel: Number(d.reorderLevel) || 0,
+                unitCostKhr: Number(d.unitCostKhr) || 0,
+                supplier: String(d.supplier || ''),
+              });
+            }
+          }
+
+          // 5. Run pure deterministic checkout planner against live server balances
+          const plan = buildCheckoutPlan({
+            clientTxId,
+            orderNumber,
+            saleDate: input.saleDate,
+            items: input.items,
+            paymentMethod: input.paymentMethod,
+            customerName: input.customerName,
+            note: input.note,
+            recordedBy: operator,
+            products: liveProducts,
+            ingredients: liveIngredients,
+            allowNegativeStock,
+          });
+
+          if (!plan.ok || !plan.sale) {
+            txResult = { ok: false, error: plan.error, shortages: plan.shortages };
+            return;
+          }
+
+          // 6. Atomic writes (sale + touched products + touched ingredients + stock movements)
+          tx.set(saleRef, saleToFirestoreDoc(plan.sale, cloudWorkspaceId, uids, user.uid));
+
+          for (const pid of plan.touchedProductIds || []) {
+            const updatedProd = plan.updatedProducts?.find((p) => p.id === pid);
+            if (!updatedProd) continue;
+            tx.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', pid), {
+              stockQty: updatedProd.stockQty,
+              updatedAt: serverTimestamp(),
+            });
+          }
+
+          for (const iid of plan.touchedIngredientIds || []) {
+            const updatedIng = plan.updatedIngredients?.find((i) => i.id === iid);
+            if (!updatedIng) continue;
+            tx.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', iid), {
+              stockQty: updatedIng.stockQty,
+              updatedAt: serverTimestamp(),
+            });
+          }
+
+          for (const mov of plan.movements || []) {
+            tx.set(
+              doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', mov.id),
+              movementToFirestoreDoc(mov, cloudWorkspaceId, uids, user.uid)
+            );
+          }
+
+          txResult = { ok: true, sale: plan.sale };
+        });
+
+        return txResult;
+      } catch (err) {
+        if (isOfflineNetworkError(err)) {
+          return applyLocalCheckout(true);
+        }
+        handleFirestoreError(err, OperationType.WRITE, salePath);
+        return { ok: false, error: 'Checkout failed while syncing to cloud.' };
+      }
+    },
+    [user, cloudWorkspaceId, activeMemberUids]
+  );
+
+  // Atomic Void (Restores EXACT original deduction snapshot — NEVER recalculates from edited recipes!)
+  const voidSale = useCallback(
+    async (saleId: string, reason?: string): Promise<OperationResult> => {
+      const cur = latestRef.current;
+      const operator = sanitizeString(cur.settings.activeOperator || 'Family', 80);
+
+      const applyLocal = (): OperationResult => {
+        const target = cur.sales.find((s) => s.id === saleId);
+        if (!target) return { ok: false, error: 'Order not found.' };
+        const plan = buildVoidPlan({
+          sale: target,
+          stockMovements: cur.stockMovements,
+          products: cur.products,
+          ingredients: cur.ingredients,
+          recordedBy: operator,
+          reason,
+        });
+        if (!plan.ok || !plan.updatedSale) {
+          return { ok: false, error: plan.error };
+        }
+        setSales((prev) => prev.map((s) => (s.id === saleId ? plan.updatedSale! : s)));
+        setProducts(plan.updatedProducts!);
+        setIngredients(plan.updatedIngredients!);
+        if (plan.movements && plan.movements.length > 0) {
+          setStockMovements((prev) => [...plan.movements!, ...prev]);
+        }
+        return { ok: true };
+      };
+
+      if (!user || !cloudWorkspaceId) {
+        return applyLocal();
+      }
+
+      const uids = activeMemberUids();
+      const salePath = `workspaces/${cloudWorkspaceId}/sales/${saleId}`;
+
+      try {
+        let txResult: OperationResult = { ok: false };
+        await runTransaction(db, async (tx) => {
+          const saleRef = doc(db, 'workspaces', cloudWorkspaceId, 'sales', saleId);
+          const saleSnap = await tx.get(saleRef);
+          if (!saleSnap.exists()) {
+            txResult = { ok: false, error: 'Order not found.' };
+            return;
+          }
+          const liveSale = normalizeSale({
+            id: saleSnap.id,
+            ...saleSnap.data(),
+            createdAt: tsToIso(saleSnap.data().createdAt),
+          } as Partial<Sale> & { id: string });
+
+          const prodIds = new Set<string>();
+          const ingIds = new Set<string>();
+
+          const hasSnapshots = liveSale.items.some((i) => i.deductions && i.deductions.length > 0);
+          if (hasSnapshots) {
+            for (const item of liveSale.items) {
+              for (const snap of item.deductions || []) {
+                if (snap.itemClassification === 'ingredient') ingIds.add(snap.itemId);
+                else prodIds.add(snap.itemId);
+              }
+            }
+          } else {
+            for (const m of cur.stockMovements.filter(
+              (mv) => mv.referenceId === saleId && mv.movementType === 'sale_consumption'
+            )) {
+              const id = m.itemId || m.ingredientId;
+              if ((m.itemClassification ?? 'ingredient') === 'ingredient') ingIds.add(id);
+              else prodIds.add(id);
+            }
+          }
+
+          const liveProducts: Product[] = [];
+          for (const pid of prodIds) {
+            const pSnap = await tx.get(doc(db, 'workspaces', cloudWorkspaceId, 'products', pid));
+            if (pSnap.exists()) {
+              liveProducts.push(
+                normalizeProduct({ id: pSnap.id, ...pSnap.data() } as Partial<Product> & { id: string })
+              );
+            }
+          }
+          const liveIngredients: Ingredient[] = [];
+          for (const iid of ingIds) {
+            const iSnap = await tx.get(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', iid));
+            if (iSnap.exists()) {
+              const d = iSnap.data();
+              liveIngredients.push({
+                id: iSnap.id,
+                name: String(d.name || ''),
+                nameVi: String(d.nameVi || ''),
+                unit: d.unit,
+                stockQty: Number(d.stockQty) || 0,
+                reorderLevel: Number(d.reorderLevel) || 0,
+                unitCostKhr: Number(d.unitCostKhr) || 0,
+                supplier: String(d.supplier || ''),
+              });
+            }
+          }
+
+          const plan = buildVoidPlan({
+            sale: liveSale,
+            stockMovements: cur.stockMovements,
+            products: liveProducts,
+            ingredients: liveIngredients,
+            recordedBy: operator,
+            reason,
+          });
+
+          if (!plan.ok || !plan.updatedSale) {
+            txResult = { ok: false, error: plan.error };
+            return;
+          }
+
+          tx.update(
+            saleRef,
+            stripUndefined({
+              status: 'voided',
+              refundedKhr: plan.updatedSale.refundedKhr ?? plan.updatedSale.totalKhr,
+              netTotalKhr: 0,
+              refundedCogsKhr: plan.updatedSale.refundedCogsKhr ?? plan.updatedSale.cogsKhr,
+              voidedAt: plan.updatedSale.voidedAt,
+              voidedBy: plan.updatedSale.voidedBy,
+              voidReason: plan.updatedSale.voidReason,
+              updatedAt: serverTimestamp(),
+            })
+          );
+
+          for (const pid of plan.touchedProductIds || []) {
+            const p = plan.updatedProducts?.find((x) => x.id === pid);
+            if (p) {
+              tx.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', pid), {
+                stockQty: p.stockQty,
+                updatedAt: serverTimestamp(),
+              });
+            }
+          }
+          for (const iid of plan.touchedIngredientIds || []) {
+            const i = plan.updatedIngredients?.find((x) => x.id === iid);
+            if (i) {
+              tx.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', iid), {
+                stockQty: i.stockQty,
+                updatedAt: serverTimestamp(),
+              });
+            }
+          }
+          for (const mov of plan.movements || []) {
+            tx.set(
+              doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', mov.id),
+              movementToFirestoreDoc(mov, cloudWorkspaceId, uids, user.uid)
+            );
+          }
+
+          txResult = { ok: true };
+        });
+
+        return txResult;
+      } catch (err) {
+        if (isOfflineNetworkError(err)) {
+          return applyLocal();
+        }
+        handleFirestoreError(err, OperationType.UPDATE, salePath);
+        return { ok: false, error: 'Failed to void order.' };
+      }
+    },
+    [user, cloudWorkspaceId, activeMemberUids]
+  );
+
+  // Atomic Partial Return (Restores exact proportional original deduction snapshot)
+  const returnSaleItems = useCallback(
+    async (input: ReturnSaleItemsInput): Promise<SaleOperationResult> => {
+      const cur = latestRef.current;
+      const operator = sanitizeString(cur.settings.activeOperator || 'Family', 80);
+
+      const applyLocal = (): SaleOperationResult => {
+        const target = cur.sales.find((s) => s.id === input.saleId);
+        if (!target) return { ok: false, error: 'Order not found.' };
+        const plan = buildPartialReturnPlan({
+          sale: target,
+          returnItems: input.returnItems,
+          products: cur.products,
+          ingredients: cur.ingredients,
+          recordedBy: operator,
+          reason: input.reason,
+        });
+        if (!plan.ok || !plan.updatedSale) {
+          return { ok: false, error: plan.error };
+        }
+        setSales((prev) => prev.map((s) => (s.id === input.saleId ? plan.updatedSale! : s)));
+        setProducts(plan.updatedProducts!);
+        setIngredients(plan.updatedIngredients!);
+        if (plan.movements && plan.movements.length > 0) {
+          setStockMovements((prev) => [...plan.movements!, ...prev]);
+        }
+        return { ok: true, sale: plan.updatedSale };
+      };
+
+      if (!user || !cloudWorkspaceId) {
+        return applyLocal();
+      }
+
+      const uids = activeMemberUids();
+      const salePath = `workspaces/${cloudWorkspaceId}/sales/${input.saleId}`;
+
+      try {
+        let txResult: SaleOperationResult = { ok: false };
+        await runTransaction(db, async (tx) => {
+          const saleRef = doc(db, 'workspaces', cloudWorkspaceId, 'sales', input.saleId);
+          const saleSnap = await tx.get(saleRef);
+          if (!saleSnap.exists()) {
+            txResult = { ok: false, error: 'Order not found.' };
+            return;
+          }
+          const liveSale = normalizeSale({
+            id: saleSnap.id,
+            ...saleSnap.data(),
+            createdAt: tsToIso(saleSnap.data().createdAt),
+          } as Partial<Sale> & { id: string });
+
+          const prodIds = new Set<string>();
+          const ingIds = new Set<string>();
+          for (const item of liveSale.items) {
+            for (const snap of item.deductions || []) {
+              if (snap.itemClassification === 'ingredient') ingIds.add(snap.itemId);
+              else prodIds.add(snap.itemId);
+            }
+          }
+
+          const liveProducts: Product[] = [];
+          for (const pid of prodIds) {
+            const pSnap = await tx.get(doc(db, 'workspaces', cloudWorkspaceId, 'products', pid));
+            if (pSnap.exists()) {
+              liveProducts.push(
+                normalizeProduct({ id: pSnap.id, ...pSnap.data() } as Partial<Product> & { id: string })
+              );
+            }
+          }
+          const liveIngredients: Ingredient[] = [];
+          for (const iid of ingIds) {
+            const iSnap = await tx.get(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', iid));
+            if (iSnap.exists()) {
+              const d = iSnap.data();
+              liveIngredients.push({
+                id: iSnap.id,
+                name: String(d.name || ''),
+                nameVi: String(d.nameVi || ''),
+                unit: d.unit,
+                stockQty: Number(d.stockQty) || 0,
+                reorderLevel: Number(d.reorderLevel) || 0,
+                unitCostKhr: Number(d.unitCostKhr) || 0,
+                supplier: String(d.supplier || ''),
+              });
+            }
+          }
+
+          const plan = buildPartialReturnPlan({
+            sale: liveSale,
+            returnItems: input.returnItems,
+            products: liveProducts,
+            ingredients: liveIngredients,
+            recordedBy: operator,
+            reason: input.reason,
+          });
+
+          if (!plan.ok || !plan.updatedSale) {
+            txResult = { ok: false, error: plan.error };
+            return;
+          }
+
+          tx.update(
+            saleRef,
+            stripUndefined({
+              status: plan.updatedSale.status,
+              items: plan.updatedSale.items,
+              refundedKhr: plan.updatedSale.refundedKhr ?? 0,
+              netTotalKhr: plan.updatedSale.netTotalKhr ?? 0,
+              refundedCogsKhr: plan.updatedSale.refundedCogsKhr ?? 0,
+              returns: plan.updatedSale.returns ?? [],
+              updatedAt: serverTimestamp(),
+            })
+          );
+
+          for (const pid of plan.touchedProductIds || []) {
+            const p = plan.updatedProducts?.find((x) => x.id === pid);
+            if (p) {
+              tx.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', pid), {
+                stockQty: p.stockQty,
+                updatedAt: serverTimestamp(),
+              });
+            }
+          }
+          for (const iid of plan.touchedIngredientIds || []) {
+            const i = plan.updatedIngredients?.find((x) => x.id === iid);
+            if (i) {
+              tx.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', iid), {
+                stockQty: i.stockQty,
+                updatedAt: serverTimestamp(),
+              });
+            }
+          }
+          for (const mov of plan.movements || []) {
+            tx.set(
+              doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', mov.id),
+              movementToFirestoreDoc(mov, cloudWorkspaceId, uids, user.uid)
+            );
+          }
+
+          txResult = { ok: true, sale: plan.updatedSale };
+        });
+
+        return txResult;
+      } catch (err) {
+        if (isOfflineNetworkError(err)) {
+          return applyLocal();
+        }
+        handleFirestoreError(err, OperationType.UPDATE, salePath);
+        return { ok: false, error: 'Failed to process partial return.' };
       }
     },
     [user, cloudWorkspaceId, activeMemberUids]
@@ -1306,6 +2167,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         vendor: sanitizeString(input.vendor, 100),
         note: sanitizeString(input.note, 200),
         linkedIngredientId: sanitizeString(input.linkedIngredientId || '', 128),
+        isInventoryPurchase: Boolean(input.isInventoryPurchase),
         recordedBy: operator,
         createdAt: new Date().toISOString(),
       };
@@ -1325,6 +2187,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               paymentMethod: clean.paymentMethod,
               vendor: clean.vendor,
               note: clean.note,
+              isInventoryPurchase: Boolean(clean.isInventoryPurchase),
               recordedBy: clean.recordedBy,
               updatedAt: serverTimestamp(),
             });
@@ -1341,6 +2204,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               vendor: clean.vendor,
               note: clean.note,
               linkedIngredientId: clean.linkedIngredientId,
+              isInventoryPurchase: Boolean(clean.isInventoryPurchase),
               recordedBy: clean.recordedBy,
               createdBy: user.uid,
               createdAt: serverTimestamp(),
@@ -1437,15 +2301,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const initiatedBeforeLogin = !activeUser;
 
       if (!activeUser) {
-        // Hold off auto-provisioning a personal workspace while we authenticate & join directly
         pendingDirectJoinRef.current = true;
         try {
-          // Prefer Anonymous Auth first: zero Google popup, works on Render/Netlify/Vercel/mobile PWAs immediately!
           activeUser = await signInAnonymouslyForSync(rememberMe);
         } catch (anonErr) {
           const anonCode = getFirebaseAuthErrorCode(anonErr);
           if (anonCode === 'auth/admin-restricted-operation' || anonCode === 'auth/operation-not-allowed') {
-            // Anonymous Auth is not toggled on yet in Firebase Console — seamlessly fall back to Google Sign-In
             try {
               const googleUser = await signInWithGoogleForSync(rememberMe, code);
               if (!googleUser) {
@@ -1495,7 +2356,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       try {
         const inviteSnap = await getDoc(doc(db, 'workspaceInvites', code));
         if (!inviteSnap.exists()) {
-          // If this was a returning user who mistyped a code, reconnect their existing workspace
           if (initiatedBeforeLogin) {
             try {
               const existingProfile = await getDoc(doc(db, 'users', activeUser.uid));
@@ -1522,7 +2382,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           100
         );
 
-        // Step 1: Join workspace members subcollection (Master Gate) — idempotent if already a member
         const memberRef = doc(db, 'workspaces', targetWsId, 'members', activeUser.uid);
         const existingMemberSnap = await getDoc(memberRef);
         if (!existingMemberSnap.exists()) {
@@ -1534,7 +2393,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           });
         }
 
-        // Step 2: Read workspace and append UID to memberUids & familyMembers if needed
         const wsSnap = await getDoc(doc(db, 'workspaces', targetWsId));
         if (wsSnap.exists()) {
           const wsData = wsSnap.data();
@@ -1555,7 +2413,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
         }
 
-        // Step 3: Create or update user profile pointing directly to the joined family workspace
         const userRef = doc(db, 'users', activeUser.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
@@ -1575,7 +2432,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
 
         setCloudWorkspaceId(targetWsId);
-        // Clean ?join=... query parameter from URL after successful connection
         if (typeof window !== 'undefined' && window.location.search.includes('join=')) {
           window.history.replaceState({}, '', window.location.pathname);
         }
@@ -1590,7 +2446,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [user, rememberMe]
   );
 
-  // Automatically complete any pending join code after a mobile/Render redirect sign-in
   useEffect(() => {
     if (!authReady || !isAllowedCloudUser(user) || !user) return;
     let pendingCode: string | null = null;
@@ -1616,6 +2471,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       products: latestRef.current.products,
       sales: latestRef.current.sales,
       expenses: latestRef.current.expenses,
+      purchases: latestRef.current.purchases,
       stockMovements: latestRef.current.stockMovements,
     };
     return JSON.stringify(payload, null, 2);
@@ -1627,12 +2483,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!parsed.settings || !Array.isArray(parsed.ingredients) || !Array.isArray(parsed.products)) {
         return { ok: false, error: 'Invalid JuiceFlow backup file.' };
       }
-      setSettings({ ...createInitialSettings(), ...parsed.settings });
+      setSettings(normalizeSettings(parsed.settings, createInitialSettings()));
       setIngredients(parsed.ingredients);
-      setProducts(parsed.products);
-      setSales(Array.isArray(parsed.sales) ? parsed.sales : []);
+      setProducts(parsed.products.map((p) => normalizeProduct(p)));
+      setSales(Array.isArray(parsed.sales) ? parsed.sales.map((s) => normalizeSale(s)) : []);
       setExpenses(Array.isArray(parsed.expenses) ? parsed.expenses : []);
-      setStockMovements(Array.isArray(parsed.stockMovements) ? parsed.stockMovements : []);
+      setPurchases(Array.isArray(parsed.purchases) ? parsed.purchases : []);
+      setStockMovements(
+        Array.isArray(parsed.stockMovements)
+          ? parsed.stockMovements.map((m) => normalizeStockMovement(m))
+          : []
+      );
       return { ok: true };
     } catch {
       return { ok: false, error: 'Could not parse JSON backup.' };
@@ -1645,6 +2506,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setProducts(seed.products);
     setSales(seed.sales);
     setExpenses(seed.expenses);
+    setPurchases(seed.purchases);
     setStockMovements(seed.stockMovements);
   }, []);
 
@@ -1656,6 +2518,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     products,
     sales,
     expenses,
+    purchases,
     stockMovements,
     user,
     authReady,
@@ -1672,9 +2535,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     saveIngredient,
     deleteIngredient,
     recordIngredientPurchase,
+    recordStockPurchase,
+    recordOpeningStock,
+    prepareBatchStock,
+    recordStockCount,
+    recordStockAdjustment,
     adjustIngredientStock,
     recordSale,
     voidSale,
+    returnSaleItems,
     saveExpense,
     deleteExpense,
     startQuickCloudSync,

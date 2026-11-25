@@ -3,8 +3,8 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
   ComposedChart,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,25 +12,32 @@ import {
 } from 'recharts';
 import { Download } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import type { ExpenseCategory } from '../types';
-import { daysAgoIso, downloadCsv, formatKhr, formatUsdRef, todayIso } from '../utils/format';
+import type { ExpenseCategory, PaymentMethod } from '../types';
+import {
+  BUSINESS_TIMEZONE,
+  daysAgoIso,
+  downloadCsv,
+  formatKhr,
+  formatUsdRef,
+  getPhnomPenhMonthBounds,
+  getPhnomPenhYearBounds,
+  todayIso,
+} from '../utils/format';
+import {
+  computeFinancialReport,
+  isLegacyInventoryPurchaseExpense,
+  type ReportGrouping,
+} from '../utils/inventoryEngine';
 
-type PeriodPreset = 'today' | '7d' | 'month' | 'lastMonth' | 'all' | 'custom';
-
-function getMonthBounds(offsetMonths: number): { start: string; end: string } {
-  const now = new Date();
-  const first = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1);
-  const last = new Date(now.getFullYear(), now.getMonth() + offsetMonths + 1, 0);
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return { start: fmt(first), end: fmt(last) };
-}
+type PeriodPreset = 'today' | '7d' | 'month' | 'lastMonth' | 'year' | 'all' | 'custom';
 
 export const ReportsView: React.FC = () => {
-  const { settings, sales, expenses, t } = useStore();
+  const { settings, sales, expenses, purchases, products, ingredients, t } = useStore();
   const isVi = settings.language === 'vi';
 
-  const [preset, setPreset] = useState<PeriodPreset>('7d');
+  const [preset, setPreset] = useState<PeriodPreset>('month');
+  const [grouping, setGrouping] = useState<ReportGrouping>('daily');
+  const [chartView, setChartView] = useState<'pnl' | 'cashflow'>('pnl');
   const [customStart, setCustomStart] = useState(daysAgoIso(29));
   const [customEnd, setCustomEnd] = useState(todayIso());
 
@@ -42,9 +49,11 @@ export const ReportsView: React.FC = () => {
       case '7d':
         return { start: daysAgoIso(6), end: today };
       case 'month':
-        return getMonthBounds(0);
+        return getPhnomPenhMonthBounds(0);
       case 'lastMonth':
-        return getMonthBounds(-1);
+        return getPhnomPenhMonthBounds(-1);
+      case 'year':
+        return getPhnomPenhYearBounds(0);
       case 'all':
         return { start: '2000-01-01', end: '2099-12-31' };
       case 'custom':
@@ -52,159 +61,142 @@ export const ReportsView: React.FC = () => {
     }
   }, [preset, customStart, customEnd]);
 
-  const report = useMemo(() => {
-    const validSales = sales.filter(
-      (s) =>
-        s.status === 'completed' &&
-        s.saleDate >= dateRange.start &&
-        s.saleDate <= dateRange.end
-    );
-    const periodExpenses = expenses.filter(
-      (e) => e.expenseDate >= dateRange.start && e.expenseDate <= dateRange.end
-    );
-    const bizExpenses = periodExpenses.filter((e) => e.scope === 'business');
-    const householdExpenses = periodExpenses.filter((e) => e.scope === 'household');
-
-    const grossRevenue = validSales.reduce((sum, s) => sum + s.totalKhr, 0);
-    const recipeCogs = validSales.reduce((sum, s) => sum + s.cogsKhr, 0);
-    const grossProfit = grossRevenue - recipeCogs;
-
-    const ingredientPurchases = bizExpenses
-      .filter((e) => e.category === 'ingredients')
-      .reduce((sum, e) => sum + e.amountKhr, 0);
-    const operatingExpenses = bizExpenses
-      .filter((e) => e.category !== 'ingredients')
-      .reduce((sum, e) => sum + e.amountKhr, 0);
-    const totalBusinessExpenses = ingredientPurchases + operatingExpenses;
-    const netProfitCash = grossRevenue - totalBusinessExpenses;
-    const netMarginPct = grossRevenue > 0 ? Math.round((netProfitCash / grossRevenue) * 100) : 0;
-    const householdTotal = householdExpenses.reduce((sum, e) => sum + e.amountKhr, 0);
-
-    // Daily trend
-    const dailyMap = new Map<string, { date: string; revenue: number; expenses: number; profit: number }>();
-    for (const s of validSales) {
-      const entry = dailyMap.get(s.saleDate) || {
-        date: s.saleDate,
-        revenue: 0,
-        expenses: 0,
-        profit: 0,
-      };
-      entry.revenue += s.totalKhr;
-      dailyMap.set(s.saleDate, entry);
+  const handlePresetChange = (next: PeriodPreset) => {
+    setPreset(next);
+    if (next === 'year') {
+      setGrouping('monthly');
+    } else if (next === 'all') {
+      setGrouping('monthly');
+    } else if (grouping === 'yearly') {
+      setGrouping('daily');
     }
-    for (const e of bizExpenses) {
-      const entry = dailyMap.get(e.expenseDate) || {
-        date: e.expenseDate,
-        revenue: 0,
-        expenses: 0,
-        profit: 0,
-      };
-      entry.expenses += e.amountKhr;
-      dailyMap.set(e.expenseDate, entry);
-    }
-    const dailySeries = Array.from(dailyMap.values())
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((row) => ({
-        ...row,
-        label: row.date.slice(5),
-        profit: row.revenue - row.expenses,
-      }));
+  };
 
-    // Expense breakdown by category
+  const report = useMemo(
+    () =>
+      computeFinancialReport({
+        sales,
+        expenses,
+        purchases,
+        products,
+        ingredients,
+        dateStart: dateRange.start,
+        dateEnd: dateRange.end,
+        grouping,
+      }),
+    [sales, expenses, purchases, products, ingredients, dateRange, grouping]
+  );
+
+  const operatingCategorySeries = useMemo(() => {
     const catMap = new Map<ExpenseCategory, number>();
-    for (const e of bizExpenses) {
+    for (const e of expenses) {
+      if (e.expenseDate < dateRange.start || e.expenseDate > dateRange.end) continue;
+      if (e.scope !== 'business' || isLegacyInventoryPurchaseExpense(e)) continue;
       catMap.set(e.category, (catMap.get(e.category) || 0) + e.amountKhr);
     }
-    const categorySeries = Array.from(catMap.entries())
+    return Array.from(catMap.entries())
       .map(([cat, amount]) => ({
         category: t.expenseCategories[cat],
         amount,
       }))
       .sort((a, b) => b.amount - a.amount);
+  }, [expenses, dateRange, t]);
 
-    // Product profitability
-    const prodMap = new Map<
-      string,
-      { name: string; units: number; revenue: number; cost: number; profit: number }
-    >();
-    for (const s of validSales) {
-      for (const item of s.items) {
-        const displayName = isVi ? item.productNameVi || item.productName : item.productName;
-        const entry = prodMap.get(item.productId) || {
-          name: displayName,
-          units: 0,
-          revenue: 0,
-          cost: 0,
-          profit: 0,
-        };
-        entry.units += item.quantity;
-        entry.revenue += item.lineTotalKhr;
-        entry.cost += item.unitCogsKhr * item.quantity;
-        entry.profit = entry.revenue - entry.cost;
-        prodMap.set(item.productId, entry);
-      }
-    }
-    const productRows = Array.from(prodMap.values()).sort((a, b) => b.revenue - a.revenue);
-
-    return {
-      orderCount: validSales.length,
-      grossRevenue,
-      recipeCogs,
-      grossProfit,
-      ingredientPurchases,
-      operatingExpenses,
-      totalBusinessExpenses,
-      netProfitCash,
-      netMarginPct,
-      householdTotal,
-      dailySeries,
-      categorySeries,
-      productRows,
-      validSales,
-      periodExpenses,
-    };
-  }, [sales, expenses, dateRange, t, isVi]);
+  const chartSeries = useMemo(
+    () =>
+      report.series.map((bucket) => ({
+        ...bucket,
+        label:
+          grouping === 'daily'
+            ? bucket.periodKey.slice(5)
+            : bucket.periodKey,
+        cashOutflowsKhr: bucket.inventoryPurchasesKhr + bucket.operatingExpensesKhr,
+        totalPnlCostKhr: bucket.cogsKhr + bucket.operatingExpensesKhr,
+      })),
+    [report.series, grouping]
+  );
 
   const handleExportCsv = () => {
+    const inRange = (d: string) => d >= dateRange.start && d <= dateRange.end;
+    const periodSales = sales.filter((s) => inRange(s.saleDate));
+    const periodPurchases = purchases.filter((p) => inRange(p.purchaseDate));
+    const periodExpenses = expenses.filter((e) => inRange(e.expenseDate));
+
     const rows: (string | number)[][] = [
       ['JuiceFlow Financial Report', settings.name],
       ['Period', `${dateRange.start} to ${dateRange.end}`],
+      ['Grouping', grouping],
+      ['Timezone', BUSINESS_TIMEZONE],
       ['Currency', 'KHR'],
       [],
-      ['PROFIT & LOSS SUMMARY', 'Amount (KHR)'],
-      [t.reports.grossRevenue, report.grossRevenue],
-      [t.reports.recipeCogs, report.recipeCogs],
-      [t.reports.grossProfit, report.grossProfit],
-      [t.reports.ingredientPurchases, report.ingredientPurchases],
-      [t.reports.operatingExpenses, report.operatingExpenses],
-      [t.reports.totalBusinessExpenses, report.totalBusinessExpenses],
-      [t.reports.netProfitCash, report.netProfitCash],
-      [t.reports.householdSummary, report.householdTotal],
+      ['ACCRUAL PROFIT & LOSS STATEMENT (NO DOUBLE-COUNTING)', 'Amount (KHR)'],
+      ['Gross Sales', report.grossSalesKhr],
+      ['Returns & Refunds', -report.returnsRefundsKhr],
+      ['Net Revenue', report.netRevenueKhr],
+      ['Cost of Goods Sold (Net of Returns)', -report.netCogsKhr],
+      ['Gross Profit', report.grossProfitKhr],
+      ['Gross Margin %', `${report.grossMarginPct}%`],
+      ['Operating Expenses (Excl. Inventory Purchases)', -report.operatingExpensesKhr],
+      ['Net Profit (Accrual)', report.netProfitKhr],
+      ['Net Margin %', `${report.netMarginPct}%`],
+      ['Voided Orders (Excluded)', report.voidedOrdersCount],
       [],
-      ['SALES LEDGER', 'Date', 'Order #', 'Payment', 'Recorded By', 'COGS (KHR)', 'Total (KHR)'],
-      ...report.validSales.map((s) => [
+      ['CASH FLOW STATEMENT', 'Amount (KHR)'],
+      ['Sales Cash Inflows (Net)', report.cashInflowsKhr],
+      ['  Cash', report.cashInflowsByMethod.cash],
+      ['  KHQR', report.cashInflowsByMethod.khqr],
+      ['  ABA', report.cashInflowsByMethod.aba],
+      ['  Wing', report.cashInflowsByMethod.wing],
+      ['Inventory Purchases Cash Outflow', -report.inventoryPurchasesCashOutKhr],
+      ['Operating Expenses Cash Outflow', -report.operatingExpensesCashOutKhr],
+      ['Business Net Cash Flow', report.businessNetCashFlowKhr],
+      ['Household / Personal Outflows (Tracked Separately)', -report.householdExpensesCashOutKhr],
+      [],
+      ['CURRENT INVENTORY VALUATION (ASSET BALANCE)', 'Amount (KHR)'],
+      ['Packaged Products Valuation', report.inventoryValuation.packagedValueKhr],
+      ['Raw Ingredients Valuation', report.inventoryValuation.ingredientsValueKhr],
+      ['Prepared Stock Valuation', report.inventoryValuation.preparedStockValueKhr],
+      ['Total Inventory Valuation', report.inventoryValuation.totalInventoryValueKhr],
+      [],
+      ['SALES LEDGER', 'Date', 'Order #', 'Status', 'Payment', 'Gross (KHR)', 'Refunded (KHR)', 'Net (KHR)', 'Net COGS (KHR)'],
+      ...periodSales.map((s) => [
         'SALE',
         s.saleDate,
         s.orderNumber,
+        s.status,
         s.paymentMethod,
-        s.recordedBy,
-        s.cogsKhr,
         s.totalKhr,
+        s.refundedKhr ?? 0,
+        s.netTotalKhr ?? s.totalKhr,
+        Math.max(0, s.cogsKhr - (s.refundedCogsKhr ?? 0)),
       ]),
       [],
-      ['EXPENSES', 'Date', 'Title', 'Scope', 'Category', 'Recorded By', 'Amount (KHR)'],
-      ...report.periodExpenses.map((e) => [
+      ['INVENTORY PURCHASES', 'Date', 'Item', 'Classification', 'Qty', 'Unit', 'Supplier', 'Payment', 'Total Cost (KHR)'],
+      ...periodPurchases.map((p) => [
+        'PURCHASE',
+        p.purchaseDate,
+        p.itemName,
+        p.itemClassification,
+        p.quantity,
+        p.unit,
+        p.supplier,
+        p.paymentMethod,
+        p.totalCostKhr,
+      ]),
+      [],
+      ['EXPENSES', 'Date', 'Title', 'Scope', 'Category', 'Inventory Purchase?', 'Amount (KHR)'],
+      ...periodExpenses.map((e) => [
         'EXPENSE',
         e.expenseDate,
         e.title,
         e.scope,
         e.category,
-        e.recordedBy,
+        isLegacyInventoryPurchaseExpense(e) ? 'YES (Cash Flow Only)' : 'NO (Operating)',
         e.amountKhr,
       ]),
     ];
 
-    downloadCsv(`juiceflow-report-${dateRange.start}-to-${dateRange.end}.csv`, rows);
+    downloadCsv(`juiceflow-financials-${dateRange.start}-to-${dateRange.end}.csv`, rows);
   };
 
   return (
@@ -215,7 +207,11 @@ export const ReportsView: React.FC = () => {
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 tracking-tight">
             {t.reports.title}
           </h1>
-          <p className="mt-1 text-sm text-stone-500">{t.reports.subtitle}</p>
+          <p className="mt-1 text-sm text-stone-500">
+            {isVi
+              ? `Báo cáo Lãi/Lỗ dồn tích, Dòng tiền & Giá trị tồn kho · Múi giờ ${BUSINESS_TIMEZONE}`
+              : `Accrual P&L, Cash Flow & 3-Tier Inventory Valuation · ${BUSINESS_TIMEZONE}`}
+          </p>
         </div>
 
         <button
@@ -228,36 +224,67 @@ export const ReportsView: React.FC = () => {
         </button>
       </div>
 
-      {/* Period Filter Bar */}
-      <div className="bg-white border border-stone-200 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {(
-            [
-              ['today', t.common.today],
-              ['7d', t.common.last7Days],
-              ['month', t.common.thisMonth],
-              ['lastMonth', t.common.lastMonth],
-              ['all', t.common.allTime],
-              ['custom', t.common.customRange],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setPreset(key)}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-                preset === key
-                  ? 'bg-[#0F5C43] text-white'
-                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+      {/* Period & Grouping Filter Bar */}
+      <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                ['today', t.common.today],
+                ['7d', t.common.last7Days],
+                ['month', t.common.thisMonth],
+                ['lastMonth', t.common.lastMonth],
+                ['year', isVi ? 'Năm nay' : 'This Year'],
+                ['all', t.common.allTime],
+                ['custom', t.common.customRange],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handlePresetChange(key)}
+                className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                  preset === key
+                    ? 'bg-[#0F5C43] text-white'
+                    : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 self-start lg:self-auto">
+            <span className="text-xs text-stone-500 whitespace-nowrap">
+              {isVi ? 'Nhóm theo:' : 'Group by:'}
+            </span>
+            <div className="inline-flex items-center p-1 bg-stone-100 rounded-lg">
+              {(
+                [
+                  ['daily', isVi ? 'Ngày' : 'Daily'],
+                  ['monthly', isVi ? 'Tháng' : 'Monthly'],
+                  ['yearly', isVi ? 'Năm' : 'Yearly'],
+                ] as const
+              ).map(([grp, lbl]) => (
+                <button
+                  key={grp}
+                  type="button"
+                  onClick={() => setGrouping(grp)}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+                    grouping === grp
+                      ? 'bg-white text-stone-900 shadow-xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {preset === 'custom' && (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs pt-2 border-t border-stone-100">
             <label className="text-stone-500">{t.reports.from}</label>
             <input
               type="date"
@@ -276,61 +303,142 @@ export const ReportsView: React.FC = () => {
         )}
       </div>
 
-      {/* P&L Statement + Daily Trend */}
+      {/* 4-Column Executive Reconciliation Strip */}
+      <div className="bg-white border border-stone-200 rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-stone-200">
+        <div className="p-5">
+          <p className="text-xs font-medium text-stone-500">
+            {isVi ? 'Doanh thu thuần' : 'Net Revenue'}
+          </p>
+          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900">
+            {formatKhr(report.netRevenueKhr)}
+          </p>
+          <p className="mt-1 text-xs text-stone-500 font-mono-num">
+            {report.completedOrderCount} {t.dashboard.ordersCount} · {report.unitsSoldNet}{' '}
+            {isVi ? 'SP thuần' : 'net units'}
+          </p>
+        </div>
+
+        <div className="p-5">
+          <p className="text-xs font-medium text-stone-500">
+            {isVi ? 'Lãi ròng (Dồn tích P&L)' : 'Accrual Net Profit'}
+          </p>
+          <p
+            className={`mt-1.5 font-mono-num text-2xl font-semibold ${
+              report.netProfitKhr >= 0 ? 'text-emerald-700' : 'text-red-700'
+            }`}
+          >
+            {formatKhr(report.netProfitKhr)}
+          </p>
+          <p className="mt-1 text-xs text-stone-500 font-mono-num">
+            {t.reports.netMargin}: {report.netMarginPct}% ·{' '}
+            {formatUsdRef(report.netProfitKhr, settings.usdRate)}
+          </p>
+        </div>
+
+        <div className="p-5">
+          <p className="text-xs font-medium text-stone-500">
+            {isVi ? 'Dòng tiền thuần kinh doanh' : 'Business Net Cash Flow'}
+          </p>
+          <p
+            className={`mt-1.5 font-mono-num text-2xl font-semibold ${
+              report.businessNetCashFlowKhr >= 0 ? 'text-stone-900' : 'text-amber-700'
+            }`}
+          >
+            {formatKhr(report.businessNetCashFlowKhr)}
+          </p>
+          <p className="mt-1 text-xs text-stone-500 font-mono-num">
+            {isVi ? 'Nhập kho:' : 'Stock-in:'} -{formatKhr(report.inventoryPurchasesCashOutKhr)}
+          </p>
+        </div>
+
+        <div className="p-5">
+          <p className="text-xs font-medium text-stone-500">
+            {isVi ? 'Giá trị tồn kho hiện tại' : 'Current Inventory Valuation'}
+          </p>
+          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-[#0F5C43]">
+            {formatKhr(report.inventoryValuation.totalInventoryValueKhr)}
+          </p>
+          <p className="mt-1 text-xs text-stone-500 font-mono-num">
+            {formatUsdRef(report.inventoryValuation.totalInventoryValueKhr, settings.usdRate)} ·{' '}
+            {isVi ? 'Tài sản (không phải chi phí)' : 'Asset balance'}
+          </p>
+        </div>
+      </div>
+
+      {/* Section 1 & 2: Accrual P&L Statement + Cash Flow Statement Side-by-Side */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Structured P&L Ledger */}
-        <div className="lg:col-span-5 bg-white border border-stone-200 rounded-xl p-6 flex flex-col justify-between">
+        {/* Accrual P&L Ledger */}
+        <div className="lg:col-span-6 bg-white border border-stone-200 rounded-xl p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-baseline justify-between gap-2 pb-4 border-b border-stone-200">
-              <h2 className="font-display text-lg font-semibold text-stone-900">
-                {t.reports.pnlStatement}
-              </h2>
-              <span className="text-xs font-mono-num text-stone-500">
-                {report.orderCount} {t.dashboard.ordersCount}
-              </span>
+              <div>
+                <h2 className="font-display text-lg font-semibold text-stone-900">
+                  {isVi ? '1. Báo cáo Lãi / Lỗ (Cơ sở dồn tích)' : '1. Accrual Profit & Loss Statement'}
+                </h2>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  {isVi
+                    ? 'Chỉ tính Giá vốn hàng đã bán (COGS) & Chi phí vận hành — không tính trùng tiền nhập kho'
+                    : 'Matches COGS of sold items against operating expenses — zero double-counting of stock purchases'}
+                </p>
+              </div>
             </div>
 
             <dl className="divide-y divide-stone-100 text-sm mt-2">
               <div className="py-3 flex justify-between gap-4">
                 <dt className="text-stone-700 font-medium">{t.reports.grossRevenue}</dt>
                 <dd className="font-mono-num font-semibold text-stone-900 whitespace-nowrap">
-                  {formatKhr(report.grossRevenue)}
+                  {formatKhr(report.grossSalesKhr)}
                 </dd>
               </div>
               <div className="py-2.5 flex justify-between gap-4 text-xs">
-                <dt className="text-stone-500 pl-3">{t.reports.recipeCogs}</dt>
+                <dt className="text-stone-500 pl-3">
+                  {isVi ? 'Trả hàng & Hoàn tiền' : 'Less: Returns & Refunds'}
+                </dt>
                 <dd className="font-mono-num text-stone-600 whitespace-nowrap">
-                  -{formatKhr(report.recipeCogs)}
+                  -{formatKhr(report.returnsRefundsKhr)}
                 </dd>
               </div>
               <div className="py-3 flex justify-between gap-4">
-                <dt className="text-stone-700 font-medium">{t.reports.grossProfit}</dt>
-                <dd className="font-mono-num font-semibold text-emerald-700 whitespace-nowrap">
-                  {formatKhr(report.grossProfit)}
-                </dd>
-              </div>
-              <div className="py-2.5 flex justify-between gap-4 text-xs">
-                <dt className="text-stone-500 pl-3">{t.reports.ingredientPurchases}</dt>
-                <dd className="font-mono-num text-stone-600 whitespace-nowrap">
-                  -{formatKhr(report.ingredientPurchases)}
-                </dd>
-              </div>
-              <div className="py-2.5 flex justify-between gap-4 text-xs">
-                <dt className="text-stone-500 pl-3">{t.reports.operatingExpenses}</dt>
-                <dd className="font-mono-num text-stone-600 whitespace-nowrap">
-                  -{formatKhr(report.operatingExpenses)}
-                </dd>
-              </div>
-              <div className="py-3 flex justify-between gap-4">
-                <dt className="text-stone-700 font-medium">{t.reports.totalBusinessExpenses}</dt>
+                <dt className="text-stone-800 font-semibold">
+                  {isVi ? 'Doanh thu thuần' : 'Net Revenue'}
+                </dt>
                 <dd className="font-mono-num font-semibold text-stone-900 whitespace-nowrap">
-                  -{formatKhr(report.totalBusinessExpenses)}
+                  {formatKhr(report.netRevenueKhr)}
+                </dd>
+              </div>
+              <div className="py-2.5 flex justify-between gap-4 text-xs">
+                <dt className="text-stone-500 pl-3">
+                  {isVi ? 'Giá vốn hàng bán thuần (COGS)' : 'Less: Cost of Goods Sold (Net COGS)'}
+                </dt>
+                <dd className="font-mono-num text-stone-600 whitespace-nowrap">
+                  -{formatKhr(report.netCogsKhr)}
+                </dd>
+              </div>
+              <div className="py-3 flex justify-between gap-4">
+                <div>
+                  <dt className="text-stone-800 font-medium">{t.reports.grossProfit}</dt>
+                  <span className="text-[11px] font-mono-num text-stone-400">
+                    {isVi ? 'Biên gộp' : 'Gross margin'}: {report.grossMarginPct}%
+                  </span>
+                </div>
+                <dd className="font-mono-num font-semibold text-emerald-700 whitespace-nowrap">
+                  {formatKhr(report.grossProfitKhr)}
+                </dd>
+              </div>
+              <div className="py-2.5 flex justify-between gap-4 text-xs">
+                <dt className="text-stone-500 pl-3">
+                  {isVi
+                    ? 'Chi phí vận hành (không gồm nhập kho)'
+                    : 'Less: Operating Expenses (excl. stock purchases)'}
+                </dt>
+                <dd className="font-mono-num text-stone-600 whitespace-nowrap">
+                  -{formatKhr(report.operatingExpensesKhr)}
                 </dd>
               </div>
               <div className="py-4 flex justify-between items-baseline gap-4 border-t-2 border-stone-200">
                 <div>
                   <dt className="font-display text-base font-bold text-stone-900">
-                    {t.reports.netProfitCash}
+                    {isVi ? 'Lợi nhuận ròng (P&L)' : 'Net Profit (Accrual)'}
                   </dt>
                   <span className="text-xs text-stone-500 font-mono-num">
                     {t.reports.netMargin}: {report.netMarginPct}%
@@ -339,97 +447,282 @@ export const ReportsView: React.FC = () => {
                 <div className="text-right">
                   <dd
                     className={`font-mono-num text-xl font-bold whitespace-nowrap ${
-                      report.netProfitCash >= 0 ? 'text-emerald-700' : 'text-red-700'
+                      report.netProfitKhr >= 0 ? 'text-emerald-700' : 'text-red-700'
                     }`}
                   >
-                    {formatKhr(report.netProfitCash)}
+                    {formatKhr(report.netProfitKhr)}
                   </dd>
                   <span className="text-xs font-mono-num text-stone-400">
-                    {formatUsdRef(report.netProfitCash, settings.usdRate)}
+                    {formatUsdRef(report.netProfitKhr, settings.usdRate)}
                   </span>
                 </div>
               </div>
             </dl>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-stone-200 space-y-2">
-            <div className="flex justify-between text-xs">
-              <span className="text-amber-800 font-medium">{t.reports.householdSummary}</span>
-              <span className="font-mono-num font-semibold text-amber-800">
-                {formatKhr(report.householdTotal)}
-              </span>
-            </div>
-            <p className="text-[11px] text-stone-500 leading-relaxed">
-              {t.reports.basisExplanation}
+          {report.voidedOrdersCount > 0 && (
+            <p className="mt-3 pt-3 border-t border-stone-100 text-xs text-stone-500 font-mono-num">
+              {isVi
+                ? `Đã loại trừ ${report.voidedOrdersCount} đơn hủy (${formatKhr(report.voidedTotalKhr)}).`
+                : `Excluded ${report.voidedOrdersCount} voided order(s) totaling ${formatKhr(report.voidedTotalKhr)}.`}
             </p>
-          </div>
+          )}
         </div>
 
-        {/* Daily Trend Chart */}
-        <div className="lg:col-span-7 bg-white border border-stone-200 rounded-xl p-6 flex flex-col">
-          <h2 className="font-display text-lg font-semibold text-stone-900 mb-5">
-            {t.reports.dailyTrend}
-          </h2>
-          {report.dailySeries.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-sm text-stone-500 py-12">
-              {t.common.noResults}
+        {/* Cash Flow Statement + Payment Method Breakdown */}
+        <div className="lg:col-span-6 bg-white border border-stone-200 rounded-xl p-6 flex flex-col justify-between">
+          <div>
+            <div className="pb-4 border-b border-stone-200">
+              <h2 className="font-display text-lg font-semibold text-stone-900">
+                {isVi ? '2. Báo cáo Dòng tiền (Tiền thực thu / thực chi)' : '2. Cash Flow Statement'}
+              </h2>
+              <p className="text-xs text-stone-500 mt-0.5">
+                {isVi
+                  ? 'Theo dõi tiền vào từ bán hàng và tiền ra cho nhập hàng + vận hành trong kỳ'
+                  : 'Tracks actual cash collected from sales minus cash paid for stock restocks and operating expenses'}
+              </p>
             </div>
-          ) : (
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={report.dailySeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 12, fill: '#78716C' }}
-                    axisLine={{ stroke: '#E7E5E4' }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: '#78716C' }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
-                  />
-                  <Tooltip
-                    formatter={(val) => formatKhr(Number(val ?? 0))}
-                    contentStyle={{
-                      borderRadius: '8px',
-                      border: '1px solid #E7E5E4',
-                      boxShadow: 'none',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <Bar
-                    dataKey="revenue"
-                    name={t.dashboard.revenueSeries}
-                    fill="#0F5C43"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={26}
-                  />
-                  <Bar
-                    dataKey="expenses"
-                    name={t.dashboard.expenseSeries}
-                    fill="#D9822B"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={26}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="profit"
-                    name={t.reports.netProfitCash}
-                    stroke="#1C1917"
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+
+            <dl className="divide-y divide-stone-100 text-sm mt-2">
+              <div className="py-3 flex justify-between gap-4">
+                <dt className="text-stone-800 font-medium">
+                  {isVi ? 'Tiền thu bán hàng (sau hoàn tiền)' : 'Sales Cash Inflows (Net)'}
+                </dt>
+                <dd className="font-mono-num font-semibold text-emerald-700 whitespace-nowrap">
+                  +{formatKhr(report.cashInflowsKhr)}
+                </dd>
+              </div>
+
+              <div className="py-2.5 pl-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                {(['cash', 'khqr', 'aba', 'wing'] as PaymentMethod[]).map((pm) => (
+                  <div key={pm} className="bg-stone-50 border border-stone-200/70 rounded-lg px-2.5 py-1.5">
+                    <span className="block text-[11px] text-stone-500">{t.paymentMethods[pm]}</span>
+                    <span className="font-mono-num font-semibold text-stone-900">
+                      {formatKhr(report.cashInflowsByMethod[pm])}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="py-3 flex justify-between gap-4">
+                <dt className="text-stone-700">
+                  {isVi ? 'Tiền chi nhập kho (Hàng hóa & Nguyên liệu)' : 'Inventory Purchases Paid'}
+                </dt>
+                <dd className="font-mono-num font-medium text-stone-900 whitespace-nowrap">
+                  -{formatKhr(report.inventoryPurchasesCashOutKhr)}
+                </dd>
+              </div>
+
+              <div className="py-3 flex justify-between gap-4">
+                <dt className="text-stone-700">
+                  {isVi ? 'Tiền chi vận hành (Điện, thuê, đóng gói...)' : 'Operating Expenses Paid'}
+                </dt>
+                <dd className="font-mono-num font-medium text-stone-900 whitespace-nowrap">
+                  -{formatKhr(report.operatingExpensesCashOutKhr)}
+                </dd>
+              </div>
+
+              <div className="py-4 flex justify-between items-baseline gap-4 border-t-2 border-stone-200">
+                <div>
+                  <dt className="font-display text-base font-bold text-stone-900">
+                    {isVi ? 'Dòng tiền thuần kinh doanh' : 'Business Net Cash Flow'}
+                  </dt>
+                  <span className="text-xs text-stone-500">
+                    {isVi ? 'Thu bán hàng − Nhập kho − Chi vận hành' : 'Sales In − Stock Purchases − OpEx'}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <dd
+                    className={`font-mono-num text-xl font-bold whitespace-nowrap ${
+                      report.businessNetCashFlowKhr >= 0 ? 'text-emerald-700' : 'text-amber-700'
+                    }`}
+                  >
+                    {formatKhr(report.businessNetCashFlowKhr)}
+                  </dd>
+                  <span className="text-xs font-mono-num text-stone-400">
+                    {formatUsdRef(report.businessNetCashFlowKhr, settings.usdRate)}
+                  </span>
+                </div>
+              </div>
+            </dl>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-stone-200 flex items-center justify-between text-xs">
+            <span className="text-amber-800 font-medium">{t.reports.householdSummary}</span>
+            <span className="font-mono-num font-semibold text-amber-800">
+              {formatKhr(report.householdExpensesCashOutKhr)}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Product Profitability + Expense Breakdown */}
+      {/* Section 3: 3-Tier Inventory Valuation */}
+      <div className="bg-white border border-stone-200 rounded-xl p-6">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 pb-4 border-b border-stone-200">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-stone-900">
+              {isVi ? '3. Định giá Tồn kho hiện tại (3 nhóm hàng)' : '3. Current Inventory Valuation (3 Tiers)'}
+            </h2>
+            <p className="text-xs text-stone-500 mt-0.5">
+              {isVi
+                ? 'Tồn kho đầu kỳ (Opening Stock) và hàng chưa bán được ghi nhận tại đây như tài sản, không tính là chi phí.'
+                : 'Opening stock balances and unsold inventory are valued here as assets — never counted as operating expenses.'}
+            </p>
+          </div>
+          <span className="font-mono-num text-base font-bold text-[#0F5C43] whitespace-nowrap">
+            {formatKhr(report.inventoryValuation.totalInventoryValueKhr)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+          <div className="border border-stone-200 rounded-lg p-4">
+            <p className="text-xs font-medium text-stone-500">
+              {isVi ? 'Sản phẩm đóng gói' : 'Packaged Products'}
+            </p>
+            <p className="mt-1.5 font-mono-num text-lg font-semibold text-stone-900">
+              {formatKhr(report.inventoryValuation.packagedValueKhr)}
+            </p>
+            <p className="text-[11px] font-mono-num text-stone-400 mt-0.5">
+              {formatUsdRef(report.inventoryValuation.packagedValueKhr, settings.usdRate)}
+            </p>
+          </div>
+
+          <div className="border border-stone-200 rounded-lg p-4">
+            <p className="text-xs font-medium text-stone-500">
+              {isVi ? 'Nguyên liệu thô' : 'Ingredients / Raw Materials'}
+            </p>
+            <p className="mt-1.5 font-mono-num text-lg font-semibold text-stone-900">
+              {formatKhr(report.inventoryValuation.ingredientsValueKhr)}
+            </p>
+            <p className="text-[11px] font-mono-num text-stone-400 mt-0.5">
+              {formatUsdRef(report.inventoryValuation.ingredientsValueKhr, settings.usdRate)}
+            </p>
+          </div>
+
+          <div className="border border-stone-200 rounded-lg p-4">
+            <p className="text-xs font-medium text-stone-500">
+              {isVi ? 'Hàng pha chế sẵn (Thành phẩm)' : 'Prepared Stock / Finished Goods'}
+            </p>
+            <p className="mt-1.5 font-mono-num text-lg font-semibold text-stone-900">
+              {formatKhr(report.inventoryValuation.preparedStockValueKhr)}
+            </p>
+            <p className="text-[11px] font-mono-num text-stone-400 mt-0.5">
+              {formatUsdRef(report.inventoryValuation.preparedStockValueKhr, settings.usdRate)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Trend Chart */}
+      <div className="bg-white border border-stone-200 rounded-xl p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-stone-900">
+              {chartView === 'pnl'
+                ? isVi
+                  ? 'Xu hướng Doanh thu, Chi phí & Lãi ròng (P&L)'
+                  : 'Accrual Revenue, Costs & Net Profit Trend'
+                : isVi
+                  ? 'Xu hướng Dòng tiền vào & ra'
+                  : 'Cash Inflows vs Cash Outflows Trend'}
+            </h2>
+          </div>
+
+          <div className="inline-flex items-center p-1 bg-stone-100 rounded-lg self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setChartView('pnl')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                chartView === 'pnl' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600'
+              }`}
+            >
+              {isVi ? 'Lãi / Lỗ (P&L)' : 'Accrual P&L'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setChartView('cashflow')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                chartView === 'cashflow' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600'
+              }`}
+            >
+              {isVi ? 'Dòng tiền' : 'Cash Flow'}
+            </button>
+          </div>
+        </div>
+
+        {chartSeries.length === 0 ? (
+          <div className="py-12 text-center text-sm text-stone-500">{t.common.noResults}</div>
+        ) : (
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 12, fill: '#78716C' }}
+                  axisLine={{ stroke: '#E7E5E4' }}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#78716C' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+                />
+                <Tooltip
+                  formatter={(val) => formatKhr(Number(val ?? 0))}
+                  contentStyle={{
+                    borderRadius: '8px',
+                    border: '1px solid #E7E5E4',
+                    boxShadow: 'none',
+                    fontSize: '12px',
+                  }}
+                />
+                <Bar
+                  dataKey="netRevenueKhr"
+                  name={isVi ? 'Doanh thu thuần' : 'Net Revenue'}
+                  fill="#0F5C43"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={28}
+                />
+                <Bar
+                  dataKey={chartView === 'pnl' ? 'totalPnlCostKhr' : 'cashOutflowsKhr'}
+                  name={
+                    chartView === 'pnl'
+                      ? isVi
+                        ? 'COGS + Chi phí vận hành'
+                        : 'COGS + Operating Expenses'
+                      : isVi
+                        ? 'Nhập kho + Chi vận hành'
+                        : 'Stock Purchases + OpEx'
+                  }
+                  fill="#D9822B"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={28}
+                />
+                <Line
+                  type="monotone"
+                  dataKey={chartView === 'pnl' ? 'netProfitKhr' : 'businessNetCashFlowKhr'}
+                  name={
+                    chartView === 'pnl'
+                      ? isVi
+                        ? 'Lãi ròng P&L'
+                        : 'Net Profit'
+                      : isVi
+                        ? 'Dòng tiền thuần'
+                        : 'Net Cash Flow'
+                  }
+                  stroke="#1C1917"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* Product Profitability + Operating Expense Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <div className="lg:col-span-7 bg-white border border-stone-200 rounded-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-200">
@@ -437,7 +730,7 @@ export const ReportsView: React.FC = () => {
               {t.reports.productPerformance}
             </h2>
           </div>
-          {report.productRows.length === 0 ? (
+          {report.productProfitability.length === 0 ? (
             <p className="p-8 text-center text-sm text-stone-500">{t.common.noResults}</p>
           ) : (
             <div className="overflow-x-auto">
@@ -445,27 +738,40 @@ export const ReportsView: React.FC = () => {
                 <thead>
                   <tr className="border-b border-stone-200 text-xs text-stone-500 bg-stone-50/70">
                     <th className="py-3 px-6 font-medium">{t.nav.products}</th>
-                    <th className="py-3 px-4 font-medium text-right">{t.reports.unitsSold}</th>
-                    <th className="py-3 px-4 font-medium text-right">{t.reports.revenue}</th>
-                    <th className="py-3 px-4 font-medium text-right">{t.reports.estCost}</th>
+                    <th className="py-3 px-3 font-medium text-right">{t.reports.unitsSold}</th>
+                    <th className="py-3 px-3 font-medium text-right">{t.reports.revenue}</th>
+                    <th className="py-3 px-3 font-medium text-right">COGS</th>
                     <th className="py-3 px-6 font-medium text-right">{t.reports.profit}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 text-sm">
-                  {report.productRows.map((row) => (
-                    <tr key={row.name}>
-                      <td className="py-3 px-6 font-medium text-stone-900">{row.name}</td>
-                      <td className="py-3 px-4 text-right font-mono-num text-stone-700">
-                        {row.units}
+                  {report.productProfitability.map((row) => (
+                    <tr key={row.productId}>
+                      <td className="py-3 px-6">
+                        <p className="font-medium text-stone-900">
+                          {isVi ? row.nameVi || row.name : row.name}
+                        </p>
+                        <p className="text-[11px] text-stone-500">
+                          {t.productTypes[row.productType]}
+                          {row.returnedQty > 0
+                            ? ` · ${row.returnedQty} ${isVi ? 'đã trả' : 'returned'}`
+                            : ''}
+                        </p>
                       </td>
-                      <td className="py-3 px-4 text-right font-mono-num font-medium text-stone-900">
-                        {formatKhr(row.revenue)}
+                      <td className="py-3 px-3 text-right font-mono-num text-stone-700">
+                        {row.netQty}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono-num text-xs text-stone-500">
-                        {formatKhr(row.cost)}
+                      <td className="py-3 px-3 text-right font-mono-num font-medium text-stone-900">
+                        {formatKhr(row.netRevenueKhr)}
                       </td>
-                      <td className="py-3 px-6 text-right font-mono-num font-semibold text-emerald-700">
-                        {formatKhr(row.profit)}
+                      <td className="py-3 px-3 text-right font-mono-num text-xs text-stone-500">
+                        {formatKhr(row.netCogsKhr)}
+                      </td>
+                      <td className="py-3 px-6 text-right font-mono-num">
+                        <span className="font-semibold text-emerald-700 block">
+                          {formatKhr(row.grossProfitKhr)}
+                        </span>
+                        <span className="text-[11px] text-stone-400">{row.marginPct}%</span>
                       </td>
                     </tr>
                   ))}
@@ -476,10 +782,17 @@ export const ReportsView: React.FC = () => {
         </div>
 
         <div className="lg:col-span-5 bg-white border border-stone-200 rounded-xl p-6 flex flex-col">
-          <h2 className="font-display text-lg font-semibold text-stone-900 mb-4">
-            {t.reports.expenseBreakdown}
-          </h2>
-          {report.categorySeries.length === 0 ? (
+          <div className="mb-4">
+            <h2 className="font-display text-lg font-semibold text-stone-900">
+              {isVi ? 'Phân bổ Chi phí vận hành' : 'Operating Expense Breakdown'}
+            </h2>
+            <p className="text-xs text-stone-500 mt-0.5">
+              {isVi
+                ? 'Không bao gồm nhập hàng tồn kho'
+                : 'Excludes inventory purchases (tracked in Cash Flow)'}
+            </p>
+          </div>
+          {operatingCategorySeries.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-sm text-stone-500 py-8">
               {t.common.noResults}
             </div>
@@ -487,7 +800,7 @@ export const ReportsView: React.FC = () => {
             <div className="h-60 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={report.categorySeries}
+                  data={operatingCategorySeries}
                   layout="vertical"
                   margin={{ top: 4, right: 16, left: 12, bottom: 4 }}
                 >

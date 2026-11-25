@@ -1,4 +1,11 @@
-import type { AppLanguage, ExpenseCategory, MovementType, PaymentMethod, ProductCategory } from '../types';
+import type {
+  AppLanguage,
+  ExpenseCategory,
+  MovementType,
+  PaymentMethod,
+  ProductCategory,
+  ProductType,
+} from '../types';
 
 export const TRANSLATIONS = {
   en: {
@@ -63,7 +70,14 @@ export const TRANSLATIONS = {
       tea: 'Iced Tea',
       coffee: 'Coffee',
       specialty: 'Specialty',
+      packaged: 'Packaged Drinks',
+      snack: 'Snacks & Food',
     } as Record<ProductCategory, string>,
+    productTypes: {
+      PACKAGED: 'Packaged',
+      PREPARED_TO_ORDER: 'Made-to-Order',
+      PREPARED_STOCK: 'Prepared Stock',
+    } as Record<ProductType, string>,
     expenseCategories: {
       ingredients: 'Ingredients',
       packaging: 'Cups & Packaging',
@@ -76,10 +90,17 @@ export const TRANSLATIONS = {
       other: 'Other',
     } as Record<ExpenseCategory, string>,
     movementTypes: {
-      purchase: 'Purchase Restock',
-      sale_consumption: 'Auto Sale Deduction',
+      opening_stock: 'Opening Stock',
+      purchase: 'Purchase / Stock-In',
+      sale_consumption: 'Sale Deduction',
+      batch_prep_in: 'Batch Prepared (In)',
+      batch_prep_consume: 'Batch Prep (Ingredients)',
       void_restore: 'Void Restore',
+      return_restore: 'Return Restore',
+      stock_count: 'Stock Count',
       adjustment: 'Manual Adjustment',
+      damaged: 'Damaged Write-Off',
+      expired: 'Expired Write-Off',
     } as Record<MovementType, string>,
     dashboard: {
       title: 'Business Overview',
@@ -250,6 +271,8 @@ export const TRANSLATIONS = {
       primaryCurrency: 'Primary Currency',
       usdRateLabel: 'Reference Exchange Rate (KHR per 1 USD)',
       lowStockDefault: 'Default Low-Stock Alert Threshold',
+      allowNegativeStockLabel: 'Allow Negative Stock Override (Rush Hours)',
+      allowNegativeStockDesc: 'By default, POS blocks checkout when stock is insufficient. Enable temporarily to allow rush-hour sales even if stock reaches zero.',
       sectionLanguage: 'Language / Ngôn ngữ',
       languageDesc: 'Toggle seamlessly between English and Vietnamese across all screens and reports.',
       sectionFamily: 'Family Access (2–3 Members, Full Access)',
@@ -379,7 +402,14 @@ export const TRANSLATIONS = {
       tea: 'Trà đá / Trà trái cây',
       coffee: 'Cà phê',
       specialty: 'Đặc sản',
+      packaged: 'Đồ uống đóng chai/lon',
+      snack: 'Đồ ăn vặt & Đóng gói',
     } as Record<ProductCategory, string>,
+    productTypes: {
+      PACKAGED: 'Đóng gói sẵn',
+      PREPARED_TO_ORDER: 'Pha chế theo đơn',
+      PREPARED_STOCK: 'Pha sẵn trữ lạnh',
+    } as Record<ProductType, string>,
     expenseCategories: {
       ingredients: 'Nguyên liệu',
       packaging: 'Ly & Bao bì',
@@ -392,10 +422,17 @@ export const TRANSLATIONS = {
       other: 'Chi phí khác',
     } as Record<ExpenseCategory, string>,
     movementTypes: {
-      purchase: 'Nhập mua nguyên liệu',
-      sale_consumption: 'Tự động trừ bán hàng',
+      opening_stock: 'Tồn kho đầu kỳ',
+      purchase: 'Nhập kho mua hàng',
+      sale_consumption: 'Trừ kho bán hàng',
+      batch_prep_in: 'Nhập mẻ pha sẵn',
+      batch_prep_consume: 'Trừ NL pha mẻ',
       void_restore: 'Hoàn kho hủy đơn',
-      adjustment: 'Điều chỉnh kiểm kho',
+      return_restore: 'Hoàn kho trả hàng',
+      stock_count: 'Kiểm kê thực tế',
+      adjustment: 'Điều chỉnh tồn kho',
+      damaged: 'Hư hỏng / Đổ vỡ',
+      expired: 'Hết hạn sử dụng',
     } as Record<MovementType, string>,
     dashboard: {
       title: 'Tổng quan kinh doanh',
@@ -566,6 +603,8 @@ export const TRANSLATIONS = {
       primaryCurrency: 'Đơn vị tiền tệ chính',
       usdRateLabel: 'Tỷ giá quy đổi tham khảo (KHR / 1 USD)',
       lowStockDefault: 'Ngưỡng cảnh báo tồn kho mặc định',
+      allowNegativeStockLabel: 'Cho phép xuất âm kho (Giờ cao điểm)',
+      allowNegativeStockDesc: 'Mặc định POS chặn thanh toán khi không đủ tồn kho. Bật tạm thời nếu cần bán vượt tồn kho trong giờ cao điểm.',
       sectionLanguage: 'Ngôn ngữ / Language',
       languageDesc: 'Chuyển đổi tức thì giữa Tiếng Anh và Tiếng Việt trên toàn hệ thống.',
       sectionFamily: 'Thành viên gia đình (2–3 người, Toàn quyền)',

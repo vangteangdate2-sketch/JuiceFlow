@@ -35,3 +35,35 @@
     scroll-behavior: auto !important;
   }
 }
+
+@media print {
+  @page {
+    margin: 2mm;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #thermal-receipt-sheet,
+  #thermal-receipt-sheet * {
+    visibility: visible;
+  }
+  #thermal-receipt-sheet {
+    position: fixed;
+    left: 0;
+    top: 0;
+    margin: 0 !important;
+    padding: 4mm !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  #thermal-receipt-sheet.thermal-58mm {
+    width: 58mm !important;
+  }
+  #thermal-receipt-sheet.thermal-80mm {
+    width: 80mm !important;
+  }
+}

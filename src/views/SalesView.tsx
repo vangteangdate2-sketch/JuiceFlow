@@ -1,92 +1,286 @@
 import React, { useMemo, useState } from 'react';
-import { Check, Minus, Plus, Search, ShoppingBag, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Eye,
+  Minus,
+  Plus,
+  Printer,
+  RotateCcw,
+  Search,
+  ShoppingBag,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import type { PaymentMethod } from '../types';
-import { calculateProductCogs, formatKhr, formatUsdRef, todayIso } from '../utils/format';
+import type { PaymentMethod, Product, ProductCategory, ProductType, Sale } from '../types';
+import {
+  calculateProductCogs,
+  formatDateTimeInPhnomPenh,
+  formatKhr,
+  formatQty,
+  formatUsdRef,
+  generateId,
+  todayIso,
+} from '../utils/format';
+import {
+  getAvailableUnitsForProduct,
+  getProductVariant,
+  resolveBarcodeMatch,
+  validateCheckoutStock,
+  type StockShortage,
+} from '../utils/inventoryEngine';
 import { ProductPhoto } from '../components/ProductPhoto';
+import { BarcodeScanner, type BarcodeScanSource } from '../components/BarcodeScanner';
+import { ReceiptModal } from '../components/ReceiptModal';
+
+interface CartEntry {
+  key: string; // `${productId}::${variantId || ''}`
+  productId: string;
+  variantId?: string;
+  quantity: number;
+}
+
+const POS_CATEGORIES: Array<'all' | ProductCategory> = [
+  'all',
+  'juice',
+  'smoothie',
+  'coffee',
+  'tea',
+  'packaged',
+  'snack',
+  'specialty',
+];
 
 export const SalesView: React.FC = () => {
-  const { settings, products, ingredients, sales, recordSale, voidSale, t } = useStore();
+  const {
+    settings,
+    products,
+    ingredients,
+    sales,
+    recordSale,
+    voidSale,
+    returnSaleItems,
+    t,
+  } = useStore();
   const isVi = settings.language === 'vi';
 
   const [subTab, setSubTab] = useState<'pos' | 'ledger'>('pos');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [posSearch, setPosSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | ProductType>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | ProductCategory>('all');
+
+  const [cart, setCart] = useState<Record<string, CartEntry>>({});
+  const [cartTxId, setCartTxId] = useState<string>(() => generateId('sale'));
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [customerName, setCustomerName] = useState('');
   const [note, setNote] = useState('');
   const [saleDate, setSaleDate] = useState(todayIso());
   const [submitting, setSubmitting] = useState(false);
+
   const [toastMessage, setToastMessage] = useState('');
+  const [lastCompletedSale, setLastCompletedSale] = useState<Sale | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutShortages, setCheckoutShortages] = useState<StockShortage[]>([]);
+
+  // Modals
+  const [variantPickerProduct, setVariantPickerProduct] = useState<Product | null>(null);
+  const [receiptSale, setReceiptSale] = useState<Sale | null>(null);
+  const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
+  const [returnQtyMap, setReturnQtyMap] = useState<Record<string, number>>({});
+  const [returnReason, setReturnReason] = useState('');
+  const [returnBusy, setReturnBusy] = useState(false);
+  const [returnFeedback, setReturnFeedback] = useState<string | null>(null);
 
   // Ledger filters
   const [search, setSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState<string>('all');
   const [confirmVoidId, setConfirmVoidId] = useState<string | null>(null);
 
-  const activeProducts = useMemo(
-    () =>
-      products.filter(
-        (p) => p.active && (categoryFilter === 'all' || p.category === categoryFilter)
-      ),
-    [products, categoryFilter]
-  );
+  const prodMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+
+  const activeProducts = useMemo(() => {
+    const q = posSearch.trim().toLowerCase();
+    return products.filter((p) => {
+      if (!p.active) return false;
+      if (typeFilter !== 'ALL' && p.productType !== typeFilter) return false;
+      if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
+      if (!q) return true;
+      const varMatch = (p.variants || []).some(
+        (v) => v.name.toLowerCase().includes(q) || (v.barcode || '').toLowerCase().includes(q)
+      );
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.nameVi.toLowerCase().includes(q) ||
+        (p.brand || '').toLowerCase().includes(q) ||
+        (p.barcode || '').toLowerCase().includes(q) ||
+        varMatch
+      );
+    });
+  }, [products, typeFilter, categoryFilter, posSearch]);
 
   const cartLines = useMemo(() => {
-    const prodMap = new Map(products.map((p) => [p.id, p]));
-    return Object.entries(cart)
-      .filter(([, qty]) => qty > 0)
-      .map(([productId, quantity]) => {
-        const product = prodMap.get(productId);
+    return Object.values(cart)
+      .filter((entry) => entry.quantity > 0)
+      .map((entry) => {
+        const product = prodMap.get(entry.productId);
         if (!product) return null;
-        const unitCogs = Math.round(calculateProductCogs(product, ingredients));
+        const variant = getProductVariant(product, entry.variantId);
+        const unitPrice = variant ? variant.priceKhr : product.priceKhr;
+        const unitCogs = Math.round(calculateProductCogs(product, ingredients, variant));
         return {
+          ...entry,
           product,
-          quantity,
-          lineTotal: product.priceKhr * quantity,
-          lineCogs: unitCogs * quantity,
+          variant,
+          unitPrice,
+          lineTotal: unitPrice * entry.quantity,
+          lineCogs: unitCogs * entry.quantity,
         };
       })
       .filter((line): line is NonNullable<typeof line> => line !== null);
-  }, [cart, products, ingredients]);
+  }, [cart, prodMap, ingredients]);
 
   const cartTotal = useMemo(() => cartLines.reduce((s, l) => s + l.lineTotal, 0), [cartLines]);
   const cartCogs = useMemo(() => cartLines.reduce((s, l) => s + l.lineCogs, 0), [cartLines]);
 
-  const addToCart = (productId: string) => {
-    setCart((prev) => ({ ...prev, [productId]: (prev[productId] || 0) + 1 }));
+  // Live stock validation for current cart
+  const liveStockValidation = useMemo(() => {
+    return validateCheckoutStock(
+      cartLines.map((l) => ({
+        productId: l.productId,
+        variantId: l.variantId,
+        quantity: l.quantity,
+      })),
+      products,
+      ingredients,
+      Boolean(settings.allowNegativeStock)
+    );
+  }, [cartLines, products, ingredients, settings.allowNegativeStock]);
+
+  const addEntryToCart = (productId: string, variantId?: string, qtyToAdd = 1) => {
+    const key = `${productId}::${variantId || ''}`;
+    setCheckoutError(null);
+    setCheckoutShortages([]);
+    setCart((prev) => {
+      const existing = prev[key];
+      return {
+        ...prev,
+        [key]: {
+          key,
+          productId,
+          variantId,
+          quantity: (existing?.quantity || 0) + qtyToAdd,
+        },
+      };
+    });
   };
 
-  const updateCartQty = (productId: string, delta: number) => {
+  const handleProductTileClick = (product: Product) => {
+    if (product.variants && product.variants.length > 1) {
+      setVariantPickerProduct(product);
+      return;
+    }
+    const onlyVariant = product.variants?.[0];
+    addEntryToCart(product.id, onlyVariant?.id, 1);
+  };
+
+  const updateCartQty = (key: string, delta: number) => {
+    setCheckoutError(null);
+    setCheckoutShortages([]);
     setCart((prev) => {
-      const next = (prev[productId] || 0) + delta;
-      if (next <= 0) {
+      const existing = prev[key];
+      if (!existing) return prev;
+      const nextQty = existing.quantity + delta;
+      if (nextQty <= 0) {
         const copy = { ...prev };
-        delete copy[productId];
+        delete copy[key];
         return copy;
       }
-      return { ...prev, [productId]: next };
+      return { ...prev, [key]: { ...existing, quantity: nextQty } };
     });
+  };
+
+  const handleBarcodeScan = (
+    rawCode: string,
+    _source: BarcodeScanSource
+  ): { ok: boolean; message: string } => {
+    const match = resolveBarcodeMatch(rawCode, products);
+    if (!match) {
+      const msg = isVi
+        ? `Không tìm thấy sản phẩm với mã vạch "${rawCode}".`
+        : `No product matched barcode "${rawCode}".`;
+      setCheckoutError(msg);
+      return { ok: false, message: msg };
+    }
+    if (!match.product.active) {
+      const msg = isVi
+        ? `Sản phẩm "${match.product.nameVi || match.product.name}" đang tạm ngưng bán.`
+        : `"${match.product.name}" is currently paused.`;
+      setCheckoutError(msg);
+      return { ok: false, message: msg };
+    }
+
+    const qty = match.isPackagingBarcode ? match.unitsPerPack : 1;
+    const availability = getAvailableUnitsForProduct(
+      match.product,
+      ingredients,
+      match.variant?.id
+    );
+    if (availability.status === 'out' && !settings.allowNegativeStock) {
+      const displayName = isVi ? match.product.nameVi || match.product.name : match.product.name;
+      const msg = isVi
+        ? `${displayName} hiện đã hết hàng trong kho.`
+        : `${displayName} is currently out of stock.`;
+      setCheckoutError(msg);
+      return { ok: false, message: msg };
+    }
+
+    addEntryToCart(match.product.id, match.variant?.id, qty);
+    const displayName = isVi ? match.product.nameVi || match.product.name : match.product.name;
+    const variantSuffix = match.variant
+      ? ` (${isVi ? match.variant.nameVi || match.variant.name : match.variant.name})`
+      : '';
+    const msg = isVi
+      ? `Đã thêm +${qty}× ${displayName}${variantSuffix} vào giỏ`
+      : `Added +${qty}× ${displayName}${variantSuffix} to cart`;
+    return { ok: true, message: msg };
   };
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (cartLines.length === 0) return;
+    if (cartLines.length === 0 || submitting) return;
+
+    setCheckoutError(null);
+    setCheckoutShortages([]);
     setSubmitting(true);
     try {
-      await recordSale({
-        items: cartLines.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
+      const result = await recordSale({
+        clientTxId: cartTxId,
+        items: cartLines.map((l) => ({
+          productId: l.productId,
+          variantId: l.variantId,
+          quantity: l.quantity,
+        })),
         paymentMethod,
         customerName,
         note,
         saleDate,
       });
+
+      if (!result.ok) {
+        setCheckoutError(result.error || 'Insufficient stock for checkout.');
+        setCheckoutShortages(result.shortages || []);
+        return;
+      }
+
       setCart({});
+      setCartTxId(generateId('sale'));
       setCustomerName('');
       setNote('');
       setSaleDate(todayIso());
+      setLastCompletedSale(result.sale || null);
       setToastMessage(t.sales.saleRecorded);
-      window.setTimeout(() => setToastMessage(''), 3500);
+      window.setTimeout(() => setToastMessage(''), 6000);
     } finally {
       setSubmitting(false);
     }
@@ -97,7 +291,10 @@ export const SalesView: React.FC = () => {
     return sales.filter((s) => {
       if (paymentFilter !== 'all' && s.paymentMethod !== paymentFilter) return false;
       if (!q) return true;
-      const itemsText = s.items.map((i) => `${i.productName} ${i.productNameVi}`).join(' ').toLowerCase();
+      const itemsText = s.items
+        .map((i) => `${i.productName} ${i.productNameVi} ${i.variantName || ''}`)
+        .join(' ')
+        .toLowerCase();
       return (
         s.orderNumber.toLowerCase().includes(q) ||
         s.customerName.toLowerCase().includes(q) ||
@@ -107,6 +304,54 @@ export const SalesView: React.FC = () => {
     });
   }, [sales, search, paymentFilter]);
 
+  const detailSale = useMemo(
+    () => (detailSaleId ? sales.find((s) => s.id === detailSaleId) || null : null),
+    [detailSaleId, sales]
+  );
+
+  const openOrderDetail = (sale: Sale) => {
+    setDetailSaleId(sale.id);
+    setReturnQtyMap({});
+    setReturnReason('');
+    setReturnFeedback(null);
+  };
+
+  const handleProcessPartialReturn = async () => {
+    if (!detailSale || returnBusy) return;
+    const reqs = Object.entries(returnQtyMap)
+      .filter(([, q]) => q > 0)
+      .map(([lineId, quantity]) => ({ lineId, quantity }));
+    if (reqs.length === 0) return;
+
+    setReturnBusy(true);
+    setReturnFeedback(null);
+    try {
+      const res = await returnSaleItems({
+        saleId: detailSale.id,
+        returnItems: reqs,
+        reason: returnReason || 'Customer return',
+      });
+      if (!res.ok) {
+        setReturnFeedback(res.error || 'Could not process return.');
+      } else {
+        setReturnQtyMap({});
+        setReturnReason('');
+        setReturnFeedback(
+          isVi
+            ? 'Đã hoàn trả hàng và cộng lại chính xác lượng tồn kho gốc.'
+            : 'Return recorded and exact original stock restored.'
+        );
+      }
+    } finally {
+      setReturnBusy(false);
+    }
+  };
+
+  const getQtyInCartForProduct = (productId: string) =>
+    Object.values(cart)
+      .filter((c) => c.productId === productId)
+      .reduce((s, c) => s + c.quantity, 0);
+
   return (
     <div className="space-y-6">
       {/* Header & View Switcher */}
@@ -115,7 +360,11 @@ export const SalesView: React.FC = () => {
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 tracking-tight">
             {t.sales.title}
           </h1>
-          <p className="mt-1 text-sm text-stone-500">{t.sales.subtitle}</p>
+          <p className="mt-1 text-sm text-stone-500">
+            {isVi
+              ? 'Bán hàng tích hợp mã vạch, kiểm tra tồn kho trực tiếp và tự động trừ kho theo loại sản phẩm.'
+              : 'Connected POS with barcode scanning, live stock checks, and automatic 3-tier stock deduction.'}
+          </p>
         </div>
 
         <div className="inline-flex items-center p-1 bg-stone-200/70 rounded-lg self-start sm:self-auto shrink-0">
@@ -144,35 +393,82 @@ export const SalesView: React.FC = () => {
         </div>
       </div>
 
+      {/* Post-sale Toast with Quick Receipt Trigger */}
       {toastMessage && (
         <div
           role="status"
-          className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2"
+          className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-4 py-3 rounded-lg text-sm font-medium flex flex-wrap items-center justify-between gap-3"
         >
-          <Check className="w-4 h-4 text-emerald-700 shrink-0" />
-          <span>{toastMessage}</span>
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+          {lastCompletedSale && (
+            <button
+              type="button"
+              onClick={() => setReceiptSale(lastCompletedSale)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-md"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              {isVi ? `In hóa đơn ${lastCompletedSale.orderNumber}` : `Receipt ${lastCompletedSale.orderNumber}`}
+            </button>
+          )}
         </div>
       )}
 
       {subTab === 'pos' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Beverage Menu Grid */}
+          {/* Product Grid & Barcode Search */}
           <div className="lg:col-span-8 space-y-4">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(['all', 'juice', 'smoothie', 'coffee', 'tea', 'specialty'] as const).map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategoryFilter(cat)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-                    categoryFilter === cat
-                      ? 'bg-[#0F5C43] text-white'
-                      : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
-                  }`}
-                >
-                  {cat === 'all' ? t.common.all : t.productCategories[cat]}
-                </button>
-              ))}
+            {/* Unified Search + Camera & USB/Bluetooth Barcode Scanner */}
+            <div className="bg-white border border-stone-200 rounded-xl p-3.5 space-y-3">
+              <BarcodeScanner
+                enabled={subTab === 'pos' && !variantPickerProduct && !receiptSale && !detailSaleId}
+                isVi={isVi}
+                searchValue={posSearch}
+                onSearchChange={setPosSearch}
+                onScan={handleBarcodeScan}
+                hasBarcodeMatch={(code) => Boolean(resolveBarcodeMatch(code, products))}
+              />
+
+              {/* Type & Category Filters */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-stone-100">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {POS_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setCategoryFilter(cat)}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                        categoryFilter === cat
+                          ? 'bg-[#0F5C43] text-white'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                      }`}
+                    >
+                      {cat === 'all' ? t.common.all : t.productCategories[cat]}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1 text-[11px]">
+                  {(['ALL', 'PREPARED_TO_ORDER', 'PACKAGED', 'PREPARED_STOCK'] as const).map(
+                    (pt) => (
+                      <button
+                        key={pt}
+                        type="button"
+                        onClick={() => setTypeFilter(pt)}
+                        className={`px-2 py-1 rounded font-semibold transition-colors ${
+                          typeFilter === pt
+                            ? 'bg-stone-900 text-white'
+                            : 'text-stone-500 hover:text-stone-800 hover:bg-stone-100'
+                        }`}
+                      >
+                        {pt === 'ALL' ? t.common.all : t.productTypes[pt]}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
             </div>
 
             {activeProducts.length === 0 ? (
@@ -182,44 +478,81 @@ export const SalesView: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {activeProducts.map((product) => {
-                  const qtyInCart = cart[product.id] || 0;
-                  const cogs = Math.round(calculateProductCogs(product, ingredients));
+                  const qtyInCart = getQtyInCartForProduct(product.id);
                   const displayName = isVi ? product.nameVi || product.name : product.name;
+                  const availability = getAvailableUnitsForProduct(
+                    product,
+                    ingredients,
+                    product.variants?.[0]?.id
+                  );
+                  const hasMultiVariants = product.variants && product.variants.length > 1;
+                  const minPrice = hasMultiVariants
+                    ? Math.min(...product.variants.map((v) => v.priceKhr))
+                    : product.variants?.[0]?.priceKhr ?? product.priceKhr;
+
+                  const outBlocked = availability.status === 'out' && !settings.allowNegativeStock;
+
                   return (
                     <button
                       key={product.id}
                       type="button"
-                      onClick={() => addToCart(product.id)}
+                      disabled={outBlocked}
+                      onClick={() => handleProductTileClick(product)}
                       className={`group text-left bg-white border rounded-xl overflow-hidden transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] ${
-                        qtyInCart > 0 ? 'border-[#0F5C43]' : 'border-stone-200 hover:border-stone-300'
+                        outBlocked
+                          ? 'opacity-55 border-stone-200 cursor-not-allowed'
+                          : qtyInCart > 0
+                          ? 'border-[#0F5C43]'
+                          : 'border-stone-200 hover:border-stone-300'
                       }`}
                     >
                       <div className="relative">
                         <ProductPhoto
                           src={product.imageUrl}
                           alt={displayName}
-                          className="w-full h-36"
+                          className="w-full h-32"
                         />
                         {qtyInCart > 0 && (
-                          <span className="absolute top-2.5 right-2.5 bg-[#0F5C43] text-white font-mono-num text-xs font-semibold px-2.5 py-1 rounded-md">
+                          <span className="absolute top-2 right-2 bg-[#0F5C43] text-white font-mono-num text-xs font-semibold px-2 py-0.5 rounded-md">
                             ×{qtyInCart}
                           </span>
                         )}
                       </div>
-                      <div className="p-4">
-                        <p className="text-xs text-stone-500">
-                          {t.productCategories[product.category]} · {t.products.recipeCost}{' '}
-                          <span className="font-mono-num">{formatKhr(cogs)}</span>
-                        </p>
-                        <h3 className="mt-1 font-display text-base font-semibold text-stone-900 truncate">
+                      <div className="p-3.5">
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="text-stone-500 truncate">
+                            {t.productTypes[product.productType]}
+                            {hasMultiVariants ? ` · ${product.variants.length} sizes` : ''}
+                          </span>
+                          {availability.availableUnits !== null && (
+                            <span
+                              className={`font-mono-num font-semibold shrink-0 ${
+                                availability.status === 'out'
+                                  ? 'text-red-700'
+                                  : availability.status === 'low'
+                                  ? 'text-amber-700'
+                                  : 'text-emerald-700'
+                              }`}
+                            >
+                              {availability.status === 'out'
+                                ? isVi
+                                  ? 'Hết hàng'
+                                  : 'Out'
+                                : product.productType === 'PREPARED_TO_ORDER'
+                                ? `~${availability.availableUnits}`
+                                : `${availability.availableUnits} ${product.unit}`}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="mt-1 font-display text-sm font-semibold text-stone-900 truncate">
                           {displayName}
                         </h3>
-                        <div className="mt-2 flex items-baseline justify-between gap-2">
-                          <span className="font-mono-num text-base font-semibold text-[#0F5C43]">
-                            {formatKhr(product.priceKhr)}
+                        <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                          <span className="font-mono-num text-sm font-bold text-[#0F5C43]">
+                            {hasMultiVariants ? `${formatKhr(minPrice)}+` : formatKhr(minPrice)}
                           </span>
-                          <span className="text-xs text-stone-400 font-mono-num">
-                            {formatUsdRef(product.priceKhr, settings.usdRate)}
+                          <span className="text-[11px] text-stone-400 font-mono-num">
+                            {formatUsdRef(minPrice, settings.usdRate)}
                           </span>
                         </div>
                       </div>
@@ -233,7 +566,7 @@ export const SalesView: React.FC = () => {
           {/* Order Cart Panel */}
           <form
             onSubmit={handleCheckout}
-            className="lg:col-span-4 bg-white border border-stone-200 rounded-xl p-5 space-y-5 lg:sticky lg:top-20"
+            className="lg:col-span-4 bg-white border border-stone-200 rounded-xl p-5 space-y-4 lg:sticky lg:top-20"
           >
             <div className="flex items-center justify-between gap-2 pb-3 border-b border-stone-200">
               <div className="flex items-center gap-2">
@@ -245,7 +578,11 @@ export const SalesView: React.FC = () => {
               {cartLines.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setCart({})}
+                  onClick={() => {
+                    setCart({});
+                    setCheckoutError(null);
+                    setCheckoutShortages([]);
+                  }}
                   className="text-xs text-stone-500 hover:text-red-700 transition-colors"
                 >
                   {t.common.cancel}
@@ -254,26 +591,32 @@ export const SalesView: React.FC = () => {
             </div>
 
             {cartLines.length === 0 ? (
-              <p className="py-10 text-center text-sm text-stone-500">{t.sales.emptyCart}</p>
+              <p className="py-8 text-center text-sm text-stone-500">{t.sales.emptyCart}</p>
             ) : (
-              <ul className="divide-y divide-stone-100 max-h-72 overflow-y-auto pr-1">
-                {cartLines.map(({ product, quantity, lineTotal }) => (
-                  <li key={product.id} className="py-3 flex items-center justify-between gap-3">
+              <ul className="divide-y divide-stone-100 max-h-64 overflow-y-auto pr-1">
+                {cartLines.map(({ key, product, variant, unitPrice, quantity, lineTotal }) => (
+                  <li key={key} className="py-2.5 flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-stone-900 truncate">
                         {isVi ? product.nameVi || product.name : product.name}
+                        {variant ? (
+                          <span className="text-stone-500 font-normal">
+                            {' '}
+                            ({isVi ? variant.nameVi || variant.name : variant.name})
+                          </span>
+                        ) : null}
                       </p>
                       <p className="text-xs text-stone-500 font-mono-num">
-                        {formatKhr(product.priceKhr)} × {quantity}
+                        {formatKhr(unitPrice)} × {quantity}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <div className="inline-flex items-center border border-stone-200 rounded-lg">
                         <button
                           type="button"
-                          onClick={() => updateCartQty(product.id, -1)}
+                          onClick={() => updateCartQty(key, -1)}
                           aria-label="Decrease quantity"
-                          className="p-1.5 text-stone-600 hover:text-stone-900"
+                          className="p-1 text-stone-600 hover:text-stone-900"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
@@ -282,9 +625,9 @@ export const SalesView: React.FC = () => {
                         </span>
                         <button
                           type="button"
-                          onClick={() => updateCartQty(product.id, 1)}
+                          onClick={() => updateCartQty(key, 1)}
                           aria-label="Increase quantity"
-                          className="p-1.5 text-stone-600 hover:text-stone-900"
+                          className="p-1 text-stone-600 hover:text-stone-900"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -296,6 +639,44 @@ export const SalesView: React.FC = () => {
                   </li>
                 ))}
               </ul>
+            )}
+
+            {/* Live Stock Shortage Warning / Override Banner */}
+            {(liveStockValidation.shortages.length > 0 || checkoutError) && (
+              <div
+                role="alert"
+                className={`p-3 rounded-lg border text-xs space-y-1.5 ${
+                  settings.allowNegativeStock && !checkoutError
+                    ? 'bg-amber-50 border-amber-200 text-amber-900'
+                    : 'bg-red-50 border-red-200 text-red-900'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-semibold">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>
+                    {checkoutError ||
+                      (settings.allowNegativeStock
+                        ? isVi
+                          ? 'Cảnh báo âm kho (đang bật chế độ cho phép):'
+                          : 'Negative stock override active:'
+                        : isVi
+                        ? 'Không đủ tồn kho để thanh toán:'
+                        : 'Insufficient stock — checkout blocked:')}
+                  </span>
+                </div>
+                <ul className="space-y-0.5 pl-5 list-disc font-mono-num">
+                  {(checkoutShortages.length > 0
+                    ? checkoutShortages
+                    : liveStockValidation.shortages
+                  ).map((sh) => (
+                    <li key={sh.itemId}>
+                      {isVi ? sh.itemNameVi || sh.itemName : sh.itemName}: need{' '}
+                      {formatQty(sh.requiredQty, sh.unit)}, have{' '}
+                      {formatQty(sh.availableQty, sh.unit)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             {/* Payment & Order Metadata */}
@@ -322,7 +703,7 @@ export const SalesView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-xs font-medium text-stone-600 mb-1">
                     {t.common.date}
@@ -331,7 +712,7 @@ export const SalesView: React.FC = () => {
                     type="date"
                     value={saleDate}
                     onChange={(e) => setSaleDate(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                    className="w-full px-2.5 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white text-stone-900"
                   />
                 </div>
                 <div>
@@ -342,7 +723,7 @@ export const SalesView: React.FC = () => {
                     type="text"
                     readOnly
                     value={settings.activeOperator}
-                    className="w-full px-3 py-2 text-xs border border-stone-200 rounded-lg bg-stone-50 text-stone-700"
+                    className="w-full px-2.5 py-2 text-xs border border-stone-200 rounded-lg bg-stone-50 text-stone-700"
                   />
                 </div>
               </div>
@@ -353,7 +734,7 @@ export const SalesView: React.FC = () => {
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder={t.sales.customerPlaceholder}
-                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white text-stone-900 placeholder:text-stone-400"
               />
 
               <input
@@ -362,7 +743,7 @@ export const SalesView: React.FC = () => {
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder={t.sales.notePlaceholder}
-                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white text-stone-900 placeholder:text-stone-400"
               />
             </div>
 
@@ -391,14 +772,11 @@ export const SalesView: React.FC = () => {
 
             <button
               type="submit"
-              disabled={cartLines.length === 0 || submitting}
+              disabled={cartLines.length === 0 || submitting || !liveStockValidation.ok}
               className="w-full py-3 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
             >
-              {t.sales.completeSale}
+              {submitting ? (isVi ? 'Đang xử lý...' : 'Recording Sale...') : t.sales.completeSale}
             </button>
-            <p className="text-[11px] text-stone-500 text-center">
-              {t.sales.ingredientsAutoDeducted}
-            </p>
           </form>
         </div>
       ) : (
@@ -412,7 +790,7 @@ export const SalesView: React.FC = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t.sales.searchOrders}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-stone-200 rounded-lg bg-white text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-stone-200 rounded-lg bg-white text-stone-900"
               />
             </div>
 
@@ -444,109 +822,412 @@ export const SalesView: React.FC = () => {
                     <th className="py-3 px-5 font-medium">Order / {t.common.date}</th>
                     <th className="py-3 px-4 font-medium">{t.sales.itemsSummary}</th>
                     <th className="py-3 px-4 font-medium">{t.common.payment}</th>
-                    <th className="py-3 px-4 font-medium">{t.common.operator}</th>
                     <th className="py-3 px-4 font-medium text-right">{t.sales.cogs}</th>
                     <th className="py-3 px-4 font-medium text-right">{t.common.total}</th>
                     <th className="py-3 px-5 font-medium text-right">{t.common.actions}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 text-sm">
-                  {filteredSales.map((sale) => (
-                    <tr key={sale.id} className="hover:bg-stone-50/60 transition-colors">
-                      <td className="py-3.5 px-5 whitespace-nowrap">
-                        <p className="font-mono-num font-semibold text-stone-900">
-                          {sale.orderNumber}
-                        </p>
-                        <p className="text-xs text-stone-500 font-mono-num">
-                          {sale.saleDate} ·{' '}
+                  {filteredSales.map((sale) => {
+                    const netTotal =
+                      sale.status === 'voided'
+                        ? 0
+                        : sale.netTotalKhr ?? Math.max(0, sale.totalKhr - (sale.refundedKhr ?? 0));
+                    const netCogs =
+                      sale.status === 'voided'
+                        ? 0
+                        : Math.max(0, sale.cogsKhr - (sale.refundedCogsKhr ?? 0));
+                    const canModify =
+                      sale.status === 'completed' || sale.status === 'partially_returned';
+
+                    return (
+                      <tr key={sale.id} className="hover:bg-stone-50/60 transition-colors">
+                        <td className="py-3.5 px-5 whitespace-nowrap">
+                          <p className="font-mono-num font-semibold text-stone-900">
+                            {sale.orderNumber}
+                          </p>
+                          <p className="text-xs text-stone-500 font-mono-num">
+                            {sale.saleDate} ·{' '}
+                            <span
+                              className={
+                                sale.status === 'voided'
+                                  ? 'text-red-700 font-medium'
+                                  : sale.status === 'partially_returned' ||
+                                    sale.status === 'refunded'
+                                  ? 'text-amber-700 font-medium'
+                                  : 'text-emerald-700'
+                              }
+                            >
+                              {sale.status === 'voided'
+                                ? t.sales.voided
+                                : sale.status === 'partially_returned'
+                                ? isVi
+                                  ? 'Trả 1 phần'
+                                  : 'Partial Return'
+                                : sale.status === 'refunded'
+                                ? isVi
+                                  ? 'Đã hoàn trả'
+                                  : 'Refunded'
+                                : t.sales.completed}
+                            </span>
+                          </p>
+                        </td>
+                        <td className="py-3.5 px-4 max-w-xs">
+                          <p className="text-stone-900">
+                            {sale.items
+                              .map(
+                                (i) =>
+                                  `${i.quantity}× ${isVi ? i.productNameVi || i.productName : i.productName}${
+                                    i.variantName ? ` (${i.variantName})` : ''
+                                  }`
+                              )
+                              .join(', ')}
+                          </p>
+                          <p className="text-xs text-stone-500 truncate mt-0.5">
+                            {[sale.recordedBy, sale.customerName, sale.note]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        </td>
+                        <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
+                          {t.paymentMethods[sale.paymentMethod]}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-600 whitespace-nowrap">
+                          {formatKhr(netCogs)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono-num whitespace-nowrap">
                           <span
                             className={
-                              sale.status === 'voided' ? 'text-red-700 font-medium' : 'text-emerald-700'
+                              sale.status === 'voided'
+                                ? 'line-through text-stone-400'
+                                : 'font-semibold text-stone-900'
                             }
                           >
-                            {sale.status === 'voided' ? t.sales.voided : t.sales.completed}
+                            {formatKhr(netTotal)}
                           </span>
-                        </p>
-                      </td>
-                      <td className="py-3.5 px-4 max-w-xs">
-                        <p className="text-stone-900">
-                          {sale.items
-                            .map(
-                              (i) =>
-                                `${i.quantity}× ${isVi ? i.productNameVi || i.productName : i.productName}`
-                            )
-                            .join(', ')}
-                        </p>
-                        {(sale.customerName || sale.note) && (
-                          <p className="text-xs text-stone-500 truncate mt-0.5">
-                            {[sale.customerName, sale.note].filter(Boolean).join(' · ')}
-                          </p>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
-                        {t.paymentMethods[sale.paymentMethod]}
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
-                        {sale.recordedBy}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-600 whitespace-nowrap">
-                        {formatKhr(sale.cogsKhr)}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono-num whitespace-nowrap">
-                        <span
-                          className={
-                            sale.status === 'voided'
-                              ? 'line-through text-stone-400'
-                              : 'font-semibold text-stone-900'
-                          }
-                        >
-                          {formatKhr(sale.totalKhr)}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                        {sale.status === 'completed' ? (
-                          confirmVoidId === sale.id ? (
-                            <div className="inline-flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await voidSale(sale.id);
-                                  setConfirmVoidId(null);
-                                }}
-                                className="text-xs font-semibold text-red-700 hover:underline"
-                              >
-                                {t.sales.voidOrder}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmVoidId(null)}
-                                className="text-xs text-stone-500 hover:text-stone-800"
-                              >
-                                {t.common.cancel}
-                              </button>
-                            </div>
-                          ) : (
+                          {sale.refundedKhr && sale.refundedKhr > 0 && sale.status !== 'voided' ? (
+                            <span className="block text-[11px] text-amber-700">
+                              -{formatKhr(sale.refundedKhr)}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-3">
                             <button
                               type="button"
-                              onClick={() => setConfirmVoidId(sale.id)}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-stone-500 hover:text-red-700 transition-colors"
+                              onClick={() => setReceiptSale(sale)}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-stone-600 hover:text-[#0F5C43]"
+                              title="Receipt"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              {t.sales.voidOrder}
+                              <Printer className="w-3.5 h-3.5" />
                             </button>
-                          )
-                        ) : (
-                          <span className="text-xs text-stone-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                            <button
+                              type="button"
+                              onClick={() => openOrderDetail(sale)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              {isVi ? 'Chi tiết' : 'Details'}
+                            </button>
+                            {canModify &&
+                              (confirmVoidId === sale.id ? (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await voidSale(sale.id, 'Voided from ledger');
+                                      setConfirmVoidId(null);
+                                    }}
+                                    className="text-xs font-semibold text-red-700 hover:underline"
+                                  >
+                                    {t.sales.voidOrder}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmVoidId(null)}
+                                    className="text-xs text-stone-500"
+                                  >
+                                    {t.common.cancel}
+                                  </button>
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmVoidId(sale.id)}
+                                  className="inline-flex items-center gap-1 text-xs text-stone-400 hover:text-red-700"
+                                  title={t.sales.voidOrder}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </div>
       )}
+
+      {/* Size Variant Picker Modal */}
+      {variantPickerProduct && (
+        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-base font-bold text-stone-900">
+                  {isVi
+                    ? variantPickerProduct.nameVi || variantPickerProduct.name
+                    : variantPickerProduct.name}
+                </h3>
+                <p className="text-xs text-stone-500">
+                  {isVi ? 'Chọn kích cỡ để thêm vào đơn' : 'Choose size variant to add to order'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVariantPickerProduct(null)}
+                className="p-1.5 text-stone-500 hover:text-stone-900"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-2.5">
+              {variantPickerProduct.variants.map((variant) => {
+                const avail = getAvailableUnitsForProduct(
+                  variantPickerProduct,
+                  ingredients,
+                  variant.id
+                );
+                const blocked = avail.status === 'out' && !settings.allowNegativeStock;
+                return (
+                  <button
+                    key={variant.id}
+                    type="button"
+                    disabled={blocked}
+                    onClick={() => {
+                      addEntryToCart(variantPickerProduct.id, variant.id, 1);
+                      setVariantPickerProduct(null);
+                    }}
+                    className="w-full px-4 py-3 border border-stone-200 hover:border-[#0F5C43] hover:bg-emerald-50/40 disabled:opacity-50 rounded-lg flex items-center justify-between transition-colors"
+                  >
+                    <div className="text-left">
+                      <div className="text-sm font-semibold text-stone-900">
+                        {isVi ? variant.nameVi || variant.name : variant.name}
+                      </div>
+                      {avail.availableUnits !== null && (
+                        <div className="text-[11px] text-stone-500 font-mono-num">
+                          {avail.status === 'out'
+                            ? isVi
+                              ? 'Thiếu nguyên liệu'
+                              : `Out (${avail.limitingItemName})`
+                            : `~${avail.availableUnits} makeable`}
+                        </div>
+                      )}
+                    </div>
+                    <span className="font-mono-num text-sm font-bold text-[#0F5C43]">
+                      {formatKhr(variant.priceKhr)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order Details & Partial Return Modal */}
+      {detailSale && (
+        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-xl bg-white border border-stone-200 rounded-xl my-8 overflow-hidden">
+            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-lg font-bold text-stone-900">
+                  {detailSale.orderNumber} ·{' '}
+                  <span className="text-sm font-medium text-stone-500">
+                    {formatDateTimeInPhnomPenh(detailSale.createdAt)} (ICT)
+                  </span>
+                </h2>
+                <p className="text-xs text-stone-500">
+                  {t.paymentMethods[detailSale.paymentMethod]} · {detailSale.recordedBy} ·{' '}
+                  {detailSale.customerName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailSaleId(null)}
+                className="p-1.5 text-stone-500 hover:text-stone-900"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* Line Items + Return Quantity Pickers */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">
+                  {isVi ? 'Chi tiết món & Hoàn trả một phần' : 'Order Items & Partial Returns'}
+                </h3>
+                <div className="divide-y divide-stone-100 border border-stone-200 rounded-lg">
+                  {detailSale.items.map((item, idx) => {
+                    const lineId = item.lineId || `${detailSale.id}_line_${idx}`;
+                    const returned = item.returnedQty ?? 0;
+                    const remaining = Math.max(0, item.quantity - returned);
+                    const selectedReturn = returnQtyMap[lineId] || 0;
+                    const canReturnLine =
+                      remaining > 0 &&
+                      (detailSale.status === 'completed' ||
+                        detailSale.status === 'partially_returned');
+
+                    return (
+                      <div key={lineId} className="p-3.5 space-y-1.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-stone-900">
+                              {item.quantity}×{' '}
+                              {isVi ? item.productNameVi || item.productName : item.productName}
+                              {item.variantName ? ` (${item.variantName})` : ''}
+                            </p>
+                            <p className="text-xs text-stone-500 font-mono-num">
+                              {formatKhr(item.unitPriceKhr)} ea · COGS {formatKhr(item.unitCogsKhr)}
+                              {returned > 0 ? ` · Returned: ${returned}` : ''}
+                            </p>
+                          </div>
+
+                          {canReturnLine && (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[11px] text-stone-500">
+                                {isVi ? 'Trả:' : 'Return:'}
+                              </span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={remaining}
+                                value={selectedReturn}
+                                onChange={(e) =>
+                                  setReturnQtyMap((prev) => ({
+                                    ...prev,
+                                    [lineId]: Math.min(
+                                      remaining,
+                                      Math.max(0, Math.round(Number(e.target.value) || 0))
+                                    ),
+                                  }))
+                                }
+                                className="w-16 px-2 py-1 text-xs font-mono-num border border-stone-300 rounded-md text-center"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Immutable Stock Deduction Snapshot */}
+                        {item.deductions && item.deductions.length > 0 && (
+                          <p className="text-[11px] text-stone-500 font-mono-num">
+                            {isVi ? 'Đã trừ kho gốc: ' : 'Original deduction snapshot: '}
+                            {item.deductions
+                              .map((d) => `${d.itemName} (-${formatQty(d.totalDeductedQty, d.unit)})`)
+                              .join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Partial Return Action Bar */}
+              {(detailSale.status === 'completed' ||
+                detailSale.status === 'partially_returned') && (
+                <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-lg space-y-2.5">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={returnReason}
+                      onChange={(e) => setReturnReason(e.target.value)}
+                      placeholder={
+                        isVi
+                          ? 'Lý do trả hàng (VD: Khách đổi ý, giao nhầm...)'
+                          : 'Return reason (e.g., Customer changed mind, wrong size...)'
+                      }
+                      className="flex-1 px-3 py-2 text-xs border border-stone-200 rounded-lg bg-white"
+                    />
+                    <button
+                      type="button"
+                      disabled={
+                        returnBusy ||
+                        Object.values(returnQtyMap).every((q) => !q || q <= 0)
+                      }
+                      onClick={handleProcessPartialReturn}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 disabled:opacity-45 rounded-lg whitespace-nowrap"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      {isVi ? 'Xác nhận hoàn trả' : 'Process Return'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-stone-500">
+                    {isVi
+                      ? 'Hoàn trả luôn cộng lại đúng số lượng đã trừ khi bán (không bị ảnh hưởng nếu bạn đã sửa công thức sau đó).'
+                      : 'Returns always restore exact original deduction snapshots (safe even if product recipes were edited later).'}
+                  </p>
+                </div>
+              )}
+
+              {returnFeedback && (
+                <p className="text-xs font-semibold text-[#0F5C43]">{returnFeedback}</p>
+              )}
+
+              {/* Prior Return History */}
+              {detailSale.returns && detailSale.returns.length > 0 && (
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-semibold text-stone-700">
+                    {isVi ? 'Lịch sử hoàn trả' : 'Return History'}
+                  </h4>
+                  {detailSale.returns.map((ret) => (
+                    <div
+                      key={ret.id}
+                      className="text-xs text-stone-600 flex justify-between border-b border-stone-100 py-1.5"
+                    >
+                      <span>
+                        {ret.returnDate} · {ret.reason} ({ret.recordedBy})
+                      </span>
+                      <span className="font-mono-num font-semibold text-amber-700">
+                        -{formatKhr(ret.refundTotalKhr)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-3.5 border-t border-stone-200 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setReceiptSale(detailSale)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-stone-800 bg-stone-100 hover:bg-stone-200 rounded-lg"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                {isVi ? 'In / Chép hóa đơn' : 'Print / Copy Receipt'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailSaleId(null)}
+                className="px-4 py-2 text-xs font-semibold text-white bg-[#0F5C43] rounded-lg"
+              >
+                {t.common.close}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Printable 58mm / 80mm Receipt Modal */}
+      <ReceiptModal
+        sale={receiptSale}
+        settings={settings}
+        onClose={() => setReceiptSale(null)}
+      />
     </div>
   );
 };
