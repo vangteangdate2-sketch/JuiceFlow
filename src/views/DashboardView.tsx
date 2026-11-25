@@ -16,6 +16,7 @@ import type { AppTab, IngredientUnit, StockClassification } from '../types';
 import { daysAgoIso, formatKhr, formatQty, formatUsdRef, todayIso } from '../utils/format';
 import { computeFinancialReport } from '../utils/inventoryEngine';
 import { DailySummary } from '../components/DailySummary';
+import { InfoHint } from '../components/InfoHint';
 import { useTheme } from '../hooks/useTheme';
 
 interface DashboardViewProps {
@@ -181,11 +182,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     <div className="space-y-6">
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
+        <div className="flex flex-wrap items-center gap-x-1 min-w-0">
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight text-balance">
             {t.dashboard.title}
           </h1>
-          <p className="mt-1 text-sm text-stone-500 dark:text-[#94A39B]">{t.dashboard.subtitle}</p>
+          <InfoHint
+            text={t.dashboard.subtitle}
+            label={isVi ? 'Thông tin tổng quan' : 'About Overview'}
+            textClassName="text-sm"
+          />
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button
@@ -242,9 +247,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
         <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-stone-200 dark:divide-[#24352C]">
           <div className="p-5">
-            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {t.dashboard.revenuePeriod}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-1">
+              <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+                {t.dashboard.revenuePeriod}
+              </p>
+              <InfoHint
+                compact
+                text={
+                  isVi
+                    ? 'Tổng doanh thu bán hàng ròng 7 ngày qua sau khi trừ trả hàng và hoàn tiền.'
+                    : 'Net sales revenue over the last 7 days after returns, refunds, and voided orders.'
+                }
+                label={t.dashboard.revenuePeriod}
+              />
+            </div>
             <p className="mt-2 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
               {formatKhr(periodReport.netRevenueKhr)}
             </p>
@@ -255,9 +271,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
 
           <div className="p-5">
-            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'COGS + Chi vận hành (7 ngày)' : 'COGS + OpEx (7 Days)'}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-1">
+              <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+                {isVi ? 'COGS + Chi vận hành (7 ngày)' : 'COGS + OpEx (7 Days)'}
+              </p>
+              <InfoHint
+                compact
+                text={
+                  isVi
+                    ? 'Giá vốn hàng đã bán (COGS) cộng chi phí vận hành kinh doanh trong 7 ngày — không tính trùng tiền nhập kho.'
+                    : 'Cost of Goods Sold (COGS) for sold items plus business operating expenses over 7 days — never double-counts stock restocks.'
+                }
+                label={isVi ? 'Giải thích COGS và chi vận hành' : 'About COGS + OpEx'}
+              />
+            </div>
             <p className="mt-2 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
               {formatKhr(periodReport.netCogsKhr + periodReport.operatingExpensesKhr)}
             </p>
@@ -268,9 +295,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
 
           <div className="p-5">
-            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {t.dashboard.netProfitPeriod}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-1">
+              <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+                {t.dashboard.netProfitPeriod}
+              </p>
+              <InfoHint
+                compact
+                text={
+                  isVi
+                    ? 'Lợi nhuận ròng = Doanh thu thuần − Giá vốn (COGS) − Chi phí vận hành.'
+                    : 'Accrual Net Profit = Net Revenue − Cost of Goods Sold (COGS) − Operating Expenses.'
+                }
+                label={t.dashboard.netProfitPeriod}
+              />
+            </div>
             <p
               className={`mt-2 font-mono-num text-2xl font-semibold ${
                 periodReport.netProfitKhr >= 0
@@ -287,9 +325,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
 
           <div className="p-5">
-            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'Tổng giá trị tồn kho' : 'Total Inventory Value'}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-1">
+              <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+                {isVi ? 'Tổng giá trị tồn kho' : 'Total Inventory Value'}
+              </p>
+              <InfoHint
+                compact
+                text={
+                  isVi
+                    ? 'Tổng giá trị tài sản đang có trong kho gồm hàng đóng gói, hàng pha sẵn và nguyên liệu thô theo đơn giá vốn bình quân.'
+                    : 'Current asset valuation of all on-hand Packaged goods, Prepared Stock, and Raw Ingredients at weighted-average unit cost.'
+                }
+                label={isVi ? 'Giải thích giá trị tồn kho' : 'About Total Inventory Value'}
+              />
+            </div>
             <p className="mt-2 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
               {formatKhr(periodReport.inventoryValuation.totalInventoryValueKhr)}
             </p>
@@ -458,19 +507,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
         {/* Unified 3-Tier Low Stock Alerts Panel */}
         <div className="lg:col-span-4 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-6 flex flex-col">
-          <div className="flex items-center justify-between gap-2 mb-4">
-            <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
-              {t.dashboard.lowStockTitle}
-              {lowStockList.length > 0 && (
-                <span className="ml-2 font-mono-num text-xs font-semibold text-amber-700 dark:text-amber-300">
-                  ({lowStockList.length})
-                </span>
-              )}
-            </h2>
+          <div className="flex items-start justify-between gap-2 mb-4">
+            <div className="flex flex-wrap items-center gap-x-1 min-w-0">
+              <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                {t.dashboard.lowStockTitle}
+                {lowStockList.length > 0 && (
+                  <span className="ml-2 font-mono-num text-xs font-semibold text-amber-700 dark:text-amber-300">
+                    ({lowStockList.length})
+                  </span>
+                )}
+              </h2>
+              <InfoHint
+                text={
+                  isVi
+                    ? 'Theo dõi sức khỏe tồn kho 3 cấp (Đóng gói, Pha sẵn, Nguyên liệu) và liệt kê mặt hàng dưới ngưỡng đặt lại.'
+                    : '3-Tier Stock Health monitor across Packaged goods, Prepared Stock, and Raw Ingredients at or below reorder levels.'
+                }
+                label={t.dashboard.lowStockTitle}
+              />
+            </div>
             <button
               type="button"
               onClick={() => onNavigate('inventory')}
-              className="text-xs font-medium text-[#0F5C43] dark:text-[#34D399] hover:underline whitespace-nowrap shrink-0"
+              className="text-xs font-medium text-[#0F5C43] dark:text-[#34D399] hover:underline whitespace-nowrap shrink-0 pt-1"
             >
               {t.dashboard.viewAll}
             </button>
@@ -639,9 +698,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
         {/* Top Selling Items (Net of Returns, 7 Days) */}
         <div className="lg:col-span-4 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-6">
-          <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] mb-4">
-            {t.dashboard.topDrinksTitle}
-          </h2>
+          <div className="flex flex-wrap items-center gap-x-1 mb-4">
+            <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
+              {t.dashboard.topDrinksTitle}
+            </h2>
+            <InfoHint
+              text={
+                isVi
+                  ? 'Xếp hạng theo doanh thu thuần 7 ngày gần nhất (đã trừ hàng trả) kèm tỷ suất lợi nhuận gộp từng món.'
+                  : 'Ranked by 7-day net revenue (after returns) alongside each item’s gross profit margin.'
+              }
+              label={t.dashboard.topDrinksTitle}
+            />
+          </div>
 
           {topProducts.length === 0 ? (
             <p className="text-sm text-stone-500 dark:text-[#94A39B] py-8 text-center">

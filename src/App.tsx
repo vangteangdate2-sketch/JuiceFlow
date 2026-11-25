@@ -3,6 +3,7 @@ import {
   BarChart3,
   Check,
   Coffee,
+  HelpCircle,
   LayoutDashboard,
   Lock,
   Menu,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { StoreProvider, useStore } from './context/StoreContext';
+import { HintsProvider, useHints } from './context/HintsContext';
 import { useTheme } from './hooks/useTheme';
 import { BiometricLockScreen } from './components/BiometricLockScreen';
 import { OfflineBanner } from './components/OfflineBanner';
@@ -47,6 +49,7 @@ const NAV_ITEMS: { id: AppTab; icon: React.ComponentType<{ className?: string }>
 const JuiceFlowShell: React.FC = () => {
   const { settings, cloudSynced, syncing, refreshing, refreshData, t, setActiveOperator } = useStore();
   const { isDark, toggleTheme } = useTheme();
+  const { showHints, toggleShowHints } = useHints();
   const isVi = settings?.language === 'vi';
   const familyMembers =
     Array.isArray(settings?.familyMembers) && settings.familyMembers.length > 0
@@ -359,6 +362,42 @@ const JuiceFlowShell: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {/* Global Show Hints Switch (minimum 44px touch height) */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showHints}
+                onClick={toggleShowHints}
+                aria-label={isVi ? 'Bật hoặc tắt gợi ý trên toàn ứng dụng' : 'Toggle helper hints across all pages'}
+                title={isVi ? 'Hiện / ẩn gợi ý giải thích' : 'Show or hide helper hints'}
+                className="inline-flex items-center gap-2 h-11 min-h-[44px] px-3 text-xs font-medium text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+              >
+                <HelpCircle
+                  className={`w-4 h-4 shrink-0 ${
+                    showHints
+                      ? 'text-[#0D5C3E] dark:text-[#34D399]'
+                      : 'text-stone-500 dark:text-[#94A39B]'
+                  }`}
+                />
+                <span className="hidden md:inline">
+                  {isVi ? 'Gợi ý' : 'Show Hints'}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
+                    showHints
+                      ? 'bg-[#0D5C3E] dark:bg-[#10B981]'
+                      : 'bg-stone-300 dark:bg-[#24352C]'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white dark:bg-[#0B110E] shadow-xs transition-transform ${
+                      showHints ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                    }`}
+                  />
+                </span>
+              </button>
+
               {/* Light / Dark Mode Switcher (minimum 44x44px tap area) */}
               <button
                 type="button"
@@ -479,7 +518,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <StoreProvider>
-        <JuiceFlowShell />
+        <HintsProvider>
+          <JuiceFlowShell />
+        </HintsProvider>
       </StoreProvider>
     </ErrorBoundary>
   );

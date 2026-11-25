@@ -48,6 +48,7 @@ import {
   lookupOpenFoodFactsV3,
   normalizeBarcodeString,
 } from '../utils/barcodeRegistry';
+import { InfoHint } from './InfoHint';
 import { compressImageBlobToDataUrl } from '../utils/image';
 import { DRINK_IMAGE_PRESETS } from '../utils/seedData';
 import { ProductPhoto } from './ProductPhoto';
@@ -803,18 +804,22 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         >
           {/* Sticky Modal Header */}
           <div className="px-6 py-4 bg-white dark:bg-[#131D18] border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-4 shrink-0">
-            <div>
+            <div className="flex flex-wrap items-center gap-x-1 min-w-0">
               <h2
                 id="product-form-modal-title"
                 className="font-display text-lg font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight"
               >
                 {editingProduct ? t.products.editProduct : t.products.addProduct}
               </h2>
-              <p className="text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
-                {isVi
-                  ? 'Điền thông tin cơ bản, giá bán và cài đặt tồn kho bên dưới.'
-                  : 'Organize product details, pricing, and inventory settings.'}
-              </p>
+              <InfoHint
+                compact
+                label={isVi ? 'Hướng dẫn biểu mẫu sản phẩm' : 'About product setup'}
+                text={
+                  isVi
+                    ? 'Điền thông tin cơ bản, giá bán và cài đặt tồn kho bên dưới.'
+                    : 'Organize product details, pricing, and inventory settings.'
+                }
+              />
             </div>
             <button
               type="button"
@@ -901,15 +906,19 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 <legend className="sr-only">
                   {isVi ? 'Phân loại tồn kho' : 'Inventory Classification'}
                 </legend>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <div className="flex flex-wrap items-center gap-x-1 mb-3">
                   <span className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                     {isVi ? 'Loại sản phẩm' : 'Product Type'}
                   </span>
-                  <span className="text-xs text-stone-500 dark:text-[#94A39B]">
-                    {isVi
-                      ? 'Quyết định cách hệ thống tự động trừ tồn kho khi bán hàng'
-                      : 'Determines how stock is deducted automatically at checkout'}
-                  </span>
+                  <InfoHint
+                    compact
+                    label={isVi ? 'Giải thích loại sản phẩm' : 'About Product Type'}
+                    text={
+                      isVi
+                        ? 'Quyết định cách hệ thống tự động trừ tồn kho khi bán hàng: trừ trực tiếp hàng đóng gói, trừ hàng pha sẵn, hoặc trừ nguyên liệu theo công thức.'
+                        : 'Determines how stock is deducted automatically at checkout: direct packaged units, prepared batch stock, or raw ingredients via recipe.'
+                    }
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -1182,17 +1191,40 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             : 'space-y-3'
                         }
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <span className="text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] block">
-                              {productType === 'PREPARED_STOCK'
-                                ? isVi
-                                  ? 'Công thức pha mẻ (cho 1 đơn vị thành phẩm)'
-                                  : 'Batch Prep Recipe (per 1 finished unit)'
-                                : t.products.recipeSection}
-                            </span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-1">
+                              <span className="text-xs font-semibold text-stone-800 dark:text-[#F1F5F3]">
+                                {productType === 'PREPARED_STOCK'
+                                  ? isVi
+                                    ? 'Công thức pha mẻ (cho 1 đơn vị thành phẩm)'
+                                    : 'Batch Prep Recipe (per 1 finished unit)'
+                                  : t.products.recipeSection}
+                              </span>
+                              <InfoHint
+                                compact
+                                label={
+                                  productType === 'PREPARED_STOCK'
+                                    ? isVi
+                                      ? 'Giải thích công thức pha mẻ'
+                                      : 'About Batch Prep Recipe'
+                                    : isVi
+                                      ? 'Giải thích định lượng nguyên liệu'
+                                      : 'About Recipe Mapping'
+                                }
+                                text={
+                                  productType === 'PREPARED_STOCK'
+                                    ? isVi
+                                      ? 'Định lượng nguyên liệu cho 1 đơn vị thành phẩm; tự động trừ kho nguyên liệu khi bạn bấm "Pha mẻ mới" trong Kho hàng.'
+                                      : 'Ingredients per finished unit; automatically deducted from raw stock when you run "Prepare Batch" in Inventory.'
+                                    : isVi
+                                      ? 'Tự động trừ kho nguyên liệu thô và tính giá vốn (COGS) mỗi khi bán món này trên POS.'
+                                      : 'Automatically deducts raw ingredient stock and calculates COGS whenever this drink is sold on POS.'
+                                }
+                              />
+                            </div>
                             {recipe.length > 0 && (
-                              <span className="text-[11px] text-stone-500 dark:text-[#94A39B]">
+                              <span className="text-[11px] text-stone-500 dark:text-[#94A39B] block mt-0.5">
                                 {isVi ? 'Giá vốn công thức ước tính:' : 'Est. recipe cost:'}{' '}
                                 <span className="font-mono-num font-semibold text-stone-700 dark:text-[#D5DFDA]">
                                   {formatKhr(recipeCogs)}
@@ -1301,13 +1333,22 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         onToggle={() => setShowVariants((prev) => !prev)}
                       >
                         <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-stone-500 dark:text-[#94A39B] flex items-center gap-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-x-1.5 min-w-0">
                               <Layers className="w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] shrink-0" />
-                              {isVi
-                                ? 'Mỗi cỡ có giá bán, mã vạch và công thức riêng.'
-                                : 'Give each size its own price, barcode, and recipe.'}
-                            </p>
+                              <span className="text-xs font-semibold text-stone-700 dark:text-[#D5DFDA]">
+                                {isVi ? 'Danh sách kích cỡ' : 'Size Variants'}
+                              </span>
+                              <InfoHint
+                                compact
+                                label={isVi ? 'Giải thích kích cỡ sản phẩm' : 'About Size Variants'}
+                                text={
+                                  isVi
+                                    ? 'Mỗi cỡ (S / M / L) có giá bán, mã vạch và công thức nguyên liệu riêng.'
+                                    : 'Give each size (S / M / L) its own selling price, barcode, and ingredient recipe.'
+                                }
+                              />
+                            </div>
                             <button
                               type="button"
                               onClick={() => addVariant()}

@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Edit2, Info, Plus, Search, Trash2, X } from 'lucide-react';
+import { Edit2, Plus, Search, Trash2, X } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import type { Expense, ExpenseCategory, ExpenseScope, PaymentMethod } from '../types';
 import { formatKhr, formatUsdRef, todayIso } from '../utils/format';
 import { isLegacyInventoryPurchaseExpense } from '../utils/inventoryEngine';
+import { InfoHint } from '../components/InfoHint';
 
 const ALL_CATEGORIES: ExpenseCategory[] = [
   'utilities',
@@ -126,11 +127,18 @@ export const ExpensesView: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
+        <div className="flex flex-wrap items-center gap-x-1">
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
             {t.expenses.title}
           </h1>
-          <p className="mt-1 text-sm text-stone-500 dark:text-[#94A39B]">{t.expenses.subtitle}</p>
+          <InfoHint
+            label={isVi ? 'Thông tin quản lý chi phí' : 'About Expenses'}
+            text={
+              isVi
+                ? `${t.expenses.subtitle} Ghi nhận chi phí vận hành (điện, thuê mặt bằng, vận chuyển, gia đình) tại đây; nhập hàng tồn kho ở mục Kho hàng để tránh tính trùng với giá vốn (COGS).`
+                : `${t.expenses.subtitle} Record operating costs (rent, utilities, transport, household) here; log stock & ingredient restocks in Inventory so quantities update automatically without double-counting COGS.`
+            }
+          />
         </div>
         <button
           type="button"
@@ -142,22 +150,23 @@ export const ExpensesView: React.FC = () => {
         </button>
       </div>
 
-      {/* Accounting Separation Notice */}
-      <div className="bg-stone-50 dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs text-stone-600 dark:text-[#94A39B]">
-        <Info className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0 mt-0.5" />
-        <p>
-          {isVi
-            ? 'Ghi nhận chi phí vận hành (điện, thuê mặt bằng, vận chuyển, gia đình) tại đây. Để nhập hàng tồn kho & nguyên liệu, hãy dùng mục Kho hàng để tự động cập nhật tồn kho và không bị tính trùng với giá vốn (COGS).'
-            : 'Record operating costs (rent, utilities, transport, household) here. Record stock & ingredient restocks in Inventory Management so quantities update automatically and never double-count against COGS.'}
-        </p>
-      </div>
-
       {/* 3-Column Summary Strip */}
       <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-stone-200 dark:divide-[#24352C]">
         <div className="p-5">
-          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-            {isVi ? 'Chi phí vận hành (P&L)' : 'Operating Expenses (P&L)'}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-1">
+            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+              {isVi ? 'Chi phí vận hành (P&L)' : 'Operating Expenses (P&L)'}
+            </p>
+            <InfoHint
+              compact
+              label={isVi ? 'Chi phí vận hành (P&L)' : 'Operating Expenses (P&L)'}
+              text={
+                isVi
+                  ? 'Chi phí kinh doanh thường kỳ (thuê mặt bằng, điện nước, bao bì, vận chuyển) — được trừ trực tiếp vào Báo cáo Lãi/Lỗ.'
+                  : 'Recurring shop overhead (rent, utilities, packaging, transport) deducted directly on the Accrual P&L.'
+              }
+            />
+          </div>
           <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(totals.operating)}
           </p>
@@ -166,9 +175,22 @@ export const ExpensesView: React.FC = () => {
           </p>
         </div>
         <div className="p-5">
-          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-            {isVi ? 'Nhập kho (Chỉ tính dòng tiền)' : 'Inventory Purchases (Cash Flow Only)'}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-1">
+            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+              {isVi ? 'Nhập kho (Chỉ tính dòng tiền)' : 'Inventory Purchases (Cash Flow Only)'}
+            </p>
+            <InfoHint
+              compact
+              label={
+                isVi ? 'Nhập kho (Chỉ tính dòng tiền)' : 'Inventory Purchases (Cash Flow Only)'
+              }
+              text={
+                isVi
+                  ? 'Tiền chi mua hàng tồn kho & nguyên liệu. Tính vào Dòng tiền chi ra nhưng KHÔNG cộng vào Chi phí vận hành để tránh tính trùng với giá vốn (COGS).'
+                  : 'Cash spent restocking packaged goods and raw ingredients. Tracked in Cash Flow only so it never double-counts against COGS.'
+              }
+            />
+          </div>
           <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(totals.stockPurchasesTotal)}
           </p>
@@ -177,9 +199,20 @@ export const ExpensesView: React.FC = () => {
           </p>
         </div>
         <div className="p-5">
-          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-            {t.expenses.householdTotal}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-1">
+            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+              {t.expenses.householdTotal}
+            </p>
+            <InfoHint
+              compact
+              label={t.expenses.householdTotal}
+              text={
+                isVi
+                  ? 'Chi tiêu cá nhân / gia đình được tách riêng hoàn toàn khỏi lợi nhuận kinh doanh của quán.'
+                  : 'Personal and family spending tracked separately so it never distorts shop profitability.'
+              }
+            />
+          </div>
           <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(totals.household)}
           </p>
@@ -386,9 +419,20 @@ export const ExpensesView: React.FC = () => {
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                  {t.expenses.scopeLabel}
-                </label>
+                <div className="flex flex-wrap items-center gap-x-1 mb-1.5">
+                  <label className="text-xs font-medium text-stone-700 dark:text-[#D5DFDA]">
+                    {t.expenses.scopeLabel}
+                  </label>
+                  <InfoHint
+                    compact
+                    label={t.expenses.scopeLabel}
+                    text={
+                      isVi
+                        ? 'Chọn "Kinh doanh" cho chi phí cửa hàng (tính vào Báo cáo Tài chính) hoặc "Gia đình" để tách riêng chi tiêu cá nhân.'
+                        : 'Choose "Business" for shop costs included in Financial Reports, or "Household" to keep personal spending separate.'
+                    }
+                  />
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -459,9 +503,20 @@ export const ExpensesView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1">
-                    {t.expenses.categoryLabel}
-                  </label>
+                  <div className="flex flex-wrap items-center gap-x-1 mb-1">
+                    <label className="text-xs font-medium text-stone-700 dark:text-[#D5DFDA]">
+                      {t.expenses.categoryLabel}
+                    </label>
+                    <InfoHint
+                      compact
+                      label={t.expenses.categoryLabel}
+                      text={
+                        isVi
+                          ? 'Danh mục "Nguyên liệu" được tính là Nhập kho (chỉ tính dòng tiền). Các danh mục vận hành khác được trừ trực tiếp vào Lãi/Lỗ.'
+                          : '"Ingredients" is classified as an inventory purchase (Cash Flow only). Other business categories flow into Operating Expenses on P&L.'
+                      }
+                    />
+                  </div>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value as ExpenseCategory)}

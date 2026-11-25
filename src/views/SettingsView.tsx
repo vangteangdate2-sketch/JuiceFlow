@@ -26,6 +26,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { useHints } from '../context/HintsContext';
 import type { BiometricSecurityConfig } from '../types';
 import {
   DEFAULT_SECURITY_CONFIG,
@@ -52,8 +53,6 @@ const SECTION_IDS: SettingsSectionId[] = [
   'cloud-sync',
   'security',
 ];
-
-const SHOW_HINTS_STORAGE_KEY = 'juiceflow_settings_show_hints';
 
 interface InfoTriggerProps {
   hintId: string;
@@ -118,16 +117,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ? settings.familyMembers
       : [settings.activeOperator || 'Family'];
 
-  // Global "Show Hints" toggle (OFF by default, persisted in localStorage) + per-item overrides
-  const [showHints, setShowHints] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return window.localStorage.getItem(SHOW_HINTS_STORAGE_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
+  // Sync with global "Show Hints" toggle + per-item overrides
+  const { showHints, resetEpoch } = useHints();
   const [hintOverrides, setHintOverrides] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setHintOverrides({});
+  }, [resetEpoch]);
 
   // Collapsible section states (all expanded initially for immediate access)
   const [openSections, setOpenSections] = useState<Record<SettingsSectionId, boolean>>({
@@ -209,20 +205,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     },
     [showHints]
   );
-
-  const handleToggleGlobalHints = () => {
-    setShowHints((prev) => {
-      const next = !prev;
-      try {
-        window.localStorage.setItem(SHOW_HINTS_STORAGE_KEY, next ? '1' : '0');
-      } catch {
-        // Ignore storage errors
-      }
-      return next;
-    });
-    // Sync all individual overrides back to the global state
-    setHintOverrides({});
-  };
 
   const allExpanded = useMemo(
     () => SECTION_IDS.every((id) => openSections[id]),
@@ -570,31 +552,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-          {/* Show Hints Toggle Switch (OFF by default, persisted in localStorage) */}
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showHints}
-            onClick={handleToggleGlobalHints}
-            className="h-11 min-h-[44px] px-3.5 inline-flex items-center gap-2.5 text-xs font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
-          >
-            <span>{isVi ? 'Hiện gợi ý' : 'Show Hints'}</span>
-            <span
-              aria-hidden="true"
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                showHints
-                  ? 'bg-[#0D5C3E] dark:bg-[#10B981]'
-                  : 'bg-stone-300 dark:bg-[#24352C]'
-              }`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white dark:bg-[#0B110E] shadow-xs transition-transform ${
-                  showHints ? 'translate-x-[18px]' : 'translate-x-[3px]'
-                }`}
-              />
-            </span>
-          </button>
-
           {/* Expand All / Collapse All Button */}
           <button
             type="button"

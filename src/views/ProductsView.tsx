@@ -22,6 +22,7 @@ import { ProductPhoto } from '../components/ProductPhoto';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { BarcodeLabelModal } from '../components/BarcodeLabelModal';
+import { InfoHint } from '../components/InfoHint';
 
 export const ProductsView: React.FC = () => {
   const {
@@ -121,15 +122,18 @@ export const ProductsView: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
+        <div className="flex flex-wrap items-center gap-x-1">
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
             {t.products.title}
           </h1>
-          <p className="mt-1 text-sm text-stone-500 dark:text-[#94A39B]">
-            {isVi
-              ? 'Quản lý sản phẩm đóng gói, pha chế theo đơn (nhiều kích cỡ S/M/L) và hàng pha sẵn trữ lạnh.'
-              : 'Manage packaged goods, made-to-order drinks with size variants, and prepared-stock items.'}
-          </p>
+          <InfoHint
+            label={isVi ? 'Thông tin quản lý sản phẩm' : 'About Products'}
+            text={
+              isVi
+                ? 'Quản lý sản phẩm đóng gói, pha chế theo đơn (nhiều kích cỡ S/M/L) và hàng pha sẵn trữ lạnh.'
+                : 'Manage packaged goods, made-to-order drinks with size variants, and prepared-stock items.'
+            }
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">

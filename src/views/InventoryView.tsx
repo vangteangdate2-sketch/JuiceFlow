@@ -32,6 +32,7 @@ import { formatBarcodeTypeLabel } from '../utils/barcodeRegistry';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { ProductFormModal } from '../components/ProductFormModal';
+import { InfoHint } from '../components/InfoHint';
 
 type InventoryTab = 'packaged' | 'ingredients' | 'prepared_stock' | 'movements';
 
@@ -520,15 +521,18 @@ export const InventoryView: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
+        <div className="flex flex-wrap items-center gap-x-1">
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
             {t.inventory.title}
           </h1>
-          <p className="mt-1 text-sm text-stone-500 dark:text-[#94A39B]">
-            {isVi
-              ? 'Quản lý thống nhất 3 phân nhóm tồn kho: Hàng đóng gói, Nguyên liệu thô và Hàng pha sẵn.'
-              : 'Unified inventory management across Packaged Stock, Raw Ingredients, Prepared Stock, and Audit Ledger.'}
-          </p>
+          <InfoHint
+            label={isVi ? 'Thông tin quản lý kho' : 'About Inventory Management'}
+            text={
+              isVi
+                ? 'Quản lý thống nhất 3 phân nhóm tồn kho: Hàng đóng gói, Nguyên liệu thô và Hàng pha sẵn.'
+                : 'Unified inventory management across Packaged Stock, Raw Ingredients, Prepared Stock, and Audit Ledger.'
+            }
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
@@ -616,41 +620,96 @@ export const InventoryView: React.FC = () => {
       {/* 3-Tier Inventory Valuation Strip */}
       <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl grid grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-stone-200 dark:divide-[#24352C]">
         <div className="p-4 col-span-2 lg:col-span-1">
-          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-            {t.inventory.stockValue}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-1">
+            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+              {t.inventory.stockValue}
+            </p>
+            <InfoHint
+              compact
+              label={t.inventory.stockValue}
+              text={
+                isVi
+                  ? 'Tổng giá trị tài sản tồn kho hiện có trên cả 3 phân nhóm (tính theo giá vốn bình quân).'
+                  : 'Combined on-hand asset valuation across all 3 inventory tiers at weighted average unit cost.'
+              }
+            />
+          </div>
           <p className="mt-1 font-mono-num text-xl font-bold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(valuation.totalVal)}
           </p>
         </div>
         <div className="p-4">
-          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-            {isVi ? 'Hàng đóng gói' : 'Packaged Stock'}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-1">
+            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+              {isVi ? 'Hàng đóng gói' : 'Packaged Stock'}
+            </p>
+            <InfoHint
+              compact
+              label={isVi ? 'Hàng đóng gói' : 'Packaged Stock'}
+              text={
+                isVi
+                  ? 'Nước đóng chai, lon, đồ ăn vặt bán trực tiếp — trừ thẳng tồn kho khi bán POS.'
+                  : 'Bottled drinks and snacks sold as-is; deducted directly by unit count at POS checkout.'
+              }
+            />
+          </div>
           <p className="mt-1 font-mono-num text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(valuation.packagedVal)}
           </p>
         </div>
         <div className="p-4">
-          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-            {isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-1">
+            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+              {isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}
+            </p>
+            <InfoHint
+              compact
+              label={isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}
+              text={
+                isVi
+                  ? 'Trái cây tươi, đường, sữa, ly — tự động trừ theo công thức khi bán món pha chế hoặc khi pha mẻ.'
+                  : 'Fresh fruit, syrups, cups, and milk; auto-deducted via recipe on made-to-order sales or batch prep.'
+              }
+            />
+          </div>
           <p className="mt-1 font-mono-num text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(valuation.ingVal)}
           </p>
         </div>
         <div className="p-4">
-          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-            {isVi ? 'Hàng pha sẵn' : 'Prepared Stock'}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-1">
+            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+              {isVi ? 'Hàng pha sẵn' : 'Prepared Stock'}
+            </p>
+            <InfoHint
+              compact
+              label={isVi ? 'Hàng pha sẵn' : 'Prepared Stock'}
+              text={
+                isVi
+                  ? 'Thành phẩm pha theo mẻ trữ lạnh — chỉ trừ số lượng sẵn bán tại POS, không trừ trùng nguyên liệu.'
+                  : 'Pre-batched chilled items; POS deducts ready units only and never double-deducts raw ingredients.'
+              }
+            />
+          </div>
           <p className="mt-1 font-mono-num text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(valuation.prepVal)}
           </p>
         </div>
         <div className="p-4">
-          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-            {t.inventory.lowStockItems}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-1">
+            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+              {t.inventory.lowStockItems}
+            </p>
+            <InfoHint
+              compact
+              label={t.inventory.lowStockItems}
+              text={
+                isVi
+                  ? 'Số mặt hàng có tồn kho bằng hoặc thấp hơn mức cảnh báo nhập lại (min).'
+                  : 'Count of items across all 3 tiers currently at or below their reorder threshold.'
+              }
+            />
+          </div>
           <p
             className={`mt-1 font-mono-num text-lg font-bold ${
               valuation.lowTotal > 0
@@ -770,8 +829,38 @@ export const InventoryView: React.FC = () => {
                       {isVi ? 'Sản phẩm / Mã vạch' : 'Product / Barcode'}
                     </th>
                     <th className="py-3 px-4 font-medium">{t.common.status}</th>
-                    <th className="py-3 px-4 font-medium text-right">{t.inventory.inStock}</th>
-                    <th className="py-3 px-4 font-medium text-right">{t.inventory.avgUnitCost}</th>
+                    <th className="py-3 px-4 font-medium text-right">
+                      <span className="inline-flex flex-wrap items-center justify-end gap-x-1">
+                        <span>{t.inventory.inStock}</span>
+                        <InfoHint
+                          mode="popover"
+                          compact
+                          align="right"
+                          label={t.inventory.inStock}
+                          text={
+                            isVi
+                              ? 'Số lượng hiện có trong kho so với mức tối thiểu (min) cần nhập thêm.'
+                              : 'Current on-hand quantity compared against the minimum reorder threshold.'
+                          }
+                        />
+                      </span>
+                    </th>
+                    <th className="py-3 px-4 font-medium text-right">
+                      <span className="inline-flex flex-wrap items-center justify-end gap-x-1">
+                        <span>{t.inventory.avgUnitCost}</span>
+                        <InfoHint
+                          mode="popover"
+                          compact
+                          align="right"
+                          label={t.inventory.avgUnitCost}
+                          text={
+                            isVi
+                              ? 'Giá vốn bình quân gia quyền tự động cập nhật sau mỗi lần nhập kho mua hàng.'
+                              : 'Weighted average unit cost recalculated automatically on each Stock-In purchase.'
+                          }
+                        />
+                      </span>
+                    </th>
                     <th className="py-3 px-4 font-medium text-right">
                       {isVi ? 'Giá trị' : 'Value'}
                     </th>
@@ -901,8 +990,38 @@ export const InventoryView: React.FC = () => {
                   <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
                     <th className="py-3 px-5 font-medium">{t.inventory.ingredientName}</th>
                     <th className="py-3 px-4 font-medium">{t.common.status}</th>
-                    <th className="py-3 px-4 font-medium text-right">{t.inventory.inStock}</th>
-                    <th className="py-3 px-4 font-medium text-right">{t.inventory.avgUnitCost}</th>
+                    <th className="py-3 px-4 font-medium text-right">
+                      <span className="inline-flex flex-wrap items-center justify-end gap-x-1">
+                        <span>{t.inventory.inStock}</span>
+                        <InfoHint
+                          mode="popover"
+                          compact
+                          align="right"
+                          label={t.inventory.inStock}
+                          text={
+                            isVi
+                              ? 'Lượng nguyên liệu hiện còn; tự động trừ khi bán món pha chế hoặc pha mẻ.'
+                              : 'Remaining raw ingredient balance; auto-deducted on made-to-order sales and batch prep.'
+                          }
+                        />
+                      </span>
+                    </th>
+                    <th className="py-3 px-4 font-medium text-right">
+                      <span className="inline-flex flex-wrap items-center justify-end gap-x-1">
+                        <span>{t.inventory.avgUnitCost}</span>
+                        <InfoHint
+                          mode="popover"
+                          compact
+                          align="right"
+                          label={t.inventory.avgUnitCost}
+                          text={
+                            isVi
+                              ? 'Giá vốn bình quân trên 1 đơn vị dùng để tính giá vốn công thức (COGS).'
+                              : 'Weighted average cost per unit used to calculate recipe COGS automatically.'
+                          }
+                        />
+                      </span>
+                    </th>
                     <th className="py-3 px-4 font-medium text-right">
                       {isVi ? 'Giá trị' : 'Value'}
                     </th>
@@ -1040,9 +1159,37 @@ export const InventoryView: React.FC = () => {
                     </th>
                     <th className="py-3 px-4 font-medium">{t.common.status}</th>
                     <th className="py-3 px-4 font-medium text-right">
-                      {isVi ? 'Sẵn bán' : 'Ready Qty'}
+                      <span className="inline-flex flex-wrap items-center justify-end gap-x-1">
+                        <span>{isVi ? 'Sẵn bán' : 'Ready Qty'}</span>
+                        <InfoHint
+                          mode="popover"
+                          compact
+                          align="right"
+                          label={isVi ? 'Sẵn bán' : 'Ready Qty'}
+                          text={
+                            isVi
+                              ? 'Số lượng thành phẩm đã pha sẵn trữ lạnh. Khi bán POS chỉ trừ số này, không trừ trùng nguyên liệu.'
+                              : 'Pre-batched units ready to sell. POS deducts this count only and never double-deducts ingredients.'
+                          }
+                        />
+                      </span>
                     </th>
-                    <th className="py-3 px-4 font-medium text-right">{t.inventory.avgUnitCost}</th>
+                    <th className="py-3 px-4 font-medium text-right">
+                      <span className="inline-flex flex-wrap items-center justify-end gap-x-1">
+                        <span>{t.inventory.avgUnitCost}</span>
+                        <InfoHint
+                          mode="popover"
+                          compact
+                          align="right"
+                          label={t.inventory.avgUnitCost}
+                          text={
+                            isVi
+                              ? 'Giá vốn mỗi thành phẩm được tính bình quân từ chi phí mẻ pha.'
+                              : 'Average cost per finished unit updated from each prepared batch.'
+                          }
+                        />
+                      </span>
+                    </th>
                     <th className="py-3 px-4 font-medium text-right">
                       {isVi ? 'Giá trị' : 'Value'}
                     </th>
@@ -1066,8 +1213,8 @@ export const InventoryView: React.FC = () => {
                           <p className="text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
                             {prod.recipe.length > 0
                               ? isVi
-                                ? `Công thức mẻ: ${prod.recipe.length} nguyên liệu (không trừ lại khi bán POS)`
-                                : `Batch recipe: ${prod.recipe.length} ingredients (never double-deducted at POS)`
+                                ? `Công thức mẻ: ${prod.recipe.length} nguyên liệu`
+                                : `Batch recipe: ${prod.recipe.length} ingredients`
                               : isVi
                                 ? 'Nhập trực tiếp thành phẩm'
                                 : 'Direct finished-goods entry'}
@@ -1173,7 +1320,22 @@ export const InventoryView: React.FC = () => {
                     <th className="py-3 px-4 font-medium">
                       {isVi ? 'Mặt hàng / Nhóm' : 'Item / Tier'}
                     </th>
-                    <th className="py-3 px-4 font-medium">{t.inventory.movementType}</th>
+                    <th className="py-3 px-4 font-medium">
+                      <span className="inline-flex flex-wrap items-center gap-x-1">
+                        <span>{t.inventory.movementType}</span>
+                        <InfoHint
+                          mode="popover"
+                          compact
+                          align="left"
+                          label={t.inventory.movementType}
+                          text={
+                            isVi
+                              ? 'Phân loại nguyên nhân biến động kho: nhập mua, đầu kỳ, bán POS, pha mẻ, kiểm kê hoặc hao hụt.'
+                              : 'Audit reason for each stock change: purchase, opening stock, POS sale, batch prep, count, or spoilage.'
+                          }
+                        />
+                      </span>
+                    </th>
                     <th className="py-3 px-4 font-medium text-right">
                       {t.inventory.quantityChange}
                     </th>
@@ -1363,11 +1525,22 @@ export const InventoryView: React.FC = () => {
       {purchaseTarget && (
         <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
-            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
-              <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
-                {isVi ? 'Nhập kho mua hàng' : 'Record Stock-In Purchase'}:{' '}
-                {isVi ? purchaseTarget.nameVi || purchaseTarget.name : purchaseTarget.name}
-              </h2>
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-x-1 min-w-0">
+                <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
+                  {isVi ? 'Nhập kho mua hàng' : 'Record Stock-In Purchase'}:{' '}
+                  {isVi ? purchaseTarget.nameVi || purchaseTarget.name : purchaseTarget.name}
+                </h2>
+                <InfoHint
+                  compact
+                  label={isVi ? 'Giải thích nhập kho mua hàng' : 'About Stock-In Purchase'}
+                  text={
+                    isVi
+                      ? 'Ghi nhận vào Sổ Mua Hàng (Dòng tiền chi ra) và tăng Giá trị Tồn kho — không tính trùng hai lần vào chi phí vận hành P&L.'
+                      : 'Recorded as an Inventory Purchase (Cash Flow outflow & Stock Asset increase) — never double-counted with COGS in Accrual P&L.'
+                  }
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => setPurchaseTarget(null)}
@@ -1378,11 +1551,6 @@ export const InventoryView: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleSavePurchase} className="p-6 space-y-4">
-              <p className="text-xs text-emerald-800 dark:text-[#D1FAE5] bg-emerald-50 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 rounded-lg p-3">
-                {isVi
-                  ? 'Ghi nhận vào Sổ Mua Hàng (Dòng tiền chi ra) và tăng Giá trị Tồn kho — không tính trùng hai lần vào chi phí vận hành P&L.'
-                  : 'Recorded as an Inventory Purchase (Cash Flow outflow & Stock Asset increase) — never double-counted with COGS in Accrual P&L.'}
-              </p>
 
               {/* Carton / Pack Mode Toggle */}
               {purchaseTarget.classification === 'packaged' && (
@@ -1550,11 +1718,22 @@ export const InventoryView: React.FC = () => {
       {openingTarget && (
         <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
           <div className="w-full max-w-sm bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
-            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
-              <h2 className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
-                {isVi ? 'Nhập tồn đầu kỳ' : 'Opening Stock'}:{' '}
-                {isVi ? openingTarget.nameVi || openingTarget.name : openingTarget.name}
-              </h2>
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-x-1 min-w-0">
+                <h2 className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
+                  {isVi ? 'Nhập tồn đầu kỳ' : 'Opening Stock'}:{' '}
+                  {isVi ? openingTarget.nameVi || openingTarget.name : openingTarget.name}
+                </h2>
+                <InfoHint
+                  compact
+                  label={isVi ? 'Giải thích tồn đầu kỳ' : 'About Opening Stock'}
+                  text={
+                    isVi
+                      ? 'Tồn kho đầu kỳ chỉ tăng số dư và giá trị tài sản kho — KHÔNG tính là chi phí hay tiền chi ra.'
+                      : 'Opening stock adds initial on-hand inventory valuation ONLY — it is NEVER recorded as an expense or cash outflow.'
+                  }
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => setOpeningTarget(null)}
@@ -1565,11 +1744,6 @@ export const InventoryView: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleSaveOpeningStock} className="p-6 space-y-4">
-              <p className="text-xs text-stone-600 dark:text-[#D5DFDA] bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg p-3">
-                {isVi
-                  ? 'Tồn kho đầu kỳ chỉ tăng số dư và giá trị tài sản kho — KHÔNG tính là chi phí hay tiền chi ra.'
-                  : 'Opening stock adds initial on-hand inventory valuation ONLY — it is NEVER recorded as an expense or cash outflow.'}
-              </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
@@ -1636,13 +1810,22 @@ export const InventoryView: React.FC = () => {
       {batchProduct && (
         <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
-            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-x-1.5 min-w-0">
                 <PackageCheck className="w-5 h-5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
                 <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
                   {isVi ? 'Pha mẻ hàng trữ sẵn' : 'Prepare Batch'}:{' '}
                   {isVi ? batchProduct.nameVi || batchProduct.name : batchProduct.name}
                 </h2>
+                <InfoHint
+                  compact
+                  label={isVi ? 'Giải thích pha mẻ hàng trữ sẵn' : 'About Prepare Batch'}
+                  text={
+                    isVi
+                      ? 'Chọn "Trừ nguyên liệu theo mẻ" để trừ kho nguyên liệu theo công thức và tự tính giá vốn thành phẩm, hoặc "Thêm trực tiếp" nếu không cần trừ nguyên liệu thô.'
+                      : 'Choose "Deduct Raw Ingredients" to consume ingredients via the batch recipe and recalculate unit cost, or "Direct Add" to increase ready stock without deducting raw stock.'
+                  }
+                />
               </div>
               <button
                 type="button"
@@ -1659,38 +1842,24 @@ export const InventoryView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setBatchMode('deduct_ingredients')}
-                  className={`min-h-[56px] p-3 rounded-lg border text-left text-xs transition-colors ${
+                  className={`min-h-[48px] px-3 py-2.5 rounded-lg border text-left text-xs font-semibold transition-colors ${
                     batchMode === 'deduct_ingredients'
                       ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
                       : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                   }`}
                 >
-                  <div className="font-semibold">
-                    {isVi ? 'Trừ nguyên liệu theo mẻ' : 'Deduct Raw Ingredients'}
-                  </div>
-                  <div className="text-[11px] text-stone-500 dark:text-[#94A39B] mt-0.5">
-                    {isVi
-                      ? 'Dùng công thức pha mẻ & tính giá vốn tự động'
-                      : 'Uses batch recipe & updates unit cost'}
-                  </div>
+                  {isVi ? 'Trừ nguyên liệu theo mẻ' : 'Deduct Raw Ingredients'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setBatchMode('direct_add')}
-                  className={`min-h-[56px] p-3 rounded-lg border text-left text-xs transition-colors ${
+                  className={`min-h-[48px] px-3 py-2.5 rounded-lg border text-left text-xs font-semibold transition-colors ${
                     batchMode === 'direct_add'
                       ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
                       : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                   }`}
                 >
-                  <div className="font-semibold">
-                    {isVi ? 'Thêm trực tiếp thành phẩm' : 'Direct Add Finished Stock'}
-                  </div>
-                  <div className="text-[11px] text-stone-500 dark:text-[#94A39B] mt-0.5">
-                    {isVi
-                      ? 'Không trừ kho nguyên liệu thô'
-                      : 'Skip raw ingredient deduction'}
-                  </div>
+                  {isVi ? 'Thêm trực tiếp thành phẩm' : 'Direct Add Finished Stock'}
                 </button>
               </div>
 
