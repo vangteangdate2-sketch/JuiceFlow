@@ -182,6 +182,10 @@ export interface Sale {
   cogsKhr: number;
   refundedCogsKhr?: number;
   paymentMethod: PaymentMethod;
+  cash_received_usd?: number | null;
+  cash_received_khr?: number | null;
+  exchange_rate_used?: number | null;
+  change_given_khr?: number | null;
   customerName: string;
   note: string;
   recordedBy: string;
@@ -309,6 +313,7 @@ export interface WorkspaceSettings {
   location: string;
   currency: 'KHR';
   usdRate: number;
+  posExchangeRate?: number;
   language: AppLanguage;
   familyMembers: string[];
   activeOperator: string;

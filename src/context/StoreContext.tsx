@@ -229,6 +229,10 @@ export interface RecordSaleInput {
   clientTxId?: string;
   items: { productId: string; variantId?: string; quantity: number }[];
   paymentMethod: PaymentMethod;
+  cash_received_usd?: number | null;
+  cash_received_khr?: number | null;
+  exchange_rate_used?: number | null;
+  change_given_khr?: number | null;
   customerName: string;
   note: string;
   saleDate?: string;
@@ -547,6 +551,30 @@ function saleToFirestoreDoc(
     cogsKhr: clampNumber(sale.cogsKhr, 0, 1000000000),
     refundedCogsKhr: clampNumber(sale.refundedCogsKhr ?? 0, 0, sale.cogsKhr),
     paymentMethod: sale.paymentMethod,
+    cash_received_usd:
+      sale.paymentMethod === 'cash' &&
+      sale.cash_received_usd !== undefined &&
+      sale.cash_received_usd !== null
+        ? clampNumber(sale.cash_received_usd, 0, 1000000)
+        : null,
+    cash_received_khr:
+      sale.paymentMethod === 'cash' &&
+      sale.cash_received_khr !== undefined &&
+      sale.cash_received_khr !== null
+        ? clampNumber(Math.round(sale.cash_received_khr), 0, 1000000000)
+        : null,
+    exchange_rate_used:
+      sale.paymentMethod === 'cash' &&
+      sale.exchange_rate_used !== undefined &&
+      sale.exchange_rate_used !== null
+        ? clampNumber(Math.round(sale.exchange_rate_used), 1, 100000)
+        : null,
+    change_given_khr:
+      sale.paymentMethod === 'cash' &&
+      sale.change_given_khr !== undefined &&
+      sale.change_given_khr !== null
+        ? clampNumber(Math.round(sale.change_given_khr), 0, 1000000000)
+        : null,
     customerName: sanitizeString(sale.customerName, 80),
     note: sanitizeString(sale.note, 200),
     recordedBy: sanitizeString(sale.recordedBy, 80),
@@ -698,6 +726,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           memberUids: uids,
           currency: 'KHR',
           usdRate: clampNumber(cur.settings.usdRate, 1, 100000),
+          posExchangeRate: clampNumber(cur.settings.posExchangeRate ?? 4000, 1, 100000),
           language: cur.settings.language === 'vi' ? 'vi' : 'en',
           familyMembers: familyList,
           lowStockDefault: clampNumber(cur.settings.lowStockDefault, 0, 1000000),
@@ -848,6 +877,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               location: String(d.location ?? prev.location),
               currency: 'KHR',
               usdRate: Number(d.usdRate) || prev.usdRate,
+              posExchangeRate:
+                d.posExchangeRate !== undefined && Number(d.posExchangeRate) > 0
+                  ? Math.round(Number(d.posExchangeRate))
+                  : prev.posExchangeRate ?? 4000,
               language: d.language === 'vi' ? 'vi' : 'en',
               familyMembers:
                 Array.isArray(d.familyMembers) && d.familyMembers.length > 0
@@ -1149,6 +1182,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             name: sanitizeString(next.name || 'JuiceFlow', 100),
             location: sanitizeString(next.location, 120),
             usdRate: clampNumber(next.usdRate, 1, 100000),
+            posExchangeRate: clampNumber(next.posExchangeRate ?? 4000, 1, 100000),
             language: next.language === 'vi' ? 'vi' : 'en',
             familyMembers: next.familyMembers.slice(0, 10),
             lowStockDefault: clampNumber(next.lowStockDefault, 0, 1000000),
@@ -1947,6 +1981,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           saleDate: input.saleDate,
           items: input.items,
           paymentMethod: input.paymentMethod,
+          cash_received_usd: input.paymentMethod === 'cash' ? input.cash_received_usd ?? 0 : null,
+          cash_received_khr: input.paymentMethod === 'cash' ? input.cash_received_khr ?? 0 : null,
+          exchange_rate_used:
+            input.paymentMethod === 'cash'
+              ? input.exchange_rate_used ?? cur.settings.posExchangeRate ?? 4000
+              : null,
+          change_given_khr: input.paymentMethod === 'cash' ? input.change_given_khr : null,
           customerName: input.customerName,
           note: input.note,
           recordedBy: operator,
@@ -2094,6 +2135,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             saleDate: input.saleDate,
             items: input.items,
             paymentMethod: input.paymentMethod,
+            cash_received_usd: input.paymentMethod === 'cash' ? input.cash_received_usd ?? 0 : null,
+            cash_received_khr: input.paymentMethod === 'cash' ? input.cash_received_khr ?? 0 : null,
+            exchange_rate_used:
+              input.paymentMethod === 'cash'
+                ? input.exchange_rate_used ?? cur.settings.posExchangeRate ?? 4000
+                : null,
+            change_given_khr: input.paymentMethod === 'cash' ? input.change_given_khr : null,
             customerName: input.customerName,
             note: input.note,
             recordedBy: operator,
@@ -2914,6 +2962,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               location: String(d.location ?? prev.location),
               currency: 'KHR',
               usdRate: Number(d.usdRate) || prev.usdRate,
+              posExchangeRate:
+                d.posExchangeRate !== undefined && Number(d.posExchangeRate) > 0
+                  ? Math.round(Number(d.posExchangeRate))
+                  : prev.posExchangeRate ?? 4000,
               language: d.language === 'vi' ? 'vi' : 'en',
               familyMembers:
                 Array.isArray(d.familyMembers) && d.familyMembers.length > 0

@@ -44,6 +44,13 @@ import {
   type StockShortage,
 } from '../utils/inventoryEngine';
 import { formatBarcodeTypeLabel } from '../utils/barcodeRegistry';
+import {
+  calculateCashTender,
+  computeExactRemainingKhr,
+  DEFAULT_POS_EXCHANGE_RATE,
+  formatUsdClean,
+  parseNonNegativeNumber,
+} from '../utils/cashTender';
 import { ProductPhoto } from '../components/ProductPhoto';
 import { BarcodeScanner, type BarcodeScanSource } from '../components/BarcodeScanner';
 import { ReceiptModal } from '../components/ReceiptModal';
@@ -102,6 +109,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
   const [cart, setCart] = useState<Record<string, CartEntry>>({});
   const [cartTxId, setCartTxId] = useState<string>(() => generateId('sale'));
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [cashUsdInput, setCashUsdInput] = useState('');
+  const [cashKhrInput, setCashKhrInput] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [note, setNote] = useState('');
   const [saleDate, setSaleDate] = useState(todayIso());
@@ -185,6 +194,46 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
   const cartTotal = useMemo(() => cartLines.reduce((s, l) => s + l.lineTotal, 0), [cartLines]);
   const cartCogs = useMemo(() => cartLines.reduce((s, l) => s + l.lineCogs, 0), [cartLines]);
+
+  const posExchangeRate = useMemo(() => {
+    const rate = Number(settings.posExchangeRate);
+    return Number.isFinite(rate) && rate > 0 ? Math.round(rate) : DEFAULT_POS_EXCHANGE_RATE;
+  }, [settings.posExchangeRate]);
+
+  const cashCalc = useMemo(
+    () =>
+      calculateCashTender({
+        totalKhr: cartTotal,
+        usdReceived: parseNonNegativeNumber(cashUsdInput),
+        khrReceived: parseNonNegativeNumber(cashKhrInput),
+        exchangeRate: posExchangeRate,
+      }),
+    [cartTotal, cashUsdInput, cashKhrInput, posExchangeRate]
+  );
+
+  const isCashSelected = paymentMethod === 'cash';
+  const cashInsufficient = isCashSelected && cartTotal > 0 && !cashCalc.isCovered;
+
+  const handleQuickAddUsd = (deltaUsd: number) => {
+    const current = parseNonNegativeNumber(cashUsdInput);
+    const next = Math.round((current + deltaUsd) * 100) / 100;
+    setCashUsdInput(String(next));
+  };
+
+  const handleQuickAddKhr = (deltaKhr: number) => {
+    const current = parseNonNegativeNumber(cashKhrInput);
+    const next = Math.round(current + deltaKhr);
+    setCashKhrInput(String(next));
+  };
+
+  const handleExactKhr = () => {
+    const remaining = computeExactRemainingKhr(
+      cartTotal,
+      parseNonNegativeNumber(cashUsdInput),
+      posExchangeRate
+    );
+    setCashKhrInput(remaining > 0 ? String(remaining) : '');
+  };
 
   // Live stock validation for current cart
   const liveStockValidation = useMemo(() => {
@@ -392,6 +441,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cartLines.length === 0 || submitting) return;
+    if (paymentMethod === 'cash' && cartTotal > 0 && !cashCalc.isCovered) return;
 
     setCheckoutError(null);
     setCheckoutShortages([]);
@@ -405,6 +455,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
           quantity: l.quantity,
         })),
         paymentMethod,
+        cash_received_usd: paymentMethod === 'cash' ? cashCalc.usdReceived : null,
+        cash_received_khr: paymentMethod === 'cash' ? cashCalc.khrReceived : null,
+        exchange_rate_used: paymentMethod === 'cash' ? cashCalc.exchangeRate : null,
+        change_given_khr: paymentMethod === 'cash' ? cashCalc.changeDueKhr : null,
         customerName,
         note,
         saleDate,
@@ -418,6 +472,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
       setCart({});
       setCartTxId(generateId('sale'));
+      setCashUsdInput('');
+      setCashKhrInput('');
       setCustomerName('');
       setNote('');
       setSaleDate(todayIso());
@@ -446,6 +502,33 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
       );
     });
   }, [sales, search, paymentFilter]);
+
+  const cashDrawerSummary = useMemo(() => {
+    let cashOrderCount = 0;
+    let usdBillsIn = 0;
+    let khrCashIn = 0;
+    let changeGivenKhr = 0;
+
+    for (const s of filteredSales) {
+      if (s.status === 'voided' || s.paymentMethod !== 'cash') continue;
+      const hasTenderData =
+        (s.cash_received_usd !== null && s.cash_received_usd !== undefined) ||
+        (s.cash_received_khr !== null && s.cash_received_khr !== undefined);
+      if (!hasTenderData) continue;
+      cashOrderCount += 1;
+      usdBillsIn += Number(s.cash_received_usd ?? 0);
+      khrCashIn += Number(s.cash_received_khr ?? 0);
+      changeGivenKhr += Number(s.change_given_khr ?? 0);
+    }
+
+    return {
+      cashOrderCount,
+      usdBillsIn: Math.round(usdBillsIn * 100) / 100,
+      khrCashIn: Math.round(khrCashIn),
+      changeGivenKhr: Math.round(changeGivenKhr),
+      netKhrDrawer: Math.round(khrCashIn - changeGivenKhr),
+    };
+  }, [filteredSales]);
 
   const detailSale = useMemo(
     () => (detailSaleId ? sales.find((s) => s.id === detailSaleId) || null : null),
@@ -916,6 +999,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   type="button"
                   onClick={() => {
                     setCart({});
+                    setCashUsdInput('');
+                    setCashKhrInput('');
                     setCheckoutError(null);
                     setCheckoutShortages([]);
                   }}
@@ -1057,8 +1142,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               )}
             </div>
 
-            {/* Pinned Bottom Checkout Controls: Accordion Details, Payment, Total (+ Margin Eye Toggle), Charge Button */}
-            <div className="shrink-0 border-t border-stone-200 bg-white px-4 sm:px-5 py-3.5 space-y-3">
+            {/* Pinned Bottom Checkout Controls: Accordion Details, Payment, Conditional Cash Box, Total (+ Margin Eye Toggle), Charge Button */}
+            <div className="shrink-0 border-t border-stone-200 bg-white px-4 sm:px-5 py-3 space-y-2.5">
               {/* Collapsible 1-Line "Order Details & Notes" Accordion */}
               <div className="border border-stone-200 rounded-lg bg-stone-50/60 overflow-hidden">
                 <button
@@ -1066,7 +1151,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   onClick={() => setOrderDetailsOpen((prev) => !prev)}
                   aria-expanded={orderDetailsOpen}
                   aria-controls="pos-order-details-panel"
-                  className="w-full px-3 py-2 flex items-center justify-between gap-2 text-xs font-medium text-stone-700 hover:bg-stone-100/70 transition-colors"
+                  className="w-full px-3 py-1.5 flex items-center justify-between gap-2 text-xs font-medium text-stone-700 hover:bg-stone-100/70 transition-colors"
                 >
                   <span className="truncate">
                     {isVi ? 'Chi tiết đơn & Ghi chú' : 'Order Details & Notes'}
@@ -1147,7 +1232,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       key={pm}
                       type="button"
                       onClick={() => setPaymentMethod(pm)}
-                      className={`px-3 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
                         paymentMethod === pm
                           ? 'border-[#0D5C3E] bg-[#E6F2ED] text-[#0D5C3E]'
                           : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
@@ -1156,6 +1241,205 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       {t.paymentMethods[pm]}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Conditional Dual-Currency Cash Received & KHR Change Box (Cash Only) */}
+              <div
+                aria-hidden={!isCashSelected}
+                className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
+                  isCashSelected
+                    ? 'grid-rows-[1fr] opacity-100'
+                    : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <div className="rounded-lg border border-stone-200 bg-stone-50/70 p-2.5 space-y-2">
+                    {/* Cash Box Header + Rate Indicator + Quick Clear */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold text-stone-700">
+                        {isVi ? 'Tiền khách đưa & Tiền thối' : 'Cash Received & Change'}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] font-mono-num text-stone-500">
+                          {isVi ? 'Tỷ giá' : 'Rate'}: {posExchangeRate.toLocaleString('en-US')} ៛/$
+                        </span>
+                        {cashCalc.hasAnyInput && (
+                          <button
+                            type="button"
+                            tabIndex={isCashSelected ? 0 : -1}
+                            onClick={() => {
+                              setCashUsdInput('');
+                              setCashKhrInput('');
+                            }}
+                            className="text-[11px] font-medium text-stone-500 hover:text-stone-900 underline"
+                          >
+                            {isVi ? 'Xóa' : 'Clear'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Side-by-Side USD & KHR Numeric Inputs + Quick-Tap Chips */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Left: USD Received ($) */}
+                      <div className="space-y-1.5">
+                        <label
+                          htmlFor="pos-cash-usd"
+                          className="block text-[11px] font-medium text-stone-600"
+                        >
+                          {isVi ? 'Nhận USD ($)' : 'USD Received ($)'}
+                        </label>
+                        <div className="relative">
+                          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-stone-400">
+                            $
+                          </span>
+                          <input
+                            id="pos-cash-usd"
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step="any"
+                            tabIndex={isCashSelected ? 0 : -1}
+                            value={cashUsdInput}
+                            onChange={(e) => setCashUsdInput(e.target.value)}
+                            placeholder="0"
+                            className="w-full pl-6 pr-6 py-1.5 text-xs font-mono-num font-semibold text-stone-900 bg-white border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0D5C3E]/30 focus:border-[#0D5C3E]"
+                          />
+                          {cashUsdInput && (
+                            <button
+                              type="button"
+                              tabIndex={isCashSelected ? 0 : -1}
+                              onClick={() => setCashUsdInput('')}
+                              aria-label="Clear USD"
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-700"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1">
+                          {[1, 5, 10, 20].map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              tabIndex={isCashSelected ? 0 : -1}
+                              onClick={() => handleQuickAddUsd(amt)}
+                              className="py-1 px-1.5 text-[11px] font-mono-num font-semibold text-stone-700 bg-white border border-stone-200 hover:border-[#0D5C3E] hover:text-[#0D5C3E] hover:bg-[#E6F2ED]/50 rounded-md transition-colors whitespace-nowrap"
+                            >
+                              ${amt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Right: KHR Received (៛) */}
+                      <div className="space-y-1.5">
+                        <label
+                          htmlFor="pos-cash-khr"
+                          className="block text-[11px] font-medium text-stone-600"
+                        >
+                          {isVi ? 'Nhận KHR (៛)' : 'KHR Received (៛)'}
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="pos-cash-khr"
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            step={100}
+                            tabIndex={isCashSelected ? 0 : -1}
+                            value={cashKhrInput}
+                            onChange={(e) => setCashKhrInput(e.target.value)}
+                            placeholder="0"
+                            className="w-full pl-2.5 pr-7 py-1.5 text-xs font-mono-num font-semibold text-stone-900 bg-white border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0D5C3E]/30 focus:border-[#0D5C3E]"
+                          />
+                          {cashKhrInput ? (
+                            <button
+                              type="button"
+                              tabIndex={isCashSelected ? 0 : -1}
+                              onClick={() => setCashKhrInput('')}
+                              aria-label="Clear KHR"
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-700"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          ) : (
+                            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-stone-400">
+                              ៛
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1">
+                          <button
+                            type="button"
+                            tabIndex={isCashSelected ? 0 : -1}
+                            onClick={handleExactKhr}
+                            disabled={cartTotal <= 0}
+                            className="py-1 px-1.5 text-[11px] font-semibold text-[#0D5C3E] bg-[#E6F2ED] border border-[#0D5C3E]/25 hover:bg-[#D5EAE0] disabled:opacity-45 rounded-md transition-colors whitespace-nowrap"
+                          >
+                            {isVi ? 'Đủ tiền' : 'Exact'}
+                          </button>
+                          {[5000, 10000, 50000].map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              tabIndex={isCashSelected ? 0 : -1}
+                              onClick={() => handleQuickAddKhr(amt)}
+                              className="py-1 px-1 text-[11px] font-mono-num font-semibold text-stone-700 bg-white border border-stone-200 hover:border-[#0D5C3E] hover:text-[#0D5C3E] hover:bg-[#E6F2ED]/50 rounded-md transition-colors whitespace-nowrap"
+                            >
+                              {amt.toLocaleString('en-US')} ៛
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Subtle Mixed-Currency Combined Breakdown Line */}
+                    {cashCalc.isMixed && (
+                      <p className="text-[11px] font-mono-num text-stone-600 text-center pt-0.5">
+                        {formatUsdClean(cashCalc.usdReceived)} ({formatKhr(cashCalc.usdEquivalentKhr)}) +{' '}
+                        {formatKhr(cashCalc.khrReceived)} ={' '}
+                        <span className="font-semibold text-stone-900">
+                          {formatKhr(cashCalc.totalTenderedKhr)}
+                        </span>
+                      </p>
+                    )}
+
+                    {/* Real-Time Change Due / Remaining Due Output Row */}
+                    <div className="pt-1.5 border-t border-stone-200/80 flex items-center justify-between gap-2">
+                      {cartTotal === 0 ? (
+                        <>
+                          <span className="text-xs font-medium text-stone-500">
+                            {isVi ? 'Tiền thối lại' : 'Change Due'}
+                          </span>
+                          <span className="font-mono-num text-sm font-semibold text-stone-400">
+                            0 ៛
+                          </span>
+                        </>
+                      ) : cashCalc.isCovered ? (
+                        <>
+                          <span className="text-xs font-semibold text-stone-700">
+                            {isVi ? 'Tiền thối lại' : 'Change Due'}
+                          </span>
+                          <span className="font-mono-num text-base font-bold text-[#0D5C3E]">
+                            {formatKhr(cashCalc.changeDueKhr)}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-xs font-medium text-red-700">
+                            {isVi ? 'Còn thiếu' : 'Remaining Due'}
+                          </span>
+                          <span className="font-mono-num text-xs font-semibold text-red-700">
+                            {isVi
+                              ? `Thiếu ${formatKhr(cashCalc.remainingDueKhr)}`
+                              : `Short by ${formatKhr(cashCalc.remainingDueKhr)}`}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1212,7 +1496,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       {formatKhr(cartTotal)}
                     </span>
                     <span className="block font-mono-num text-[11px] text-stone-400 mt-0.5">
-                      {formatUsdRef(cartTotal, settings.usdRate)}
+                      {formatUsdRef(cartTotal, isCashSelected ? posExchangeRate : settings.usdRate)}
                     </span>
                   </div>
                 </div>
@@ -1221,8 +1505,13 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               {/* Pinned Full-Width Primary Charge CTA */}
               <button
                 type="submit"
-                disabled={cartLines.length === 0 || submitting || !liveStockValidation.ok}
-                className="w-full py-3 px-4 text-sm font-semibold text-white bg-[#0D5C3E] hover:bg-[#0A4A31] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap font-mono-num"
+                disabled={
+                  cartLines.length === 0 ||
+                  submitting ||
+                  !liveStockValidation.ok ||
+                  cashInsufficient
+                }
+                className="w-full py-2.5 px-4 text-sm font-semibold text-white bg-[#0D5C3E] hover:bg-[#0A4A31] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap font-mono-num"
               >
                 {submitting
                   ? isVi
@@ -1267,6 +1556,44 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               ))}
             </div>
           </div>
+
+          {/* End-of-Day Dual-Currency Cash Drawer Reconciliation Strip */}
+          {cashDrawerSummary.cashOrderCount > 0 && (
+            <div className="px-5 py-3 bg-stone-50/80 border-b border-stone-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div>
+                <span className="block text-[11px] text-stone-500">
+                  {isVi ? 'Tiền USD thu vào' : 'USD Bills Received'}
+                </span>
+                <span className="font-mono-num text-sm font-semibold text-stone-900">
+                  {formatUsdClean(cashDrawerSummary.usdBillsIn)}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[11px] text-stone-500">
+                  {isVi ? 'Tiền KHR thu vào' : 'KHR Cash Received'}
+                </span>
+                <span className="font-mono-num text-sm font-semibold text-stone-900">
+                  {formatKhr(cashDrawerSummary.khrCashIn)}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[11px] text-stone-500">
+                  {isVi ? 'Tiền thối KHR đã trả' : 'KHR Change Given'}
+                </span>
+                <span className="font-mono-num text-sm font-semibold text-amber-700">
+                  -{formatKhr(cashDrawerSummary.changeGivenKhr)}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[11px] text-stone-500">
+                  {isVi ? 'KHR thực giữ trong két' : 'Net KHR in Drawer'}
+                </span>
+                <span className="font-mono-num text-sm font-semibold text-[#0D5C3E]">
+                  {formatKhr(cashDrawerSummary.netKhrDrawer)}
+                </span>
+              </div>
+            </div>
+          )}
 
           {filteredSales.length === 0 ? (
             <p className="p-10 text-center text-sm text-stone-500">{t.common.noResults}</p>
@@ -1346,7 +1673,31 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                           </p>
                         </td>
                         <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
-                          {t.paymentMethods[sale.paymentMethod]}
+                          <span className="font-medium text-stone-700">
+                            {t.paymentMethods[sale.paymentMethod]}
+                          </span>
+                          {sale.paymentMethod === 'cash' &&
+                            ((sale.cash_received_usd !== null &&
+                              sale.cash_received_usd !== undefined) ||
+                              (sale.cash_received_khr !== null &&
+                                sale.cash_received_khr !== undefined)) && (
+                              <span className="block text-[11px] text-stone-500 font-mono-num mt-0.5">
+                                {[
+                                  (sale.cash_received_usd ?? 0) > 0
+                                    ? formatUsdClean(sale.cash_received_usd ?? 0)
+                                    : null,
+                                  (sale.cash_received_khr ?? 0) > 0
+                                    ? formatKhr(sale.cash_received_khr ?? 0)
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' + ') || '0 ៛'}
+                                {sale.change_given_khr !== null &&
+                                sale.change_given_khr !== undefined
+                                  ? ` · ${isVi ? 'Thối' : 'Chg'} ${formatKhr(sale.change_given_khr)}`
+                                  : ''}
+                              </span>
+                            )}
                         </td>
                         <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-600 whitespace-nowrap">
                           {formatKhr(netCogs)}
@@ -1531,6 +1882,49 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
             </div>
 
             <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* Cash Drawer Breakdown (for Cash orders with tender data) */}
+              {detailSale.paymentMethod === 'cash' &&
+                ((detailSale.cash_received_usd !== null &&
+                  detailSale.cash_received_usd !== undefined) ||
+                  (detailSale.cash_received_khr !== null &&
+                    detailSale.cash_received_khr !== undefined)) && (
+                  <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <span className="block text-[11px] text-stone-500">
+                        {isVi ? 'Nhận USD' : 'USD Received'}
+                      </span>
+                      <span className="font-mono-num font-semibold text-stone-900">
+                        {formatUsdClean(detailSale.cash_received_usd ?? 0)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[11px] text-stone-500">
+                        {isVi ? 'Nhận KHR' : 'KHR Received'}
+                      </span>
+                      <span className="font-mono-num font-semibold text-stone-900">
+                        {formatKhr(detailSale.cash_received_khr ?? 0)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[11px] text-stone-500">
+                        {isVi ? 'Tỷ giá áp dụng' : 'Rate Used'}
+                      </span>
+                      <span className="font-mono-num font-semibold text-stone-700">
+                        {(detailSale.exchange_rate_used ?? posExchangeRate).toLocaleString('en-US')}{' '}
+                        ៛/$
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[11px] text-stone-500">
+                        {isVi ? 'Tiền thối KHR' : 'Change Given'}
+                      </span>
+                      <span className="font-mono-num font-semibold text-[#0D5C3E]">
+                        {formatKhr(detailSale.change_given_khr ?? 0)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
               {/* Line Items + Return Quantity Pickers */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">

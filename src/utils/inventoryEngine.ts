@@ -155,6 +155,22 @@ export function normalizeSale(raw: Partial<Sale> & { id: string }): Sale {
     cogsKhr,
     refundedCogsKhr,
     paymentMethod: raw.paymentMethod || 'cash',
+    cash_received_usd:
+      raw.cash_received_usd !== undefined && raw.cash_received_usd !== null
+        ? Math.max(0, Number(raw.cash_received_usd))
+        : null,
+    cash_received_khr:
+      raw.cash_received_khr !== undefined && raw.cash_received_khr !== null
+        ? Math.max(0, Math.round(Number(raw.cash_received_khr)))
+        : null,
+    exchange_rate_used:
+      raw.exchange_rate_used !== undefined && raw.exchange_rate_used !== null
+        ? Math.max(1, Math.round(Number(raw.exchange_rate_used)))
+        : null,
+    change_given_khr:
+      raw.change_given_khr !== undefined && raw.change_given_khr !== null
+        ? Math.max(0, Math.round(Number(raw.change_given_khr)))
+        : null,
     customerName: raw.customerName || 'Walk-in',
     note: raw.note || '',
     recordedBy: raw.recordedBy || 'Family',
@@ -198,9 +214,17 @@ export function normalizeStockMovement(raw: Partial<StockMovement> & { id: strin
 }
 
 export function normalizeSettings(raw: Partial<WorkspaceSettings>, fallback: WorkspaceSettings): WorkspaceSettings {
+  const rawPosRate = Number(raw.posExchangeRate);
+  const fallbackPosRate = Number(fallback.posExchangeRate);
   return {
     ...fallback,
     ...raw,
+    posExchangeRate:
+      Number.isFinite(rawPosRate) && rawPosRate > 0
+        ? Math.round(rawPosRate)
+        : Number.isFinite(fallbackPosRate) && fallbackPosRate > 0
+          ? Math.round(fallbackPosRate)
+          : 4000,
     allowNegativeStock: Boolean(raw.allowNegativeStock ?? false),
     enableOpenFoodFactsLookup: raw.enableOpenFoodFactsLookup !== false,
     timezone: raw.timezone || BUSINESS_TIMEZONE,
@@ -461,6 +485,10 @@ export interface CheckoutPlanParams {
   createdAt?: string;
   items: CartRequestItem[];
   paymentMethod: PaymentMethod;
+  cash_received_usd?: number | null;
+  cash_received_khr?: number | null;
+  exchange_rate_used?: number | null;
+  change_given_khr?: number | null;
   customerName: string;
   note: string;
   recordedBy: string;
@@ -653,6 +681,47 @@ export function buildCheckoutPlan(params: CheckoutPlanParams): CheckoutPlanResul
     });
   });
 
+  const isCashPayment = params.paymentMethod === 'cash';
+  const hasCashDetails =
+    isCashPayment &&
+    (params.cash_received_usd !== undefined ||
+      params.cash_received_khr !== undefined ||
+      params.exchange_rate_used !== undefined ||
+      params.change_given_khr !== undefined);
+
+  const cash_received_usd =
+    hasCashDetails && params.cash_received_usd !== null && params.cash_received_usd !== undefined
+      ? Math.max(0, Math.round(Number(params.cash_received_usd) * 100) / 100)
+      : hasCashDetails
+        ? 0
+        : null;
+  const cash_received_khr =
+    hasCashDetails && params.cash_received_khr !== null && params.cash_received_khr !== undefined
+      ? Math.max(0, Math.round(Number(params.cash_received_khr)))
+      : hasCashDetails
+        ? 0
+        : null;
+  const exchange_rate_used =
+    hasCashDetails && params.exchange_rate_used !== null && params.exchange_rate_used !== undefined
+      ? Math.max(1, Math.round(Number(params.exchange_rate_used)))
+      : hasCashDetails
+        ? 4000
+        : null;
+  const change_given_khr =
+    hasCashDetails && params.change_given_khr !== null && params.change_given_khr !== undefined
+      ? Math.max(0, Math.round(Number(params.change_given_khr)))
+      : hasCashDetails
+        ? Math.max(
+            0,
+            Math.round(
+              (((cash_received_usd ?? 0) * (exchange_rate_used ?? 4000) +
+                (cash_received_khr ?? 0) -
+                totalKhr) /
+                100)
+            ) * 100
+          )
+        : null;
+
   const sale: Sale = {
     id: saleId,
     clientTxId: saleId,
@@ -666,6 +735,10 @@ export function buildCheckoutPlan(params: CheckoutPlanParams): CheckoutPlanResul
     cogsKhr: totalCogsKhr,
     refundedCogsKhr: 0,
     paymentMethod: params.paymentMethod,
+    cash_received_usd,
+    cash_received_khr,
+    exchange_rate_used,
+    change_given_khr,
     customerName: sanitizeString(params.customerName || 'Walk-in', 80) || 'Walk-in',
     note: sanitizeString(params.note || '', 200),
     recordedBy,

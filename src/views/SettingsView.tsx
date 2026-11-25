@@ -65,6 +65,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [shopName, setShopName] = useState(settings.name);
   const [shopLocation, setShopLocation] = useState(settings.location);
   const [usdRate, setUsdRate] = useState(String(settings.usdRate));
+  const [posExchangeRate, setPosExchangeRate] = useState(
+    String(settings.posExchangeRate ?? 4000)
+  );
   const [lowStockDefault, setLowStockDefault] = useState(String(settings.lowStockDefault));
   const [allowNegativeStock, setAllowNegativeStock] = useState(Boolean(settings.allowNegativeStock));
   const [enableOpenFoodFactsLookup, setEnableOpenFoodFactsLookup] = useState(
@@ -108,6 +111,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setShopName(settings.name);
     setShopLocation(settings.location);
     setUsdRate(String(settings.usdRate));
+    setPosExchangeRate(String(settings.posExchangeRate ?? 4000));
     setLowStockDefault(String(settings.lowStockDefault));
     setAllowNegativeStock(Boolean(settings.allowNegativeStock));
     setEnableOpenFoodFactsLookup(settings.enableOpenFoodFactsLookup !== false);
@@ -115,6 +119,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     settings.name,
     settings.location,
     settings.usdRate,
+    settings.posExchangeRate,
     settings.lowStockDefault,
     settings.allowNegativeStock,
     settings.enableOpenFoodFactsLookup,
@@ -129,7 +134,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     await updateSettings({
       name: shopName.trim() || 'JuiceFlow',
       location: shopLocation.trim(),
-      usdRate: Math.max(100, Number(usdRate) || 4050),
+      usdRate: Math.max(100, Number(usdRate) || 4000),
+      posExchangeRate: Math.max(100, Math.round(Number(posExchangeRate) || 4000)),
       lowStockDefault: Math.max(0, Number(lowStockDefault) || 15),
       allowNegativeStock,
       enableOpenFoodFactsLookup,
@@ -390,7 +396,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-medium text-stone-700 mb-1">
                 {t.settings.primaryCurrency}
@@ -400,6 +406,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 readOnly
                 value="Cambodian Riel (KHR · ៛)"
                 className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-stone-50 text-stone-700"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-stone-700 mb-1">
+                {t.settings.posExchangeRateLabel}
+              </label>
+              <input
+                type="number"
+                min={100}
+                step={50}
+                value={posExchangeRate}
+                onChange={(e) => setPosExchangeRate(e.target.value)}
+                className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
               />
             </div>
             <div>

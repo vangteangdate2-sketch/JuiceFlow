@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Check, Copy, Printer, X } from 'lucide-react';
 import type { Sale, WorkspaceSettings } from '../types';
 import { formatDateTimeInPhnomPenh, formatKhr, formatUsdRef } from '../utils/format';
+import { formatUsdClean } from '../utils/cashTender';
 
 interface ReceiptModalProps {
   sale: Sale | null;
@@ -47,6 +48,24 @@ export function buildReceiptPlainText(sale: Sale, settings: WorkspaceSettings): 
   if (settings.usdRate > 0) {
     const net = sale.netTotalKhr ?? sale.totalKhr;
     lines.push(`USD REF:  ${formatUsdRef(net, settings.usdRate)}`);
+  }
+  if (
+    sale.paymentMethod === 'cash' &&
+    (sale.cash_received_usd !== null || sale.cash_received_khr !== null) &&
+    (sale.cash_received_usd !== undefined || sale.cash_received_khr !== undefined)
+  ) {
+    const usd = sale.cash_received_usd ?? 0;
+    const khr = sale.cash_received_khr ?? 0;
+    const rate = sale.exchange_rate_used ?? settings.posExchangeRate ?? 4000;
+    const parts: string[] = [];
+    if (usd > 0) parts.push(`${formatUsdClean(usd)} (${formatKhr(Math.round(usd * rate))})`);
+    if (khr > 0) parts.push(formatKhr(khr));
+    if (parts.length > 0) {
+      lines.push(`TENDERED: ${parts.join(' + ')}`);
+    }
+    if (sale.change_given_khr !== null && sale.change_given_khr !== undefined) {
+      lines.push(`CHANGE:   ${formatKhr(sale.change_given_khr)}`);
+    }
   }
   if (sale.status !== 'completed') {
     lines.push(`STATUS:   ${sale.status.toUpperCase()}`);
@@ -220,6 +239,36 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
                   <span>{formatUsdRef(netAmount, settings.usdRate)}</span>
                 </div>
               )}
+              {sale.paymentMethod === 'cash' &&
+                ((sale.cash_received_usd !== null && sale.cash_received_usd !== undefined) ||
+                  (sale.cash_received_khr !== null && sale.cash_received_khr !== undefined)) && (
+                  <div className="pt-1.5 mt-1.5 border-t border-dashed border-stone-200 space-y-0.5 text-[11px]">
+                    {(sale.cash_received_usd ?? 0) > 0 && (
+                      <div className="flex justify-between text-stone-600">
+                        <span>Cash (USD)</span>
+                        <span>
+                          {formatUsdClean(sale.cash_received_usd ?? 0)} @{' '}
+                          {(sale.exchange_rate_used ?? settings.posExchangeRate ?? 4000).toLocaleString(
+                            'en-US'
+                          )}{' '}
+                          ៛
+                        </span>
+                      </div>
+                    )}
+                    {(sale.cash_received_khr ?? 0) > 0 && (
+                      <div className="flex justify-between text-stone-600">
+                        <span>Cash (KHR)</span>
+                        <span>{formatKhr(sale.cash_received_khr ?? 0)}</span>
+                      </div>
+                    )}
+                    {sale.change_given_khr !== null && sale.change_given_khr !== undefined && (
+                      <div className="flex justify-between font-semibold text-stone-900">
+                        <span>Change (KHR)</span>
+                        <span>{formatKhr(sale.change_given_khr)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
             </div>
 
             {sale.note && (

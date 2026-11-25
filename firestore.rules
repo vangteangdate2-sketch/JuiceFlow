@@ -101,7 +101,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'name', 'location', 'inviteCode', 'ownerId', 'memberUids',
-          'currency', 'usdRate', 'language', 'familyMembers', 'lowStockDefault',
+          'currency', 'usdRate', 'posExchangeRate', 'language', 'familyMembers', 'lowStockDefault',
           'allowNegativeStock', 'enableOpenFoodFactsLookup', 'timezone', 'createdAt', 'updatedAt'
         ])
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
@@ -111,6 +111,7 @@ service cloud.firestore {
         && isValidMemberUids(data.memberUids)
         && data.currency == 'KHR'
         && data.usdRate is number && data.usdRate > 0 && data.usdRate <= 100000
+        && (!('posExchangeRate' in data) || (data.posExchangeRate is number && data.posExchangeRate > 0 && data.posExchangeRate <= 100000))
         && data.language is string && data.language in ['en', 'vi']
         && isValidFamilyNames(data.familyMembers)
         && data.lowStockDefault is number && data.lowStockDefault >= 0 && data.lowStockDefault <= 1000000
@@ -233,7 +234,8 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'workspaceId', 'memberUids', 'clientTxId', 'orderNumber', 'saleDate', 'items',
           'subtotalKhr', 'totalKhr', 'refundedKhr', 'netTotalKhr', 'cogsKhr', 'refundedCogsKhr',
-          'paymentMethod', 'customerName', 'note', 'recordedBy', 'status',
+          'paymentMethod', 'cash_received_usd', 'cash_received_khr', 'exchange_rate_used', 'change_given_khr',
+          'customerName', 'note', 'recordedBy', 'status',
           'returns', 'voidedAt', 'voidedBy', 'voidReason',
           'createdBy', 'createdAt', 'updatedAt'
         ])
@@ -250,6 +252,10 @@ service cloud.firestore {
         && data.cogsKhr is number && data.cogsKhr >= 0 && data.cogsKhr <= 1000000000
         && (!('refundedCogsKhr' in data) || (data.refundedCogsKhr is number && data.refundedCogsKhr >= 0 && data.refundedCogsKhr <= data.cogsKhr))
         && isValidPaymentMethod(data.paymentMethod)
+        && (!('cash_received_usd' in data) || data.cash_received_usd == null || (data.cash_received_usd is number && data.cash_received_usd >= 0 && data.cash_received_usd <= 1000000))
+        && (!('cash_received_khr' in data) || data.cash_received_khr == null || (data.cash_received_khr is number && data.cash_received_khr >= 0 && data.cash_received_khr <= 1000000000))
+        && (!('exchange_rate_used' in data) || data.exchange_rate_used == null || (data.exchange_rate_used is number && data.exchange_rate_used > 0 && data.exchange_rate_used <= 100000))
+        && (!('change_given_khr' in data) || data.change_given_khr == null || (data.change_given_khr is number && data.change_given_khr >= 0 && data.change_given_khr <= 1000000000))
         && data.customerName is string && data.customerName.size() <= 80
         && data.note is string && data.note.size() <= 200
         && data.recordedBy is string && data.recordedBy.size() >= 1 && data.recordedBy.size() <= 80
@@ -428,7 +434,7 @@ service cloud.firestore {
             && incoming().inviteCode == existing().inviteCode
             && incoming().memberUids == existing().memberUids
             && incoming().diff(existing()).affectedKeys().hasOnly([
-              'name', 'location', 'usdRate', 'language', 'familyMembers',
+              'name', 'location', 'usdRate', 'posExchangeRate', 'language', 'familyMembers',
               'lowStockDefault', 'allowNegativeStock', 'enableOpenFoodFactsLookup', 'timezone', 'updatedAt'
             ])
           ) ||

@@ -59,7 +59,7 @@ export const TRANSLATIONS = {
       fullAccessNote: 'Full Family Access — All members can view & manage every module.',
     },
     paymentMethods: {
-      cash: 'Cash (KHR)',
+      cash: 'Cash',
       khqr: 'KHQR',
       aba: 'ABA Pay',
       wing: 'Wing',
@@ -269,6 +269,7 @@ export const TRANSLATIONS = {
       shopName: 'Business Name',
       shopLocation: 'Location',
       primaryCurrency: 'Primary Currency',
+      posExchangeRateLabel: 'POS Cash Exchange Rate (KHR per 1 USD)',
       usdRateLabel: 'Reference Exchange Rate (KHR per 1 USD)',
       lowStockDefault: 'Default Low-Stock Alert Threshold',
       allowNegativeStockLabel: 'Allow Negative Stock Override (Rush Hours)',
@@ -391,7 +392,7 @@ export const TRANSLATIONS = {
       fullAccessNote: 'Toàn quyền gia đình — Mọi thành viên đều có quyền truy cập đầy đủ.',
     },
     paymentMethods: {
-      cash: 'Tiền mặt (KHR)',
+      cash: 'Tiền mặt',
       khqr: 'KHQR',
       aba: 'ABA Pay',
       wing: 'Wing',
@@ -601,6 +602,7 @@ export const TRANSLATIONS = {
       shopName: 'Tên quán / Doanh nghiệp',
       shopLocation: 'Địa chỉ',
       primaryCurrency: 'Đơn vị tiền tệ chính',
+      posExchangeRateLabel: 'Tỷ giá tiền mặt POS (KHR / 1 USD)',
       usdRateLabel: 'Tỷ giá quy đổi tham khảo (KHR / 1 USD)',
       lowStockDefault: 'Ngưỡng cảnh báo tồn kho mặc định',
       allowNegativeStockLabel: 'Cho phép xuất âm kho (Giờ cao điểm)',
