@@ -4,6 +4,7 @@ import {
   Check,
   ChevronDown,
   Eye,
+  EyeOff,
   Loader2,
   Minus,
   Plus,
@@ -66,7 +67,11 @@ const POS_CATEGORIES: Array<'all' | ProductCategory> = [
   'specialty',
 ];
 
-export const SalesView: React.FC = () => {
+interface SalesViewProps {
+  sidebarCollapsed?: boolean;
+}
+
+export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }) => {
   const {
     settings,
     products,
@@ -89,6 +94,10 @@ export const SalesView: React.FC = () => {
   const [filtersOpen, setFiltersOpen] = useState(true);
   const activeFilterCount =
     (categoryFilter !== 'all' ? 1 : 0) + (typeFilter !== 'ALL' ? 1 : 0);
+
+  // Right checkout panel progressive disclosure states
+  const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
+  const [showMargins, setShowMargins] = useState(false);
 
   const [cart, setCart] = useState<Record<string, CartEntry>>({});
   const [cartTxId, setCartTxId] = useState<string>(() => generateId('sale'));
@@ -191,7 +200,59 @@ export const SalesView: React.FC = () => {
     );
   }, [cartLines, products, ingredients, settings.allowNegativeStock]);
 
-  const addEntryToCart = (productId: string, variantId?: string, qtyToAdd = 1) => {
+  // Strictly verify whether adding `qtyToAdd` to current cart stays within available stock
+  const canAddToCart = (
+    productId: string,
+    variantId?: string,
+    qtyToAdd = 1
+  ): { allowed: boolean; reason?: string; shortages?: StockShortage[] } => {
+    if (qtyToAdd <= 0 || settings.allowNegativeStock) {
+      return { allowed: true };
+    }
+    const key = `${productId}::${variantId || ''}`;
+    const nextMap: Record<string, CartEntry> = {
+      ...cart,
+      [key]: {
+        key,
+        productId,
+        variantId,
+        quantity: (cart[key]?.quantity || 0) + qtyToAdd,
+      },
+    };
+    const nextItems = Object.values(nextMap)
+      .filter((e) => e.quantity > 0)
+      .map((e) => ({
+        productId: e.productId,
+        variantId: e.variantId,
+        quantity: e.quantity,
+      }));
+    const check = validateCheckoutStock(nextItems, products, ingredients, false);
+    if (!check.ok) {
+      const first = check.shortages[0];
+      const itemLabel = first
+        ? isVi
+          ? first.itemNameVi || first.itemName
+          : first.itemName
+        : '';
+      const reason = first
+        ? isVi
+          ? `Đã đạt giới hạn tồn kho cho ${itemLabel} (còn ${formatQty(first.availableQty, first.unit)}).`
+          : `Stock limit reached for ${itemLabel} (${formatQty(first.availableQty, first.unit)} available).`
+        : isVi
+          ? 'Đã đạt giới hạn tồn kho.'
+          : 'Stock limit reached.';
+      return { allowed: false, reason, shortages: check.shortages };
+    }
+    return { allowed: true };
+  };
+
+  const addEntryToCart = (productId: string, variantId?: string, qtyToAdd = 1): boolean => {
+    const stockCheck = canAddToCart(productId, variantId, qtyToAdd);
+    if (!stockCheck.allowed) {
+      setCheckoutError(stockCheck.reason || (isVi ? 'Đã đạt giới hạn tồn kho.' : 'Stock limit reached.'));
+      setCheckoutShortages(stockCheck.shortages || []);
+      return false;
+    }
     const key = `${productId}::${variantId || ''}`;
     setCheckoutError(null);
     setCheckoutShortages([]);
@@ -207,6 +268,7 @@ export const SalesView: React.FC = () => {
         },
       };
     });
+    return true;
   };
 
   const handleProductTileClick = (product: Product) => {
@@ -219,6 +281,16 @@ export const SalesView: React.FC = () => {
   };
 
   const updateCartQty = (key: string, delta: number) => {
+    const current = cart[key];
+    if (!current) return;
+    if (delta > 0) {
+      const stockCheck = canAddToCart(current.productId, current.variantId, delta);
+      if (!stockCheck.allowed) {
+        setCheckoutError(stockCheck.reason || (isVi ? 'Đã đạt giới hạn tồn kho.' : 'Stock limit reached.'));
+        setCheckoutShortages(stockCheck.shortages || []);
+        return;
+      }
+    }
     setCheckoutError(null);
     setCheckoutShortages([]);
     setCart((prev) => {
@@ -291,6 +363,16 @@ export const SalesView: React.FC = () => {
         ? `${displayName} hiện đã hết hàng trong kho.`
         : `${displayName} is currently out of stock.`;
       setCheckoutError(msg);
+      return { ok: false, message: msg };
+    }
+
+    const stockCheck = canAddToCart(result.product.id, result.variant?.id, qty);
+    if (!stockCheck.allowed) {
+      const msg =
+        stockCheck.reason ||
+        (isVi ? 'Đã đạt giới hạn tồn kho.' : 'Stock limit reached.');
+      setCheckoutError(msg);
+      setCheckoutShortages(stockCheck.shortages || []);
       return { ok: false, message: msg };
     }
 
@@ -414,25 +496,18 @@ export const SalesView: React.FC = () => {
       .reduce((s, c) => s + c.quantity, 0);
 
   return (
-    <div className="space-y-6">
-      {/* Header & View Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 tracking-tight">
-            {t.sales.title}
-          </h1>
-          <p className="mt-1 text-sm text-stone-500">
-            {isVi
-              ? 'Bán hàng tích hợp mã vạch, kiểm tra tồn kho trực tiếp và tự động trừ kho theo loại sản phẩm.'
-              : 'Connected POS with barcode scanning, live stock checks, and automatic 3-tier stock deduction.'}
-          </p>
-        </div>
+    <div className="space-y-4">
+      {/* Condensed Single-Row Header: Title + Inline POS / Sales Ledger Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
+          {t.sales.title}
+        </h1>
 
-        <div className="inline-flex items-center p-1 bg-stone-200/70 rounded-lg self-start sm:self-auto shrink-0">
+        <div className="inline-flex items-center p-1 bg-stone-200/70 rounded-lg shrink-0">
           <button
             type="button"
             onClick={() => setSubTab('pos')}
-            className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
               subTab === 'pos'
                 ? 'bg-white text-stone-900 shadow-xs'
                 : 'text-stone-600 hover:text-stone-900'
@@ -443,7 +518,7 @@ export const SalesView: React.FC = () => {
           <button
             type="button"
             onClick={() => setSubTab('ledger')}
-            className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
               subTab === 'ledger'
                 ? 'bg-white text-stone-900 shadow-xs'
                 : 'text-stone-600 hover:text-stone-900'
@@ -687,7 +762,13 @@ export const SalesView: React.FC = () => {
                 {t.common.noResults}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div
+                className={`grid grid-cols-1 sm:grid-cols-2 gap-3.5 ${
+                  sidebarCollapsed
+                    ? 'lg:grid-cols-3 xl:grid-cols-4'
+                    : 'xl:grid-cols-3'
+                }`}
+              >
                 {activeProducts.map((product) => {
                   const qtyInCart = getQtyInCartForProduct(product.id);
                   const displayName = isVi ? product.nameVi || product.name : product.name;
@@ -702,64 +783,102 @@ export const SalesView: React.FC = () => {
                     : product.variants?.[0]?.priceKhr ?? product.priceKhr;
 
                   const outBlocked = availability.status === 'out' && !settings.allowNegativeStock;
+                  const atStockLimit =
+                    !outBlocked &&
+                    !settings.allowNegativeStock &&
+                    (hasMultiVariants
+                      ? product.variants.every((v) => !canAddToCart(product.id, v.id, 1).allowed)
+                      : !canAddToCart(product.id, product.variants?.[0]?.id, 1).allowed);
+                  const cardDisabled = outBlocked || atStockLimit;
 
                   return (
                     <button
                       key={product.id}
                       type="button"
-                      disabled={outBlocked}
+                      disabled={cardDisabled}
                       onClick={() => handleProductTileClick(product)}
-                      className={`group text-left bg-white border rounded-xl overflow-hidden transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] ${
+                      title={
                         outBlocked
-                          ? 'opacity-55 border-stone-200 cursor-not-allowed'
+                          ? isVi
+                            ? 'Hết hàng'
+                            : 'Out of Stock'
+                          : atStockLimit
+                            ? isVi
+                              ? 'Đã đạt giới hạn tồn kho trong giỏ'
+                              : 'Stock limit reached in cart'
+                            : undefined
+                      }
+                      className={`group text-left bg-white rounded-xl overflow-hidden transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] ${
+                        outBlocked
+                          ? 'opacity-60 grayscale-[40%] border border-stone-200 cursor-not-allowed'
                           : qtyInCart > 0
-                          ? 'border-[#0F5C43]'
-                          : 'border-stone-200 hover:border-stone-300'
+                            ? `border-2 border-[#0D5C3E] ring-2 ring-[#0D5C3E]/15 shadow-sm ${
+                                atStockLimit ? 'cursor-not-allowed' : ''
+                              }`
+                            : atStockLimit
+                              ? 'opacity-75 border border-stone-200 cursor-not-allowed'
+                              : 'border border-stone-200 hover:border-stone-300 hover:shadow-2xs'
                       }`}
                     >
                       <div className="relative">
                         <ProductPhoto
                           src={product.imageUrl}
                           alt={displayName}
+                          category={product.category}
                           className="w-full h-32"
                         />
-                        {qtyInCart > 0 && (
-                          <span className="absolute top-2 right-2 bg-[#0F5C43] text-white font-mono-num text-xs font-semibold px-2 py-0.5 rounded-md">
-                            ×{qtyInCart}
+
+                        {outBlocked && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-stone-900/20">
+                            <span className="px-3 py-1 rounded-full bg-stone-900/85 text-white text-xs font-semibold tracking-wide shadow-xs">
+                              {isVi ? 'Hết hàng' : 'Out of Stock'}
+                            </span>
+                          </div>
+                        )}
+
+                        {!outBlocked && qtyInCart > 0 && (
+                          <span className="absolute top-2 right-2 bg-[#0D5C3E] text-white font-mono-num text-[11px] font-semibold px-2.5 py-0.5 rounded-full shadow-xs">
+                            {isVi ? `${qtyInCart} trong giỏ` : `${qtyInCart} in cart`}
                           </span>
                         )}
                       </div>
-                      <div className="p-3.5">
+                      <div className="p-3">
                         <div className="flex items-center justify-between gap-2 text-[11px]">
                           <span className="text-stone-500 truncate">
                             {t.productTypes[product.productType]}
                             {hasMultiVariants ? ` · ${product.variants.length} sizes` : ''}
                           </span>
-                          {availability.availableUnits !== null && (
-                            <span
-                              className={`font-mono-num font-semibold shrink-0 ${
-                                availability.status === 'out'
-                                  ? 'text-red-700'
-                                  : availability.status === 'low'
-                                  ? 'text-amber-700'
-                                  : 'text-emerald-700'
-                              }`}
-                            >
-                              {availability.status === 'out'
-                                ? isVi
-                                  ? 'Hết hàng'
-                                  : 'Out'
-                                : product.productType === 'PREPARED_TO_ORDER'
-                                ? `~${availability.availableUnits}`
-                                : `${availability.availableUnits} ${product.unit}`}
+                          {atStockLimit ? (
+                            <span className="font-mono-num font-semibold text-amber-700 shrink-0">
+                              {isVi ? 'Đạt giới hạn' : 'Max limit'}
                             </span>
+                          ) : (
+                            availability.availableUnits !== null && (
+                              <span
+                                className={`font-mono-num font-semibold shrink-0 ${
+                                  availability.status === 'out'
+                                    ? 'text-red-700'
+                                    : availability.status === 'low'
+                                    ? 'text-amber-700'
+                                    : 'text-[#0D5C3E]'
+                                }`}
+                              >
+                                {availability.status === 'out'
+                                  ? isVi
+                                    ? 'Hết hàng'
+                                    : 'Out'
+                                  : product.productType === 'PREPARED_TO_ORDER'
+                                  ? `~${availability.availableUnits}`
+                                  : `${availability.availableUnits} ${product.unit}`}
+                              </span>
+                            )
                           )}
                         </div>
                         <h3 className="mt-1 font-display text-sm font-semibold text-stone-900 truncate">
                           {displayName}
                         </h3>
                         <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                          <span className="font-mono-num text-sm font-bold text-[#0F5C43]">
+                          <span className="font-mono-num text-sm font-bold text-[#0D5C3E]">
                             {hasMultiVariants ? `${formatKhr(minPrice)}+` : formatKhr(minPrice)}
                           </span>
                           <span className="text-[11px] text-stone-400 font-mono-num">
@@ -774,17 +893,23 @@ export const SalesView: React.FC = () => {
             )}
           </div>
 
-          {/* Order Cart Panel */}
+          {/* Pinned Right-Hand "Current Order" Checkout Panel (Full-height flex column; ONLY cart items scroll) */}
           <form
             onSubmit={handleCheckout}
-            className="lg:col-span-4 bg-white border border-stone-200 rounded-xl p-5 space-y-4 lg:sticky lg:top-20"
+            className="lg:col-span-4 bg-white border border-stone-200 rounded-xl flex flex-col overflow-hidden lg:sticky lg:top-[72px] lg:h-[calc(100vh-88px)]"
           >
-            <div className="flex items-center justify-between gap-2 pb-3 border-b border-stone-200">
-              <div className="flex items-center gap-2">
-                <ShoppingBag className="w-4 h-4 text-[#0F5C43]" />
-                <h2 className="font-display text-base font-semibold text-stone-900">
+            {/* Pinned Panel Header */}
+            <div className="px-4 sm:px-5 py-3.5 border-b border-stone-200 flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <ShoppingBag className="w-4 h-4 text-[#0D5C3E] shrink-0" />
+                <h2 className="font-display text-base font-semibold text-stone-900 truncate">
                   {t.sales.cartTitle}
                 </h2>
+                {cartLines.length > 0 && (
+                  <span className="font-mono-num text-xs font-semibold text-[#0D5C3E] bg-[#E6F2ED] px-2 py-0.5 rounded-full shrink-0">
+                    {cartLines.reduce((s, l) => s + l.quantity, 0)}
+                  </span>
+                )}
               </div>
               {cartLines.length > 0 && (
                 <button
@@ -794,117 +919,237 @@ export const SalesView: React.FC = () => {
                     setCheckoutError(null);
                     setCheckoutShortages([]);
                   }}
-                  className="text-xs text-stone-500 hover:text-red-700 transition-colors"
+                  className="text-xs font-medium text-stone-500 hover:text-red-700 transition-colors shrink-0"
                 >
-                  {t.common.cancel}
+                  {isVi ? 'Xóa giỏ' : 'Clear'}
                 </button>
               )}
             </div>
 
-            {cartLines.length === 0 ? (
-              <p className="py-8 text-center text-sm text-stone-500">{t.sales.emptyCart}</p>
-            ) : (
-              <ul className="divide-y divide-stone-100 max-h-64 overflow-y-auto pr-1">
-                {cartLines.map(({ key, product, variant, unitPrice, quantity, lineTotal }) => (
-                  <li key={key} className="py-2.5 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-stone-900 truncate">
-                        {isVi ? product.nameVi || product.name : product.name}
-                        {variant ? (
-                          <span className="text-stone-500 font-normal">
-                            {' '}
-                            ({isVi ? variant.nameVi || variant.name : variant.name})
+            {/* ONLY Scrollable Region: Cart Line Items + Stock Warnings */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-5 py-2 space-y-3">
+              {cartLines.length === 0 ? (
+                <div className="h-full min-h-[120px] flex flex-col items-center justify-center text-center py-8 text-sm text-stone-400">
+                  <ShoppingBag className="w-7 h-7 text-stone-300 mb-2" />
+                  <p>{t.sales.emptyCart}</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-stone-100">
+                  {cartLines.map(({ key, product, variant, unitPrice, quantity, lineTotal }) => {
+                    const incCheck = canAddToCart(product.id, variant?.id, 1);
+                    return (
+                      <li key={key} className="py-2.5 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-stone-900 truncate">
+                            {isVi ? product.nameVi || product.name : product.name}
+                            {variant ? (
+                              <span className="text-stone-500 font-normal">
+                                {' '}
+                                ({isVi ? variant.nameVi || variant.name : variant.name})
+                              </span>
+                            ) : null}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-xs text-stone-500 font-mono-num">
+                            <span>
+                              {formatKhr(unitPrice)} × {quantity}
+                            </span>
+                            {!incCheck.allowed && (
+                              <span className="text-[10px] font-sans font-semibold text-amber-700">
+                                · {isVi ? 'Tối đa' : 'Max'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="inline-flex items-center border border-stone-200 rounded-lg bg-white">
+                            <button
+                              type="button"
+                              onClick={() => updateCartQty(key, -1)}
+                              aria-label="Decrease quantity"
+                              className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-50 rounded-l-lg transition-colors"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="px-2 font-mono-num text-xs font-semibold text-stone-900 min-w-[24px] text-center">
+                              {quantity}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!incCheck.allowed}
+                              onClick={() => updateCartQty(key, 1)}
+                              aria-label="Increase quantity"
+                              title={
+                                !incCheck.allowed
+                                  ? incCheck.reason || (isVi ? 'Đã đạt giới hạn tồn kho' : 'Stock limit reached')
+                                  : undefined
+                              }
+                              className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-50 disabled:opacity-35 disabled:cursor-not-allowed rounded-r-lg transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <span className="font-mono-num text-xs font-semibold text-stone-900 w-20 text-right">
+                            {formatKhr(lineTotal)}
                           </span>
-                        ) : null}
-                      </p>
-                      <p className="text-xs text-stone-500 font-mono-num">
-                        {formatKhr(unitPrice)} × {quantity}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <div className="inline-flex items-center border border-stone-200 rounded-lg">
-                        <button
-                          type="button"
-                          onClick={() => updateCartQty(key, -1)}
-                          aria-label="Decrease quantity"
-                          className="p-1 text-stone-600 hover:text-stone-900"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="px-2 font-mono-num text-xs font-semibold text-stone-900">
-                          {quantity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => updateCartQty(key, 1)}
-                          aria-label="Increase quantity"
-                          className="p-1 text-stone-600 hover:text-stone-900"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <span className="font-mono-num text-xs font-semibold text-stone-900 w-20 text-right">
-                        {formatKhr(lineTotal)}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {/* Live Stock Shortage Warning / Limit Notice */}
+              {(liveStockValidation.shortages.length > 0 || checkoutError) && (
+                <div
+                  role="alert"
+                  className={`p-3 rounded-lg border text-xs space-y-1.5 ${
+                    settings.allowNegativeStock && !checkoutError
+                      ? 'bg-amber-50 border-amber-200 text-amber-900'
+                      : 'bg-red-50 border-red-200 text-red-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 font-semibold">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span className="leading-snug">
+                        {checkoutError ||
+                          (settings.allowNegativeStock
+                            ? isVi
+                              ? 'Cảnh báo âm kho (đang bật chế độ cho phép):'
+                              : 'Negative stock override active:'
+                            : isVi
+                            ? 'Không đủ tồn kho để thanh toán:'
+                            : 'Insufficient stock — checkout blocked:')}
                       </span>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {/* Live Stock Shortage Warning / Override Banner */}
-            {(liveStockValidation.shortages.length > 0 || checkoutError) && (
-              <div
-                role="alert"
-                className={`p-3 rounded-lg border text-xs space-y-1.5 ${
-                  settings.allowNegativeStock && !checkoutError
-                    ? 'bg-amber-50 border-amber-200 text-amber-900'
-                    : 'bg-red-50 border-red-200 text-red-900'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-semibold">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>
-                    {checkoutError ||
-                      (settings.allowNegativeStock
-                        ? isVi
-                          ? 'Cảnh báo âm kho (đang bật chế độ cho phép):'
-                          : 'Negative stock override active:'
-                        : isVi
-                        ? 'Không đủ tồn kho để thanh toán:'
-                        : 'Insufficient stock — checkout blocked:')}
-                  </span>
-                </div>
-                <ul className="space-y-0.5 pl-5 list-disc font-mono-num">
+                    {checkoutError && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCheckoutError(null);
+                          setCheckoutShortages([]);
+                        }}
+                        aria-label={t.common.close}
+                        className="p-0.5 opacity-60 hover:opacity-100 shrink-0"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                   {(checkoutShortages.length > 0
                     ? checkoutShortages
                     : liveStockValidation.shortages
-                  ).map((sh) => (
-                    <li key={sh.itemId}>
-                      {isVi ? sh.itemNameVi || sh.itemName : sh.itemName}: need{' '}
-                      {formatQty(sh.requiredQty, sh.unit)}, have{' '}
-                      {formatQty(sh.availableQty, sh.unit)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                  ).length > 0 && (
+                    <ul className="space-y-0.5 pl-5 list-disc font-mono-num">
+                      {(checkoutShortages.length > 0
+                        ? checkoutShortages
+                        : liveStockValidation.shortages
+                      ).map((sh) => (
+                        <li key={sh.itemId}>
+                          {isVi ? sh.itemNameVi || sh.itemName : sh.itemName}: need{' '}
+                          {formatQty(sh.requiredQty, sh.unit)}, have{' '}
+                          {formatQty(sh.availableQty, sh.unit)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
 
-            {/* Payment & Order Metadata */}
-            <div className="space-y-3 pt-3 border-t border-stone-200">
+            {/* Pinned Bottom Checkout Controls: Accordion Details, Payment, Total (+ Margin Eye Toggle), Charge Button */}
+            <div className="shrink-0 border-t border-stone-200 bg-white px-4 sm:px-5 py-3.5 space-y-3">
+              {/* Collapsible 1-Line "Order Details & Notes" Accordion */}
+              <div className="border border-stone-200 rounded-lg bg-stone-50/60 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setOrderDetailsOpen((prev) => !prev)}
+                  aria-expanded={orderDetailsOpen}
+                  aria-controls="pos-order-details-panel"
+                  className="w-full px-3 py-2 flex items-center justify-between gap-2 text-xs font-medium text-stone-700 hover:bg-stone-100/70 transition-colors"
+                >
+                  <span className="truncate">
+                    {isVi ? 'Chi tiết đơn & Ghi chú' : 'Order Details & Notes'}
+                    {(customerName.trim() || note.trim()) && !orderDetailsOpen && (
+                      <span className="text-stone-400 font-normal">
+                        {' '}
+                        · {[customerName.trim(), note.trim()].filter(Boolean).join(' — ')}
+                      </span>
+                    )}
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-stone-400 shrink-0 transition-transform duration-200 motion-reduce:transition-none ${
+                      orderDetailsOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                <div
+                  id="pos-order-details-panel"
+                  className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
+                    orderDetailsOpen
+                      ? 'grid-rows-[1fr] opacity-100'
+                      : 'grid-rows-[0fr] opacity-0 pointer-events-none'
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="px-3 pb-3 pt-2 border-t border-stone-200/80 bg-white space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-stone-500 mb-0.5">
+                            {t.common.date}
+                          </label>
+                          <input
+                            type="date"
+                            value={saleDate}
+                            onChange={(e) => setSaleDate(e.target.value)}
+                            className="w-full px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded-md bg-white text-stone-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-stone-500 mb-0.5">
+                            {t.common.operator}
+                          </label>
+                          <input
+                            type="text"
+                            readOnly
+                            value={settings.activeOperator}
+                            className="w-full px-2 py-1.5 text-xs border border-stone-200 rounded-md bg-stone-50 text-stone-700"
+                          />
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={80}
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder={t.sales.customerPlaceholder}
+                        className="w-full px-2.5 py-1.5 text-xs border border-stone-200 rounded-md bg-white text-stone-900 placeholder:text-stone-400"
+                      />
+                      <input
+                        type="text"
+                        maxLength={200}
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        placeholder={t.sales.notePlaceholder}
+                        className="w-full px-2.5 py-1.5 text-xs border border-stone-200 rounded-md bg-white text-stone-900 placeholder:text-stone-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Method Grid */}
               <div>
-                <label className="block text-xs font-medium text-stone-600 mb-1.5">
-                  {t.common.payment}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-1.5">
                   {(['cash', 'khqr', 'aba', 'wing'] as PaymentMethod[]).map((pm) => (
                     <button
                       key={pm}
                       type="button"
                       onClick={() => setPaymentMethod(pm)}
-                      className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap ${
+                      className={`px-3 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
                         paymentMethod === pm
-                          ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
+                          ? 'border-[#0D5C3E] bg-[#E6F2ED] text-[#0D5C3E]'
                           : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                       }`}
                     >
@@ -914,80 +1159,80 @@ export const SalesView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-xs font-medium text-stone-600 mb-1">
-                    {t.common.date}
-                  </label>
-                  <input
-                    type="date"
-                    value={saleDate}
-                    onChange={(e) => setSaleDate(e.target.value)}
-                    className="w-full px-2.5 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white text-stone-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-stone-600 mb-1">
-                    {t.common.operator}
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={settings.activeOperator}
-                    className="w-full px-2.5 py-2 text-xs border border-stone-200 rounded-lg bg-stone-50 text-stone-700"
-                  />
+              {/* Optional Hidden Margin Breakdown + Total Row with Eye Toggle */}
+              <div className="pt-2 border-t border-stone-100 space-y-1.5">
+                {showMargins && (
+                  <div className="space-y-1 pb-1.5 border-b border-stone-100 text-xs">
+                    <div className="flex justify-between text-stone-500">
+                      <span>{t.sales.estimatedCogs}</span>
+                      <span className="font-mono-num">{formatKhr(cartCogs)}</span>
+                    </div>
+                    <div className="flex justify-between text-[#0D5C3E] font-medium">
+                      <span>{t.sales.estProfit}</span>
+                      <span className="font-mono-num">{formatKhr(cartTotal - cartCogs)}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-stone-900">{t.common.total}</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowMargins((prev) => !prev)}
+                      aria-label={
+                        showMargins
+                          ? isVi
+                            ? 'Ẩn giá vốn & lợi nhuận'
+                            : 'Hide cost & profit'
+                          : isVi
+                            ? 'Hiện giá vốn & lợi nhuận'
+                            : 'Show cost & profit'
+                      }
+                      title={
+                        showMargins
+                          ? isVi
+                            ? 'Ẩn giá vốn & lợi nhuận'
+                            : 'Hide cost & profit'
+                          : isVi
+                            ? 'Hiện giá vốn & lợi nhuận'
+                            : 'Show cost & profit'
+                      }
+                      className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+                    >
+                      {showMargins ? (
+                        <EyeOff className="w-3.5 h-3.5" />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-mono-num text-xl font-bold text-stone-900 leading-none">
+                      {formatKhr(cartTotal)}
+                    </span>
+                    <span className="block font-mono-num text-[11px] text-stone-400 mt-0.5">
+                      {formatUsdRef(cartTotal, settings.usdRate)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <input
-                type="text"
-                maxLength={80}
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder={t.sales.customerPlaceholder}
-                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white text-stone-900 placeholder:text-stone-400"
-              />
-
-              <input
-                type="text"
-                maxLength={200}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder={t.sales.notePlaceholder}
-                className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white text-stone-900 placeholder:text-stone-400"
-              />
+              {/* Pinned Full-Width Primary Charge CTA */}
+              <button
+                type="submit"
+                disabled={cartLines.length === 0 || submitting || !liveStockValidation.ok}
+                className="w-full py-3 px-4 text-sm font-semibold text-white bg-[#0D5C3E] hover:bg-[#0A4A31] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap font-mono-num"
+              >
+                {submitting
+                  ? isVi
+                    ? 'Đang xử lý...'
+                    : 'Recording Sale...'
+                  : isVi
+                    ? `Thu ${formatKhr(cartTotal)}`
+                    : `Charge ${formatKhr(cartTotal)}`}
+              </button>
             </div>
-
-            {/* Order Totals */}
-            <div className="pt-3 border-t border-stone-200 space-y-1.5 text-xs">
-              <div className="flex justify-between text-stone-500">
-                <span>{t.sales.estimatedCogs}</span>
-                <span className="font-mono-num">{formatKhr(cartCogs)}</span>
-              </div>
-              <div className="flex justify-between text-emerald-700 font-medium">
-                <span>{t.sales.estProfit}</span>
-                <span className="font-mono-num">{formatKhr(cartTotal - cartCogs)}</span>
-              </div>
-              <div className="flex justify-between items-baseline pt-2 border-t border-stone-100">
-                <span className="text-sm font-semibold text-stone-900">{t.common.total}</span>
-                <div className="text-right">
-                  <span className="font-mono-num text-xl font-bold text-stone-900">
-                    {formatKhr(cartTotal)}
-                  </span>
-                  <span className="block font-mono-num text-xs text-stone-400">
-                    {formatUsdRef(cartTotal, settings.usdRate)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={cartLines.length === 0 || submitting || !liveStockValidation.ok}
-              className="w-full py-3 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
-            >
-              {submitting ? (isVi ? 'Đang xử lý...' : 'Recording Sale...') : t.sales.completeSale}
-            </button>
           </form>
         </div>
       ) : (
@@ -1213,33 +1458,42 @@ export const SalesView: React.FC = () => {
                   ingredients,
                   variant.id
                 );
-                const blocked = avail.status === 'out' && !settings.allowNegativeStock;
+                const outBlocked = avail.status === 'out' && !settings.allowNegativeStock;
+                const variantLimitCheck = canAddToCart(variantPickerProduct.id, variant.id, 1);
+                const blocked = outBlocked || !variantLimitCheck.allowed;
                 return (
                   <button
                     key={variant.id}
                     type="button"
                     disabled={blocked}
                     onClick={() => {
-                      addEntryToCart(variantPickerProduct.id, variant.id, 1);
-                      setVariantPickerProduct(null);
+                      if (addEntryToCart(variantPickerProduct.id, variant.id, 1)) {
+                        setVariantPickerProduct(null);
+                      }
                     }}
-                    className="w-full px-4 py-3 border border-stone-200 hover:border-[#0F5C43] hover:bg-emerald-50/40 disabled:opacity-50 rounded-lg flex items-center justify-between transition-colors"
+                    className="w-full px-4 py-3 border border-stone-200 hover:border-[#0D5C3E] hover:bg-[#E6F2ED]/50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center justify-between transition-colors"
                   >
                     <div className="text-left">
                       <div className="text-sm font-semibold text-stone-900">
                         {isVi ? variant.nameVi || variant.name : variant.name}
                       </div>
-                      {avail.availableUnits !== null && (
-                        <div className="text-[11px] text-stone-500 font-mono-num">
-                          {avail.status === 'out'
-                            ? isVi
-                              ? 'Thiếu nguyên liệu'
-                              : `Out (${avail.limitingItemName})`
-                            : `~${avail.availableUnits} makeable`}
+                      {!outBlocked && !variantLimitCheck.allowed ? (
+                        <div className="text-[11px] text-amber-700 font-medium">
+                          {isVi ? 'Đã đạt giới hạn tồn kho' : 'Stock limit reached in cart'}
                         </div>
+                      ) : (
+                        avail.availableUnits !== null && (
+                          <div className="text-[11px] text-stone-500 font-mono-num">
+                            {avail.status === 'out'
+                              ? isVi
+                                ? 'Thiếu nguyên liệu'
+                                : `Out (${avail.limitingItemName})`
+                              : `~${avail.availableUnits} makeable`}
+                          </div>
+                        )
                       )}
                     </div>
-                    <span className="font-mono-num text-sm font-bold text-[#0F5C43]">
+                    <span className="font-mono-num text-sm font-bold text-[#0D5C3E]">
                       {formatKhr(variant.priceKhr)}
                     </span>
                   </button>

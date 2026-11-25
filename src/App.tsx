@@ -7,6 +7,8 @@ import {
   Lock,
   Menu,
   Package,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Receipt,
   RefreshCw,
@@ -50,12 +52,32 @@ const JuiceFlowShell: React.FC = () => {
     return 'dashboard';
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem('juiceflow_sidebar_collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [justRefreshed, setJustRefreshed] = useState(false);
   const [security, setSecurity] = useState<BiometricSecurityConfig>(() => loadSecurityConfig());
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     const cfg = loadSecurityConfig();
     return cfg.enabled && (cfg.biometricEnrolled || Boolean(cfg.pinHash));
   });
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem('juiceflow_sidebar_collapsed', next ? '1' : '0');
+      } catch {
+        // Ignore storage write errors
+      }
+      return next;
+    });
+  };
 
   const handleManualRefresh = async () => {
     if (refreshing || syncing) return;
@@ -115,20 +137,56 @@ const JuiceFlowShell: React.FC = () => {
           />
         )}
 
-        {/* Sidebar Navigation (256px desktop, stays fixed in viewport while scrolling) */}
+        {/* Sidebar Navigation (256px desktop or 72px icon-only rail when collapsed) */}
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-stone-200 flex flex-col transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
-            mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+          className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-stone-200 flex flex-col transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
+            sidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-64'
+          } ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
         >
-          {/* Brand Lockup */}
-          <div className="h-14 px-5 border-b border-stone-200 flex items-center justify-between shrink-0">
+          {/* Brand Lockup & Collapse Toggle */}
+          <div
+            className={`h-14 border-b border-stone-200 flex items-center shrink-0 ${
+              sidebarCollapsed ? 'px-5 lg:px-0 lg:justify-center' : 'px-5 justify-between'
+            }`}
+          >
             <button
               type="button"
               onClick={() => navigate('dashboard')}
-              className="font-display text-xl font-bold tracking-tight text-[#0F5C43] whitespace-nowrap shrink-0"
+              title={t.brand}
+              className={`font-display text-xl font-bold tracking-tight text-[#0F5C43] whitespace-nowrap shrink-0 ${
+                sidebarCollapsed ? 'lg:hidden' : ''
+              }`}
             >
               {t.brand}
+            </button>
+            <button
+              type="button"
+              onClick={toggleSidebarCollapsed}
+              title={
+                sidebarCollapsed
+                  ? isVi
+                    ? 'Mở rộng thanh bên'
+                    : 'Expand sidebar'
+                  : isVi
+                    ? 'Thu gọn thanh bên'
+                    : 'Collapse sidebar'
+              }
+              aria-label={
+                sidebarCollapsed
+                  ? isVi
+                    ? 'Mở rộng thanh bên'
+                    : 'Expand sidebar'
+                  : isVi
+                    ? 'Thu gọn thanh bên'
+                    : 'Collapse sidebar'
+              }
+              className="hidden lg:inline-flex items-center justify-center p-1.5 rounded-lg text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors shrink-0"
+            >
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4" />
+              )}
             </button>
             <button
               type="button"
@@ -141,7 +199,12 @@ const JuiceFlowShell: React.FC = () => {
           </div>
 
           {/* Primary Navigation Links */}
-          <nav className="flex-1 p-3 space-y-1 overflow-y-auto" aria-label="Main navigation">
+          <nav
+            className={`flex-1 space-y-1 overflow-y-auto ${
+              sidebarCollapsed ? 'p-3 lg:px-2.5' : 'p-3'
+            }`}
+            aria-label="Main navigation"
+          >
             {NAV_ITEMS.map(({ id, icon: Icon }) => {
               const isCurrent = activeTab === id;
               return (
@@ -149,69 +212,107 @@ const JuiceFlowShell: React.FC = () => {
                   key={id}
                   type="button"
                   onClick={() => navigate(id)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                  title={sidebarCollapsed ? t.nav[id] : undefined}
+                  aria-label={t.nav[id]}
+                  className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    sidebarCollapsed
+                      ? 'px-3.5 py-2.5 lg:px-0 lg:justify-center'
+                      : 'px-3.5 py-2.5'
+                  } ${
                     isCurrent
-                      ? 'bg-[#0F5C43] text-white'
+                      ? 'bg-[#0D5C3E] text-white'
                       : 'text-stone-700 hover:bg-stone-100 hover:text-stone-950'
                   }`}
                 >
                   <Icon className={`w-4 h-4 shrink-0 ${isCurrent ? 'text-white' : 'text-stone-500'}`} />
-                  <span className="truncate">{t.nav[id]}</span>
+                  <span className={`truncate ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
+                    {t.nav[id]}
+                  </span>
                 </button>
               );
             })}
           </nav>
 
           {/* Family Operator Switcher & Lock Footer */}
-          <div className="p-4 border-t border-solid border-stone-200 space-y-3 bg-white shrink-0">
-            <div>
-              <label
-                htmlFor="operator-select"
-                className="block text-[11px] font-medium text-stone-500 mb-1"
-              >
-                {t.common.activeOperator}
-              </label>
-              <select
-                id="operator-select"
-                value={settings.activeOperator}
-                onChange={(e) => setActiveOperator(e.target.value)}
-                className="w-full px-3 py-1.5 text-xs font-medium bg-white border border-stone-200 rounded-lg text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
-              >
-                {settings.familyMembers.map((member) => (
-                  <option key={member} value={member}>
-                    {member}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 text-[11px] text-stone-500">
-              <button
-                type="button"
-                onClick={() => {
-                  navigate('settings');
-                  window.setTimeout(() => {
-                    document.getElementById('cloud-sync')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }, 100);
-                }}
-                className="truncate text-left hover:text-[#0F5C43] transition-colors"
-              >
-                {syncing
-                  ? t.common.syncing
-                  : cloudSynced
-                    ? t.common.onlineSynced
-                    : t.common.localMode}
-              </button>
-              {security.enabled && (
+          <div
+            className={`border-t border-solid border-stone-200 bg-white shrink-0 ${
+              sidebarCollapsed ? 'p-4 lg:p-2.5 lg:flex lg:flex-col lg:items-center lg:gap-2' : 'p-4 space-y-3'
+            }`}
+          >
+            {sidebarCollapsed && (
+              <div className="hidden lg:flex flex-col items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsLocked(true)}
-                  className="inline-flex items-center gap-1 font-medium text-stone-700 hover:text-[#0F5C43] whitespace-nowrap shrink-0"
+                  onClick={toggleSidebarCollapsed}
+                  title={`${t.common.activeOperator}: ${settings.activeOperator}`}
+                  className="w-9 h-9 rounded-lg bg-[#E6F2ED] text-[#0D5C3E] text-xs font-bold flex items-center justify-center hover:bg-[#D9ECE4] transition-colors"
                 >
-                  <Lock className="w-3 h-3" />
-                  {t.common.lockApp}
+                  {(settings.activeOperator || 'U').slice(0, 2).toUpperCase()}
                 </button>
-              )}
+                {security.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => setIsLocked(true)}
+                    title={t.common.lockApp}
+                    aria-label={t.common.lockApp}
+                    className="p-2 rounded-lg text-stone-500 hover:text-[#0D5C3E] hover:bg-stone-100 transition-colors"
+                  >
+                    <Lock className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className={sidebarCollapsed ? 'space-y-3 lg:hidden' : 'space-y-3'}>
+              <div>
+                <label
+                  htmlFor="operator-select"
+                  className="block text-[11px] font-medium text-stone-500 mb-1"
+                >
+                  {t.common.activeOperator}
+                </label>
+                <select
+                  id="operator-select"
+                  value={settings.activeOperator}
+                  onChange={(e) => setActiveOperator(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs font-medium bg-white border border-stone-200 rounded-lg text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                >
+                  {settings.familyMembers.map((member) => (
+                    <option key={member} value={member}>
+                      {member}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 text-[11px] text-stone-500">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate('settings');
+                    window.setTimeout(() => {
+                      document.getElementById('cloud-sync')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                  }}
+                  className="truncate text-left hover:text-[#0F5C43] transition-colors"
+                >
+                  {syncing
+                    ? t.common.syncing
+                    : cloudSynced
+                      ? t.common.onlineSynced
+                      : t.common.localMode}
+                </button>
+                {security.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => setIsLocked(true)}
+                    className="inline-flex items-center gap-1 font-medium text-stone-700 hover:text-[#0F5C43] whitespace-nowrap shrink-0"
+                  >
+                    <Lock className="w-3 h-3" />
+                    {t.common.lockApp}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </aside>
@@ -295,9 +396,17 @@ const JuiceFlowShell: React.FC = () => {
           </header>
 
           {/* Main Content Container */}
-          <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <main
+            className={`flex-1 w-full mx-auto px-4 sm:px-6 transition-[max-width] duration-200 ${
+              activeTab === 'sales'
+                ? sidebarCollapsed
+                  ? 'max-w-[1520px] py-4 sm:py-5'
+                  : 'max-w-[1360px] py-4 sm:py-5'
+                : 'max-w-[1320px] lg:px-8 py-6 sm:py-8'
+            }`}
+          >
             {activeTab === 'dashboard' && <DashboardView onNavigate={navigate} />}
-            {activeTab === 'sales' && <SalesView />}
+            {activeTab === 'sales' && <SalesView sidebarCollapsed={sidebarCollapsed} />}
             {activeTab === 'products' && <ProductsView />}
             {activeTab === 'inventory' && <InventoryView />}
             {activeTab === 'expenses' && <ExpensesView />}
