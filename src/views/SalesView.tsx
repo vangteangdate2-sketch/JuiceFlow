@@ -86,7 +86,9 @@ export const SalesView: React.FC = () => {
   const [posSearch, setPosSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | ProductType>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<'all' | ProductCategory>('all');
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  const activeFilterCount =
+    (categoryFilter !== 'all' ? 1 : 0) + (typeFilter !== 'ALL' ? 1 : 0);
 
   const [cart, setCart] = useState<Record<string, CartEntry>>({});
   const [cartTxId, setCartTxId] = useState<string>(() => generateId('sale'));
@@ -500,58 +502,55 @@ export const SalesView: React.FC = () => {
                   )
                 }
                 secondaryLeftSlot={
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setFiltersOpen((prev) => !prev)}
-                      aria-expanded={filtersOpen}
-                      aria-controls="pos-catalog-filters"
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
-                        filtersOpen || categoryFilter !== 'all' || typeFilter !== 'ALL'
-                          ? 'bg-stone-100 text-stone-900'
-                          : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
-                      }`}
-                    >
-                      <SlidersHorizontal className="w-3.5 h-3.5 text-[#0F5C43] shrink-0" />
-                      <span>
-                        {filtersOpen
+                  <button
+                    type="button"
+                    onClick={() => setFiltersOpen((prev) => !prev)}
+                    aria-expanded={filtersOpen}
+                    aria-controls="pos-catalog-filters"
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap ${
+                      filtersOpen || activeFilterCount > 0
+                        ? 'bg-stone-100 text-stone-900 hover:bg-stone-200/70'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] shrink-0" />
+                    <span>
+                      {activeFilterCount > 0
+                        ? filtersOpen
+                          ? isVi
+                            ? `Ẩn bộ lọc (${activeFilterCount})`
+                            : `Hide Filters (${activeFilterCount})`
+                          : isVi
+                            ? `Bộ lọc (${activeFilterCount})`
+                            : `Filters (${activeFilterCount})`
+                        : filtersOpen
                           ? isVi
                             ? 'Ẩn bộ lọc'
                             : 'Hide Filters'
                           : isVi
-                            ? 'Bộ lọc'
-                            : 'Filters'}
-                      </span>
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 text-stone-400 transition-transform duration-200 motion-reduce:transition-none ${
-                          filtersOpen ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </button>
-
-                    {(categoryFilter !== 'all' || typeFilter !== 'ALL') && (
-                      <div className="flex items-center gap-2 text-xs text-stone-600 min-w-0">
-                        <span className="truncate">
-                          {[
-                            categoryFilter !== 'all' ? t.productCategories[categoryFilter] : null,
-                            typeFilter !== 'ALL' ? t.productTypes[typeFilter] : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCategoryFilter('all');
-                            setTypeFilter('ALL');
-                          }}
-                          className="text-xs font-medium text-[#0F5C43] hover:underline whitespace-nowrap shrink-0"
-                        >
-                          {isVi ? 'Xóa lọc' : 'Clear'}
-                        </button>
-                      </div>
-                    )}
-                  </>
+                            ? 'Hiện bộ lọc'
+                            : 'Show Filters'}
+                    </span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-stone-400 transition-transform duration-200 motion-reduce:transition-none ${
+                        filtersOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                }
+                secondaryRightSlot={
+                  <button
+                    type="button"
+                    disabled={activeFilterCount === 0 && !posSearch.trim()}
+                    onClick={() => {
+                      setCategoryFilter('all');
+                      setTypeFilter('ALL');
+                      setPosSearch('');
+                    }}
+                    className="text-xs font-medium text-[#0D5C3E] hover:underline disabled:text-stone-400 disabled:no-underline disabled:cursor-default transition-colors whitespace-nowrap"
+                  >
+                    {isVi ? 'Đặt lại tất cả' : 'Reset All'}
+                  </button>
                 }
               />
 
@@ -561,7 +560,7 @@ export const SalesView: React.FC = () => {
                   role="status"
                   className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-stone-50 border border-stone-200 text-xs text-stone-700"
                 >
-                  <Loader2 className="w-3.5 h-3.5 text-[#0F5C43] animate-spin shrink-0" />
+                  <Loader2 className="w-3.5 h-3.5 text-[#0D5C3E] animate-spin shrink-0" />
                   <span>
                     {isVi
                       ? `Đang kiểm tra sổ mã vạch JuiceFlow cho "${lookingUpBarcode}"...`
@@ -577,11 +576,11 @@ export const SalesView: React.FC = () => {
                   className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg bg-stone-50 border border-stone-300"
                 >
                   <div className="flex items-start gap-2.5 min-w-0">
-                    <ScanBarcode className="w-4 h-4 text-[#0F5C43] shrink-0 mt-0.5" />
+                    <ScanBarcode className="w-4 h-4 text-[#0D5C3E] shrink-0 mt-0.5" />
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-stone-900">
                         {isVi ? 'Mã vạch chưa đăng ký' : 'Unregistered Barcode'}:{' '}
-                        <span className="font-mono-num text-[#0F5C43]">
+                        <span className="font-mono-num text-[#0D5C3E]">
                           {unknownBarcodePrompt.code}
                         </span>{' '}
                         <span className="font-normal text-stone-500">
@@ -603,7 +602,7 @@ export const SalesView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setQuickRegisterOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-md transition-colors whitespace-nowrap"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0D5C3E] hover:bg-[#0A4A31] rounded-md transition-colors whitespace-nowrap"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       {isVi ? 'Đăng ký ngay' : 'Register Now'}
@@ -630,21 +629,21 @@ export const SalesView: React.FC = () => {
                 }`}
               >
                 <div className="overflow-hidden">
-                  <div className="space-y-3">
-                    {/* Row 1: Category Filters */}
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <span className="text-[11px] font-semibold text-stone-500 sm:w-20 shrink-0">
+                  <div className="space-y-2.5">
+                    {/* Row 1: Single-Line Horizontal Category Pills */}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-[11px] font-semibold text-stone-500 w-16 shrink-0">
                         {isVi ? 'Danh mục' : 'Category'}
                       </span>
-                      <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {POS_CATEGORIES.map((cat) => (
                           <button
                             key={cat}
                             type="button"
                             onClick={() => setCategoryFilter(cat)}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
+                            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 ${
                               categoryFilter === cat
-                                ? 'bg-[#0F5C43] text-white'
+                                ? 'bg-[#0D5C3E] text-white'
                                 : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
                             }`}
                           >
@@ -654,21 +653,21 @@ export const SalesView: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Row 2: Product Type Filters */}
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <span className="text-[11px] font-semibold text-stone-500 sm:w-20 shrink-0">
+                    {/* Row 2: Unified Soft-Green Item Type Pills */}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-[11px] font-semibold text-stone-500 w-16 shrink-0">
                         {isVi ? 'Loại hàng' : 'Item Type'}
                       </span>
-                      <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {(['ALL', 'PREPARED_TO_ORDER', 'PACKAGED', 'PREPARED_STOCK'] as const).map(
                           (pt) => (
                             <button
                               key={pt}
                               type="button"
                               onClick={() => setTypeFilter(pt)}
-                              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
+                              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 ${
                                 typeFilter === pt
-                                  ? 'bg-stone-900 text-white'
+                                  ? 'bg-[#E6F2ED] text-[#0D5C3E] ring-1 ring-inset ring-[#0D5C3E]/25 font-semibold'
                                   : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
                               }`}
                             >
