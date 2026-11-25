@@ -334,10 +334,10 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Row 1: Integrated Search + Scan Input (10px radius) & Adjacent Audio Beep Toggle */}
-      <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center h-11 rounded-[10px] border border-stone-200 bg-stone-50/50 focus-within:bg-white focus-within:border-[#0D5C3E] focus-within:ring-2 focus-within:ring-[#0D5C3E]/20 transition-all">
-          <Search className="w-4 h-4 text-stone-400 ml-3.5 shrink-0 pointer-events-none" />
+      {/* Row 1: Integrated Search + Scan Input (10px radius, 48px touch height) & Adjacent Audio Beep Toggle */}
+      <div className="flex items-center gap-2.5">
+        <div className="flex-1 min-w-0 flex items-center h-12 rounded-[10px] border border-stone-200 dark:border-[#24352C] bg-stone-50/50 dark:bg-[#18251F] focus-within:bg-white dark:focus-within:bg-[#18251F] focus-within:border-[#0D5C3E] dark:focus-within:border-[#10B981] focus-within:ring-2 focus-within:ring-[#0D5C3E]/20 dark:focus-within:ring-[#10B981]/25 transition-all">
+          <Search className="w-4 h-4 text-stone-400 dark:text-[#94A39B] ml-3.5 shrink-0 pointer-events-none" />
           <input
             type="text"
             value={searchValue}
@@ -349,30 +349,30 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 ? 'Tìm tên sản phẩm hoặc quét / nhập mã vạch + Enter...'
                 : 'Search products or scan / type barcode + Enter...'
             }
-            className="flex-1 min-w-0 h-full px-2.5 text-sm bg-transparent text-stone-900 placeholder:text-stone-400 focus:outline-none"
+            className="flex-1 min-w-0 h-full px-2.5 text-sm bg-transparent text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus:outline-none"
           />
           {searchValue && (
             <button
               type="button"
               onClick={() => onSearchChange('')}
               aria-label={isVi ? 'Xóa tìm kiếm' : 'Clear search'}
-              className="p-1 mr-1 text-stone-400 hover:text-stone-700 rounded-md shrink-0"
+              className="inline-flex items-center justify-center w-11 h-11 text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-md shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
           )}
-          <div className="p-1 shrink-0">
+          <div className="pr-0.5 shrink-0">
             <button
               type="button"
               onClick={() => setCameraOpen((prev) => !prev)}
               aria-expanded={cameraOpen}
-              className={`inline-flex items-center justify-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-[7px] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] ${
+              className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[8px] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
                 cameraOpen
-                  ? 'bg-stone-800 text-white hover:bg-stone-900'
-                  : 'bg-[#0D5C3E] text-white hover:bg-[#0A4A31]'
+                  ? 'bg-stone-800 text-white hover:bg-stone-900 dark:bg-[#1F3028] dark:text-[#F1F5F3] dark:hover:bg-[#2A3F35]'
+                  : 'bg-[#0D5C3E] text-white hover:bg-[#0A4A31] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399]'
               }`}
             >
-              <ScanBarcode className="w-3.5 h-3.5 shrink-0" />
+              <ScanBarcode className="w-4 h-4 shrink-0" />
               <span>
                 {cameraOpen
                   ? isVi
@@ -386,7 +386,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           </div>
         </div>
 
-        {/* Audio Beep Toggle directly to the right of the search bar */}
+        {/* Audio Beep Toggle directly to the right of the search bar (48x48 touch target) */}
         <button
           type="button"
           onClick={() => setSoundEnabled((prev) => !prev)}
@@ -400,10 +400,10 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 ? 'Bật âm thanh báo quét'
                 : 'Enable scan beep'
           }
-          className={`inline-flex items-center justify-center h-11 w-11 rounded-[10px] border transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] ${
+          className={`inline-flex items-center justify-center h-12 w-12 rounded-[10px] border transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
             soundEnabled
-              ? 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:text-stone-900'
-              : 'border-stone-200 bg-stone-50 text-stone-400 hover:text-stone-700'
+              ? 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-50 dark:hover:bg-[#1F3028] hover:text-stone-900'
+              : 'border-stone-200 dark:border-[#24352C] bg-stone-50 dark:bg-[#131D18] text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]'
           }`}
         >
           {soundEnabled ? (
@@ -415,11 +415,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       </div>
 
       {/* Row 2: Compact Filter Control + USB/BT Ready Status Pill (Left) & Reset All (Right) */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-2 min-w-0">
           {secondaryLeftSlot}
 
-          {/* USB / Bluetooth HID Scanner Status Pill */}
+          {/* USB / Bluetooth HID Scanner Status Pill (minimum 44px touch height) */}
           <button
             type="button"
             onClick={() => setHardwareEnabled((prev) => !prev)}
@@ -428,19 +428,19 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 ? 'Bật/tắt nhận tín hiệu trực tiếp từ máy quét mã vạch USB hoặc Bluetooth'
                 : 'Toggle external USB / Bluetooth barcode scanner listening'
             }
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-colors whitespace-nowrap shrink-0 ${
+            className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-xs font-medium rounded-full border transition-colors whitespace-nowrap shrink-0 ${
               hardwareEnabled
-                ? 'border-[#0D5C3E]/15 bg-[#E6F2ED] text-[#0D5C3E] hover:bg-[#D9ECE4]'
-                : 'border-stone-200 bg-stone-100 text-stone-500 hover:text-stone-800'
+                ? 'border-[#0D5C3E]/15 dark:border-[#10B981]/35 bg-[#E6F2ED] dark:bg-[#064E3B] text-[#0D5C3E] dark:text-[#6EE7B7] hover:bg-[#D9ECE4] dark:hover:bg-[#065F46]'
+                : 'border-stone-200 dark:border-[#24352C] bg-stone-100 dark:bg-[#18251F] text-stone-500 dark:text-[#94A39B] hover:text-stone-800 dark:hover:text-[#F1F5F3]'
             }`}
           >
             <span
               aria-hidden="true"
-              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                hardwareEnabled ? 'bg-emerald-600' : 'bg-stone-400'
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                hardwareEnabled ? 'bg-emerald-600 dark:bg-[#34D399]' : 'bg-stone-400 dark:bg-[#94A39B]'
               }`}
             />
-            <Usb className="w-3 h-3 shrink-0 opacity-80" />
+            <Usb className="w-3.5 h-3.5 shrink-0 opacity-85" />
             <span>
               {hardwareEnabled
                 ? isVi
@@ -462,27 +462,27 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       {lastScan && (
         <div
           role="status"
-          className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg border text-xs ${
+          className={`flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border text-xs ${
             lastScan.ok
-              ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
-              : 'bg-red-50 border-red-200 text-red-800'
+              ? 'bg-emerald-50/70 dark:bg-[#064E3B]/50 border-emerald-200 dark:border-[#10B981]/35 text-emerald-900 dark:text-[#D1FAE5]'
+              : 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-500/35 text-red-800 dark:text-red-200'
           }`}
         >
           <div className="flex items-center gap-2 min-w-0">
             {lastScan.ok ? (
-              <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+              <Check className="w-3.5 h-3.5 text-emerald-700 dark:text-[#34D399] shrink-0" />
             ) : (
-              <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+              <AlertCircle className="w-3.5 h-3.5 text-red-600 dark:text-[#F87171] shrink-0" />
             )}
             <span className="font-medium truncate">{lastScan.message}</span>
-            <span aria-hidden="true" className="text-stone-400">
+            <span aria-hidden="true" className="text-stone-400 dark:text-[#94A39B]">
               ·
             </span>
-            <span className="font-mono-num text-[11px] opacity-80 shrink-0">{lastScan.code}</span>
-            <span aria-hidden="true" className="text-stone-400 hidden sm:inline">
+            <span className="font-mono-num text-[11px] opacity-85 shrink-0">{lastScan.code}</span>
+            <span aria-hidden="true" className="text-stone-400 dark:text-[#94A39B] hidden sm:inline">
               ·
             </span>
-            <span className="text-[11px] opacity-75 hidden sm:inline shrink-0">
+            <span className="text-[11px] opacity-80 hidden sm:inline shrink-0">
               {sourceLabel(lastScan.source)}
             </span>
           </div>
@@ -490,7 +490,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             type="button"
             onClick={() => setLastScan(null)}
             aria-label={isVi ? 'Đóng thông báo' : 'Dismiss'}
-            className="p-0.5 opacity-60 hover:opacity-100 shrink-0"
+            className="w-9 h-9 inline-flex items-center justify-center rounded-md opacity-70 hover:opacity-100 shrink-0"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -499,19 +499,19 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
       {/* Expandable Live Camera Scanner Panel (Inline above product grid so cart stays visible) */}
       {cameraOpen && (
-        <div className="border-t border-stone-200 pt-3.5 space-y-3">
+        <div className="border-t border-stone-200 dark:border-[#24352C] pt-3.5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs text-stone-700">
-              <Camera className="w-4 h-4 text-[#0F5C43] shrink-0" />
-              <span className="font-semibold text-stone-900">
+            <div className="flex items-center gap-2 text-xs text-stone-700 dark:text-[#94A39B]">
+              <Camera className="w-4 h-4 text-[#0F5C43] dark:text-[#10B981] shrink-0" />
+              <span className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
                 {isVi ? 'Máy quét mã vạch bằng Camera' : 'Live Camera Barcode Scanner'}
               </span>
               {sessionScanCount > 0 && (
                 <>
-                  <span aria-hidden="true" className="text-stone-300">
+                  <span aria-hidden="true" className="text-stone-300 dark:text-[#24352C]">
                     ·
                   </span>
-                  <span className="font-mono-num text-[#0F5C43] font-semibold">
+                  <span className="font-mono-num text-[#0F5C43] dark:text-[#34D399] font-semibold">
                     {sessionScanCount} {isVi ? 'món đã thêm' : 'added'}
                   </span>
                 </>
@@ -520,12 +520,14 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
             <div className="flex items-center gap-2">
               {/* Continuous vs Single-Scan Segmented Control */}
-              <div className="inline-flex items-center p-0.5 bg-stone-100 rounded-lg text-[11px]">
+              <div className="inline-flex items-center p-1 bg-stone-100 dark:bg-[#0B110E] border border-transparent dark:border-[#24352C] rounded-lg text-xs">
                 <button
                   type="button"
                   onClick={() => setContinuousMode(true)}
-                  className={`px-2.5 py-1 font-semibold rounded-md transition-colors whitespace-nowrap ${
-                    continuousMode ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600'
+                  className={`h-9 px-3 font-semibold rounded-md transition-colors whitespace-nowrap ${
+                    continuousMode
+                      ? 'bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] shadow-xs'
+                      : 'text-stone-600 dark:text-[#94A39B]'
                   }`}
                 >
                   {isVi ? 'Quét liên tục' : 'Multi-Scan'}
@@ -533,8 +535,10 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 <button
                   type="button"
                   onClick={() => setContinuousMode(false)}
-                  className={`px-2.5 py-1 font-semibold rounded-md transition-colors whitespace-nowrap ${
-                    !continuousMode ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600'
+                  className={`h-9 px-3 font-semibold rounded-md transition-colors whitespace-nowrap ${
+                    !continuousMode
+                      ? 'bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] shadow-xs'
+                      : 'text-stone-600 dark:text-[#94A39B]'
                   }`}
                 >
                   {isVi ? 'Quét 1 lần' : 'Single'}
@@ -545,7 +549,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 <button
                   type="button"
                   onClick={handleCycleCamera}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-stone-700 border border-stone-200 hover:bg-stone-50 rounded-lg whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 h-11 px-3 text-xs font-medium text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg whitespace-nowrap"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   {isVi ? 'Đổi camera' : 'Switch'}
@@ -556,7 +560,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
             {/* Live Camera Viewfinder */}
-            <div className="md:col-span-7 relative rounded-lg overflow-hidden bg-stone-950 border border-stone-200 min-h-[210px] flex items-center justify-center">
+            <div className="md:col-span-7 relative rounded-lg overflow-hidden bg-stone-950 border border-stone-200 dark:border-[#24352C] min-h-[210px] flex items-center justify-center">
               <div id={viewfinderId} className="w-full" />
               {!cameraActive && !cameraError && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-stone-300 text-xs px-4 text-center">
@@ -575,10 +579,10 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             </div>
 
             {/* Quick Manual / Hardware Entry Fallback beside viewfinder */}
-            <div className="md:col-span-5 flex flex-col justify-between gap-3 bg-stone-50 border border-stone-200 rounded-lg p-3.5">
-              <div className="space-y-1.5 text-xs text-stone-600">
-                <p className="font-semibold text-stone-900 flex items-center gap-1.5">
-                  <Keyboard className="w-3.5 h-3.5 text-[#0F5C43]" />
+            <div className="md:col-span-5 flex flex-col justify-between gap-3 bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg p-3.5">
+              <div className="space-y-1.5 text-xs text-stone-600 dark:text-[#94A39B]">
+                <p className="font-semibold text-stone-900 dark:text-[#F1F5F3] flex items-center gap-1.5">
+                  <Keyboard className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#10B981]" />
                   {isVi ? 'Nhập mã nhanh hoặc máy quét rời' : 'Manual Entry or USB/BT Scan'}
                 </p>
                 <p className="leading-relaxed">
@@ -588,19 +592,19 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 </p>
               </div>
 
-              <form onSubmit={handleManualSubmit} className="space-y-2">
+              <form onSubmit={handleManualSubmit} className="space-y-2.5">
                 <input
                   type="text"
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
                   placeholder="e.g. 8851959132012"
                   data-barcode-capture="true"
-                  className="w-full px-3 py-2 text-sm font-mono-num bg-white border border-stone-300 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                  className="w-full h-11 px-3 text-sm font-mono-num bg-white dark:bg-[#0B110E] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-300 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
                 <button
                   type="submit"
                   disabled={!manualCode.trim()}
-                  className="w-full py-2 px-3 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                  className="w-full h-11 px-3 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
                 >
                   {isVi ? 'Thêm vào giỏ hàng' : 'Add to Cart'}
                 </button>

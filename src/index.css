@@ -1,16 +1,24 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   :root {
     --font-display: 'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    color-scheme: light;
   }
 
   html {
     font-family: var(--font-sans);
     background-color: #f6f7f5;
     color: #1c1917;
+  }
+
+  html.dark {
+    color-scheme: dark;
+    background-color: #0b110e;
+    color: #f1f5f3;
   }
 
   h1, h2, h3, .font-display {

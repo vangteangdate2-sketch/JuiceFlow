@@ -12,9 +12,9 @@ export const OfflineBanner: React.FC = () => {
   return (
     <div
       role="status"
-      className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs font-medium text-amber-900 flex items-center justify-center gap-2"
+      className="bg-amber-50 dark:bg-amber-950/60 border-b border-amber-200 dark:border-amber-500/40 px-4 py-2 text-xs font-medium text-amber-900 dark:text-amber-200 flex items-center justify-center gap-2"
     >
-      <WifiOff className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+      <WifiOff className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
       <span>{t.common.offlineMode}</span>
     </div>
   );

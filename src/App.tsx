@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Lock,
   Menu,
+  Moon,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
@@ -14,10 +15,12 @@ import {
   RefreshCw,
   Settings,
   ShoppingCart,
+  Sun,
   X,
 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { StoreProvider, useStore } from './context/StoreContext';
+import { useTheme } from './hooks/useTheme';
 import { BiometricLockScreen } from './components/BiometricLockScreen';
 import { OfflineBanner } from './components/OfflineBanner';
 import { PWAInstallButton } from './components/PWAInstallButton';
@@ -43,6 +46,7 @@ const NAV_ITEMS: { id: AppTab; icon: React.ComponentType<{ className?: string }>
 
 const JuiceFlowShell: React.FC = () => {
   const { settings, cloudSynced, syncing, refreshing, refreshData, t, setActiveOperator } = useStore();
+  const { isDark, toggleTheme } = useTheme();
   const isVi = settings.language === 'vi';
 
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
@@ -125,27 +129,27 @@ const JuiceFlowShell: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F6F7F5] text-stone-900 flex flex-col">
+    <div className="min-h-screen bg-[#F6F7F5] text-stone-900 dark:bg-[#0B110E] dark:text-[#F1F5F3] flex flex-col transition-colors duration-150">
       <OfflineBanner />
 
       <div className="flex-1 flex min-w-0">
         {/* Mobile Sidebar Backdrop */}
         {mobileMenuOpen && (
           <div
-            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
         )}
 
-        {/* Sidebar Navigation (256px desktop or 72px icon-only rail when collapsed) */}
+        {/* Sidebar Navigation (256px desktop or 76px icon-only rail when collapsed) */}
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-stone-200 flex flex-col transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
-            sidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-64'
+          className={`fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-[#131D18] border-r border-stone-200 dark:border-[#24352C] flex flex-col transition-[width,transform,background-color,border-color] duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
+            sidebarCollapsed ? 'lg:w-[76px]' : 'lg:w-64'
           } ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
         >
           {/* Brand Lockup & Collapse Toggle */}
           <div
-            className={`h-14 border-b border-stone-200 flex items-center shrink-0 ${
+            className={`h-16 border-b border-stone-200 dark:border-[#24352C] flex items-center shrink-0 ${
               sidebarCollapsed ? 'px-5 lg:px-0 lg:justify-center' : 'px-5 justify-between'
             }`}
           >
@@ -153,7 +157,7 @@ const JuiceFlowShell: React.FC = () => {
               type="button"
               onClick={() => navigate('dashboard')}
               title={t.brand}
-              className={`font-display text-xl font-bold tracking-tight text-[#0F5C43] whitespace-nowrap shrink-0 ${
+              className={`font-display text-xl font-bold tracking-tight text-[#0F5C43] dark:text-[#10B981] whitespace-nowrap shrink-0 h-11 inline-flex items-center ${
                 sidebarCollapsed ? 'lg:hidden' : ''
               }`}
             >
@@ -180,7 +184,7 @@ const JuiceFlowShell: React.FC = () => {
                     ? 'Thu gọn thanh bên'
                     : 'Collapse sidebar'
               }
-              className="hidden lg:inline-flex items-center justify-center p-1.5 rounded-lg text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors shrink-0"
+              className="hidden lg:inline-flex items-center justify-center w-11 h-11 rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors shrink-0"
             >
               {sidebarCollapsed ? (
                 <PanelLeftOpen className="w-4 h-4" />
@@ -191,17 +195,17 @@ const JuiceFlowShell: React.FC = () => {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(false)}
-              className="p-1.5 text-stone-500 hover:text-stone-900 lg:hidden"
+              className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] lg:hidden"
               aria-label={t.common.close}
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Primary Navigation Links */}
+          {/* Primary Navigation Links (minimum 44px touch height) */}
           <nav
-            className={`flex-1 space-y-1 overflow-y-auto ${
-              sidebarCollapsed ? 'p-3 lg:px-2.5' : 'p-3'
+            className={`flex-1 space-y-1.5 overflow-y-auto ${
+              sidebarCollapsed ? 'p-3 lg:px-3' : 'p-3'
             }`}
             aria-label="Main navigation"
           >
@@ -214,17 +218,23 @@ const JuiceFlowShell: React.FC = () => {
                   onClick={() => navigate(id)}
                   title={sidebarCollapsed ? t.nav[id] : undefined}
                   aria-label={t.nav[id]}
-                  className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                  className={`w-full min-h-[44px] h-11 flex items-center gap-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                     sidebarCollapsed
-                      ? 'px-3.5 py-2.5 lg:px-0 lg:justify-center'
-                      : 'px-3.5 py-2.5'
+                      ? 'px-3.5 lg:px-0 lg:justify-center'
+                      : 'px-3.5'
                   } ${
                     isCurrent
-                      ? 'bg-[#0D5C3E] text-white'
-                      : 'text-stone-700 hover:bg-stone-100 hover:text-stone-950'
+                      ? 'bg-[#0D5C3E] text-white dark:bg-[#10B981] dark:text-[#042419] font-semibold'
+                      : 'text-stone-700 hover:bg-stone-100 hover:text-stone-950 dark:text-[#94A39B] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 shrink-0 ${isCurrent ? 'text-white' : 'text-stone-500'}`} />
+                  <Icon
+                    className={`w-4 h-4 shrink-0 ${
+                      isCurrent
+                        ? 'text-white dark:text-[#042419]'
+                        : 'text-stone-500 dark:text-[#94A39B]'
+                    }`}
+                  />
                   <span className={`truncate ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
                     {t.nav[id]}
                   </span>
@@ -235,8 +245,8 @@ const JuiceFlowShell: React.FC = () => {
 
           {/* Family Operator Switcher & Lock Footer */}
           <div
-            className={`border-t border-solid border-stone-200 bg-white shrink-0 ${
-              sidebarCollapsed ? 'p-4 lg:p-2.5 lg:flex lg:flex-col lg:items-center lg:gap-2' : 'p-4 space-y-3'
+            className={`border-t border-solid border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] shrink-0 ${
+              sidebarCollapsed ? 'p-4 lg:p-3 lg:flex lg:flex-col lg:items-center lg:gap-2' : 'p-4 space-y-3'
             }`}
           >
             {sidebarCollapsed && (
@@ -245,7 +255,7 @@ const JuiceFlowShell: React.FC = () => {
                   type="button"
                   onClick={toggleSidebarCollapsed}
                   title={`${t.common.activeOperator}: ${settings.activeOperator}`}
-                  className="w-9 h-9 rounded-lg bg-[#E6F2ED] text-[#0D5C3E] text-xs font-bold flex items-center justify-center hover:bg-[#D9ECE4] transition-colors"
+                  className="w-11 h-11 rounded-lg bg-[#E6F2ED] dark:bg-[#064E3B] text-[#0D5C3E] dark:text-[#6EE7B7] text-xs font-bold flex items-center justify-center hover:bg-[#D9ECE4] dark:hover:bg-[#065F46] transition-colors"
                 >
                   {(settings.activeOperator || 'U').slice(0, 2).toUpperCase()}
                 </button>
@@ -255,7 +265,7 @@ const JuiceFlowShell: React.FC = () => {
                     onClick={() => setIsLocked(true)}
                     title={t.common.lockApp}
                     aria-label={t.common.lockApp}
-                    className="p-2 rounded-lg text-stone-500 hover:text-[#0D5C3E] hover:bg-stone-100 transition-colors"
+                    className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-[#0D5C3E] dark:hover:text-[#10B981] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors"
                   >
                     <Lock className="w-4 h-4" />
                   </button>
@@ -267,7 +277,7 @@ const JuiceFlowShell: React.FC = () => {
               <div>
                 <label
                   htmlFor="operator-select"
-                  className="block text-[11px] font-medium text-stone-500 mb-1"
+                  className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1.5"
                 >
                   {t.common.activeOperator}
                 </label>
@@ -275,7 +285,7 @@ const JuiceFlowShell: React.FC = () => {
                   id="operator-select"
                   value={settings.activeOperator}
                   onChange={(e) => setActiveOperator(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs font-medium bg-white border border-stone-200 rounded-lg text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                  className="w-full h-11 px-3 text-xs font-medium bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 >
                   {settings.familyMembers.map((member) => (
                     <option key={member} value={member}>
@@ -285,7 +295,7 @@ const JuiceFlowShell: React.FC = () => {
                 </select>
               </div>
 
-              <div className="flex items-center justify-between gap-2 text-[11px] text-stone-500">
+              <div className="flex items-center justify-between gap-2 text-xs text-stone-500 dark:text-[#94A39B]">
                 <button
                   type="button"
                   onClick={() => {
@@ -294,7 +304,7 @@ const JuiceFlowShell: React.FC = () => {
                       document.getElementById('cloud-sync')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }, 100);
                   }}
-                  className="truncate text-left hover:text-[#0F5C43] transition-colors"
+                  className="min-h-[44px] truncate text-left hover:text-[#0F5C43] dark:hover:text-[#10B981] transition-colors"
                 >
                   {syncing
                     ? t.common.syncing
@@ -306,9 +316,9 @@ const JuiceFlowShell: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsLocked(true)}
-                    className="inline-flex items-center gap-1 font-medium text-stone-700 hover:text-[#0F5C43] whitespace-nowrap shrink-0"
+                    className="min-h-[44px] inline-flex items-center gap-1 font-medium text-stone-700 dark:text-[#F1F5F3] hover:text-[#0F5C43] dark:hover:text-[#10B981] whitespace-nowrap shrink-0"
                   >
-                    <Lock className="w-3 h-3" />
+                    <Lock className="w-3.5 h-3.5" />
                     {t.common.lockApp}
                   </button>
                 )}
@@ -319,31 +329,62 @@ const JuiceFlowShell: React.FC = () => {
 
         {/* Main Workspace Viewport */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Top Bar (56px height, clean breadcrumb left + 1-2 primary controls right) */}
-          <header className="sticky top-0 z-30 h-14 bg-white/95 backdrop-blur-xs border-b border-stone-200 px-4 sm:px-6 flex items-center justify-between gap-4 shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
+          {/* Top Bar (64px height so 44px touch targets have comfortable breathing room) */}
+          <header className="sticky top-0 z-30 h-16 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-xs border-b border-stone-200 dark:border-[#24352C] px-4 sm:px-6 flex items-center justify-between gap-4 shrink-0 transition-colors duration-150">
+            <div className="flex items-center gap-2.5 min-w-0">
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="p-2 -ml-2 text-stone-600 hover:text-stone-900 lg:hidden"
+                className="w-11 h-11 -ml-2 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] lg:hidden"
                 aria-label="Open menu"
               >
                 <Menu className="w-5 h-5" />
               </button>
               <div className="flex items-center gap-2 text-sm min-w-0">
-                <span className="font-medium text-stone-500 truncate hidden sm:inline">
+                <span className="font-medium text-stone-500 dark:text-[#94A39B] truncate hidden sm:inline">
                   {settings.name}
                 </span>
-                <span className="text-stone-300 hidden sm:inline" aria-hidden="true">
+                <span className="text-stone-300 dark:text-[#24352C] hidden sm:inline" aria-hidden="true">
                   /
                 </span>
-                <span className="font-semibold text-stone-900 truncate">
+                <span className="font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                   {t.nav[activeTab]}
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {/* Light / Dark Mode Switcher (minimum 44x44px tap area) */}
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={
+                  isDark
+                    ? isVi
+                      ? 'Chuyển sang chế độ sáng'
+                      : 'Switch to light mode'
+                    : isVi
+                      ? 'Chuyển sang chế độ tối'
+                      : 'Switch to dark mode'
+                }
+                title={
+                  isDark
+                    ? isVi
+                      ? 'Chế độ sáng'
+                      : 'Light mode'
+                    : isVi
+                      ? 'Chế độ tối'
+                      : 'Dark mode'
+                }
+                className="inline-flex items-center justify-center w-11 h-11 text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+              >
+                {isDark ? (
+                  <Sun className="w-[18px] h-[18px] text-amber-300" />
+                ) : (
+                  <Moon className="w-[18px] h-[18px] text-stone-600" />
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={handleManualRefresh}
@@ -358,13 +399,17 @@ const JuiceFlowShell: React.FC = () => {
                       : 'Refresh local data'
                 }
                 aria-label={isVi ? 'Làm mới dữ liệu' : 'Refresh data'}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 hover:text-stone-900 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                className="inline-flex items-center justify-center gap-1.5 min-w-[44px] h-11 px-3.5 text-xs font-medium text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] hover:text-stone-900 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shrink-0"
               >
                 {justRefreshed ? (
-                  <Check className="w-3.5 h-3.5 text-[#0F5C43]" />
+                  <Check className="w-4 h-4 text-[#0F5C43] dark:text-[#10B981]" />
                 ) : (
                   <RefreshCw
-                    className={`w-3.5 h-3.5 ${refreshing || syncing ? 'animate-spin text-[#0F5C43]' : 'text-stone-500'}`}
+                    className={`w-4 h-4 ${
+                      refreshing || syncing
+                        ? 'animate-spin text-[#0F5C43] dark:text-[#10B981]'
+                        : 'text-stone-500 dark:text-[#94A39B]'
+                    }`}
                   />
                 )}
                 <span className="hidden sm:inline">
@@ -386,9 +431,9 @@ const JuiceFlowShell: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => navigate('sales')}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-4 h-4" />
                   {t.dashboard.newSale}
                 </button>
               )}

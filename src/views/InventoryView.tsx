@@ -521,10 +521,10 @@ export const InventoryView: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
             {t.inventory.title}
           </h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <p className="mt-1 text-sm text-stone-500 dark:text-[#94A39B]">
             {isVi
               ? 'Quản lý thống nhất 3 phân nhóm tồn kho: Hàng đóng gói, Nguyên liệu thô và Hàng pha sẵn.'
               : 'Unified inventory management across Packaged Stock, Raw Ingredients, Prepared Stock, and Audit Ledger.'}
@@ -535,15 +535,15 @@ export const InventoryView: React.FC = () => {
           <button
             type="button"
             onClick={() => setScannerOpen(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 text-sm font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 rounded-lg transition-colors whitespace-nowrap"
+            className="h-11 inline-flex items-center gap-2 px-4 text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
           >
-            <ScanBarcode className="w-4 h-4 text-[#0F5C43]" />
+            <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
             {isVi ? 'Quét nhập kho (Thùng/Lẻ)' : 'Scan Stock-In'}
           </button>
           <button
             type="button"
             onClick={openNewIngredient}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors whitespace-nowrap"
+            className="h-11 inline-flex items-center gap-2 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
             {t.inventory.addIngredient}
@@ -556,8 +556,8 @@ export const InventoryView: React.FC = () => {
           role="status"
           className={`px-4 py-3 rounded-lg border text-sm font-medium ${
             feedbackMsg.kind === 'ok'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-              : 'bg-red-50 border-red-200 text-red-900'
+              ? 'bg-emerald-50 dark:bg-[#064E3B] border-emerald-200 dark:border-[#10B981]/50 text-emerald-900 dark:text-[#D1FAE5]'
+              : 'bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-500/40 text-red-900 dark:text-red-200'
           }`}
         >
           {feedbackMsg.text}
@@ -567,26 +567,28 @@ export const InventoryView: React.FC = () => {
       {unknownStockBarcode && (
         <div
           role="status"
-          className="bg-white border border-stone-300 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          className="bg-white dark:bg-[#131D18] border border-stone-300 dark:border-[#24352C] rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
         >
           <div className="flex items-start gap-2.5 min-w-0">
-            <ScanBarcode className="w-4 h-4 text-[#0F5C43] shrink-0 mt-0.5" />
+            <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-stone-900">
+              <p className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                 {isVi ? 'Mã vạch chưa có trong kho' : 'Unregistered Stock-In Barcode'}:{' '}
-                <span className="font-mono-num text-[#0F5C43]">{unknownStockBarcode.code}</span>{' '}
-                <span className="text-xs font-normal text-stone-500">
+                <span className="font-mono-num text-[#0F5C43] dark:text-[#34D399]">
+                  {unknownStockBarcode.code}
+                </span>{' '}
+                <span className="text-xs font-normal text-stone-500 dark:text-[#94A39B]">
                   ({formatBarcodeTypeLabel(unknownStockBarcode.format)})
                 </span>
               </p>
-              <p className="text-xs text-stone-600 mt-0.5 truncate">
+              <p className="text-xs text-stone-600 dark:text-[#94A39B] mt-0.5 truncate">
                 {unknownStockBarcode.prefill
                   ? isVi
                     ? `Gợi ý từ Open Food Facts: ${unknownStockBarcode.prefill.name}${unknownStockBarcode.prefill.brand ? ` · ${unknownStockBarcode.prefill.brand}` : ''}`
                     : `Prefill from Open Food Facts: ${unknownStockBarcode.prefill.name}${unknownStockBarcode.prefill.brand ? ` · ${unknownStockBarcode.prefill.brand}` : ''}`
                   : isVi
-                  ? 'Không tìm thấy trên Open Food Facts — bạn có thể đăng ký sản phẩm mới ngay rồi nhập kho.'
-                  : 'Not found externally — register this product now and proceed directly to Stock-In.'}
+                    ? 'Không tìm thấy trên Open Food Facts — bạn có thể đăng ký sản phẩm mới ngay rồi nhập kho.'
+                    : 'Not found externally — register this product now and proceed directly to Stock-In.'}
               </p>
             </div>
           </div>
@@ -594,7 +596,7 @@ export const InventoryView: React.FC = () => {
             <button
               type="button"
               onClick={() => setQuickRegisterOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors whitespace-nowrap"
+              className="h-11 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               {isVi ? 'Đăng ký sản phẩm' : 'Register Product'}
@@ -603,7 +605,7 @@ export const InventoryView: React.FC = () => {
               type="button"
               onClick={() => setUnknownStockBarcode(null)}
               aria-label={t.common.close}
-              className="p-1.5 text-stone-400 hover:text-stone-700 rounded-md"
+              className="w-11 h-11 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-lg transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -612,42 +614,48 @@ export const InventoryView: React.FC = () => {
       )}
 
       {/* 3-Tier Inventory Valuation Strip */}
-      <div className="bg-white border border-stone-200 rounded-xl grid grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-stone-200">
+      <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl grid grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-stone-200 dark:divide-[#24352C]">
         <div className="p-4 col-span-2 lg:col-span-1">
-          <p className="text-xs font-medium text-stone-500">{t.inventory.stockValue}</p>
-          <p className="mt-1 font-mono-num text-xl font-bold text-stone-900">
+          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+            {t.inventory.stockValue}
+          </p>
+          <p className="mt-1 font-mono-num text-xl font-bold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(valuation.totalVal)}
           </p>
         </div>
         <div className="p-4">
-          <p className="text-xs font-medium text-stone-500">
+          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
             {isVi ? 'Hàng đóng gói' : 'Packaged Stock'}
           </p>
-          <p className="mt-1 font-mono-num text-lg font-semibold text-stone-900">
+          <p className="mt-1 font-mono-num text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(valuation.packagedVal)}
           </p>
         </div>
         <div className="p-4">
-          <p className="text-xs font-medium text-stone-500">
+          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
             {isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}
           </p>
-          <p className="mt-1 font-mono-num text-lg font-semibold text-stone-900">
+          <p className="mt-1 font-mono-num text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(valuation.ingVal)}
           </p>
         </div>
         <div className="p-4">
-          <p className="text-xs font-medium text-stone-500">
+          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
             {isVi ? 'Hàng pha sẵn' : 'Prepared Stock'}
           </p>
-          <p className="mt-1 font-mono-num text-lg font-semibold text-stone-900">
+          <p className="mt-1 font-mono-num text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(valuation.prepVal)}
           </p>
         </div>
         <div className="p-4">
-          <p className="text-xs font-medium text-stone-500">{t.inventory.lowStockItems}</p>
+          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+            {t.inventory.lowStockItems}
+          </p>
           <p
             className={`mt-1 font-mono-num text-lg font-bold ${
-              valuation.lowTotal > 0 ? 'text-amber-700' : 'text-emerald-700'
+              valuation.lowTotal > 0
+                ? 'text-amber-700 dark:text-amber-300'
+                : 'text-emerald-700 dark:text-[#34D399]'
             }`}
           >
             {valuation.lowTotal}
@@ -656,9 +664,9 @@ export const InventoryView: React.FC = () => {
       </div>
 
       {/* 4-Tab Panel */}
-      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-stone-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-1 p-1 bg-stone-100 rounded-lg self-start">
+      <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+        <div className="p-4 border-b border-stone-200 dark:border-[#24352C] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-1 p-1 bg-stone-100 dark:bg-[#18251F] border border-transparent dark:border-[#24352C] rounded-lg self-start">
             {(
               [
                 {
@@ -691,10 +699,10 @@ export const InventoryView: React.FC = () => {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+                className={`h-9 px-3.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'bg-white text-stone-900 shadow-xs'
-                    : 'text-stone-600 hover:text-stone-900'
+                    ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
+                    : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
                 }`}
               >
                 {tab.label}
@@ -710,7 +718,7 @@ export const InventoryView: React.FC = () => {
                   onChange={(e) =>
                     setMovementTierFilter(e.target.value as 'ALL' | StockClassification)
                   }
-                  className="px-2.5 py-2 text-xs border border-stone-200 rounded-lg bg-white"
+                  className="h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                 >
                   <option value="ALL">{isVi ? 'Mọi nhóm kho' : 'All Tiers'}</option>
                   <option value="packaged">{isVi ? 'Đóng gói' : 'Packaged'}</option>
@@ -720,7 +728,7 @@ export const InventoryView: React.FC = () => {
                 <select
                   value={movementTypeFilter}
                   onChange={(e) => setMovementTypeFilter(e.target.value as 'ALL' | MovementType)}
-                  className="px-2.5 py-2 text-xs border border-stone-200 rounded-lg bg-white"
+                  className="h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                 >
                   <option value="ALL">{isVi ? 'Mọi loại giao dịch' : 'All Types'}</option>
                   {(Object.keys(t.movementTypes) as MovementType[]).map((mt) => (
@@ -733,13 +741,13 @@ export const InventoryView: React.FC = () => {
             )}
 
             <div className="relative flex-1 min-w-[200px] max-w-xs">
-              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-stone-400 dark:text-[#94A39B] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t.common.search}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-stone-200 rounded-lg"
+                className="w-full h-11 pl-9 pr-3 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
               />
             </div>
           </div>
@@ -749,7 +757,7 @@ export const InventoryView: React.FC = () => {
         {activeTab === 'packaged' && (
           <div className="overflow-x-auto">
             {filteredPackaged.length === 0 ? (
-              <p className="p-10 text-center text-sm text-stone-500">
+              <p className="p-10 text-center text-sm text-stone-500 dark:text-[#94A39B]">
                 {isVi
                   ? 'Chưa có sản phẩm đóng gói. Thêm ở mục Sản phẩm với loại Đóng gói sẵn.'
                   : 'No packaged items yet. Add one under Products with classification "Packaged".'}
@@ -757,27 +765,34 @@ export const InventoryView: React.FC = () => {
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-stone-200 text-xs text-stone-500 bg-stone-50/70">
-                    <th className="py-3 px-5 font-medium">{isVi ? 'Sản phẩm / Mã vạch' : 'Product / Barcode'}</th>
+                  <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
+                    <th className="py-3 px-5 font-medium">
+                      {isVi ? 'Sản phẩm / Mã vạch' : 'Product / Barcode'}
+                    </th>
                     <th className="py-3 px-4 font-medium">{t.common.status}</th>
                     <th className="py-3 px-4 font-medium text-right">{t.inventory.inStock}</th>
                     <th className="py-3 px-4 font-medium text-right">{t.inventory.avgUnitCost}</th>
-                    <th className="py-3 px-4 font-medium text-right">{isVi ? 'Giá trị' : 'Value'}</th>
+                    <th className="py-3 px-4 font-medium text-right">
+                      {isVi ? 'Giá trị' : 'Value'}
+                    </th>
                     <th className="py-3 px-5 font-medium text-right">{t.common.actions}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-100 text-sm">
+                <tbody className="divide-y divide-stone-100 dark:divide-[#1F3028] text-sm">
                   {filteredPackaged.map((prod) => {
                     const isOut = prod.stockQty <= 0;
                     const isLow = !isOut && prod.stockQty <= prod.reorderLevel;
                     const target = toTargetFromProduct(prod);
                     return (
-                      <tr key={prod.id} className="hover:bg-stone-50/60">
+                      <tr
+                        key={prod.id}
+                        className="hover:bg-stone-50/60 dark:hover:bg-[#18251F]/70 transition-colors"
+                      >
                         <td className="py-3.5 px-5">
-                          <p className="font-medium text-stone-900">
+                          <p className="font-medium text-stone-900 dark:text-[#F1F5F3]">
                             {isVi ? prod.nameVi || prod.name : prod.name}
                           </p>
-                          <p className="text-xs text-stone-500 font-mono-num mt-0.5">
+                          <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num mt-0.5">
                             {[
                               prod.barcode || 'No barcode',
                               prod.packagingBarcodes?.[0]
@@ -790,31 +805,37 @@ export const InventoryView: React.FC = () => {
                         </td>
                         <td className="py-3.5 px-4 text-xs font-medium whitespace-nowrap">
                           {isOut ? (
-                            <span className="text-red-700">{t.inventory.statusOut}</span>
+                            <span className="text-red-700 dark:text-[#F87171]">
+                              {t.inventory.statusOut}
+                            </span>
                           ) : isLow ? (
-                            <span className="text-amber-700">{t.inventory.statusLow}</span>
+                            <span className="text-amber-700 dark:text-amber-300">
+                              {t.inventory.statusLow}
+                            </span>
                           ) : (
-                            <span className="text-emerald-700">{t.inventory.statusHealthy}</span>
+                            <span className="text-emerald-700 dark:text-[#34D399]">
+                              {t.inventory.statusHealthy}
+                            </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono-num font-semibold text-stone-900 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
                           {formatQty(prod.stockQty, prod.unit)}
-                          <span className="block text-[11px] font-normal text-stone-400">
+                          <span className="block text-[11px] font-normal text-stone-400 dark:text-[#94A39B]">
                             min {prod.reorderLevel}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-700 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-700 dark:text-[#D5DFDA] whitespace-nowrap">
                           {formatKhr(prod.costPriceKhr)}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono-num text-xs font-semibold text-stone-900 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right font-mono-num text-xs font-semibold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
                           {formatKhr(Math.max(0, prod.stockQty) * prod.costPriceKhr)}
                         </td>
                         <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-3 text-xs">
+                          <div className="inline-flex items-center gap-1.5 text-xs">
                             <button
                               type="button"
                               onClick={() => openPurchaseModal(target)}
-                              className="inline-flex items-center gap-1 font-semibold text-[#0F5C43] hover:underline"
+                              className="h-9 px-2.5 inline-flex items-center gap-1 font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                             >
                               <ArrowDownCircle className="w-3.5 h-3.5" />
                               {isVi ? 'Nhập kho' : 'Stock-In'}
@@ -827,7 +848,7 @@ export const InventoryView: React.FC = () => {
                                 setOpeningUnitCost(String(prod.costPriceKhr));
                                 setOpeningNote('');
                               }}
-                              className="text-stone-600 hover:text-stone-900"
+                              className="h-9 px-2.5 text-stone-600 dark:text-[#D5DFDA] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                             >
                               {isVi ? 'Đầu kỳ' : 'Opening'}
                             </button>
@@ -838,10 +859,10 @@ export const InventoryView: React.FC = () => {
                                 setCountedQty(String(prod.stockQty));
                                 setCountNote('');
                               }}
-                              className="text-stone-600 hover:text-stone-900"
+                              className="w-9 h-9 inline-flex items-center justify-center text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                               title="Physical Count"
                             >
-                              <ClipboardCheck className="w-3.5 h-3.5" />
+                              <ClipboardCheck className="w-4 h-4" />
                             </button>
                             <button
                               type="button"
@@ -851,10 +872,10 @@ export const InventoryView: React.FC = () => {
                                 setAdjustDelta('');
                                 setAdjustNote('');
                               }}
-                              className="text-stone-600 hover:text-stone-900"
+                              className="w-9 h-9 inline-flex items-center justify-center text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                               title="Adjust / Damaged / Expired"
                             >
-                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                              <SlidersHorizontal className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -871,61 +892,76 @@ export const InventoryView: React.FC = () => {
         {activeTab === 'ingredients' && (
           <div className="overflow-x-auto">
             {filteredIngredients.length === 0 ? (
-              <p className="p-10 text-center text-sm text-stone-500">{t.inventory.emptyStock}</p>
+              <p className="p-10 text-center text-sm text-stone-500 dark:text-[#94A39B]">
+                {t.inventory.emptyStock}
+              </p>
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-stone-200 text-xs text-stone-500 bg-stone-50/70">
+                  <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
                     <th className="py-3 px-5 font-medium">{t.inventory.ingredientName}</th>
                     <th className="py-3 px-4 font-medium">{t.common.status}</th>
                     <th className="py-3 px-4 font-medium text-right">{t.inventory.inStock}</th>
                     <th className="py-3 px-4 font-medium text-right">{t.inventory.avgUnitCost}</th>
-                    <th className="py-3 px-4 font-medium text-right">{isVi ? 'Giá trị' : 'Value'}</th>
+                    <th className="py-3 px-4 font-medium text-right">
+                      {isVi ? 'Giá trị' : 'Value'}
+                    </th>
                     <th className="py-3 px-5 font-medium text-right">{t.common.actions}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-100 text-sm">
+                <tbody className="divide-y divide-stone-100 dark:divide-[#1F3028] text-sm">
                   {filteredIngredients.map((ing) => {
                     const isOut = ing.stockQty <= 0;
                     const isLow = !isOut && ing.stockQty <= ing.reorderLevel;
                     const target = toTargetFromIngredient(ing);
                     return (
-                      <tr key={ing.id} className="hover:bg-stone-50/60">
+                      <tr
+                        key={ing.id}
+                        className="hover:bg-stone-50/60 dark:hover:bg-[#18251F]/70 transition-colors"
+                      >
                         <td className="py-3.5 px-5">
-                          <p className="font-medium text-stone-900">
+                          <p className="font-medium text-stone-900 dark:text-[#F1F5F3]">
                             {isVi ? ing.nameVi || ing.name : ing.name}
                           </p>
                           {ing.supplier && (
-                            <p className="text-xs text-stone-500 mt-0.5">{ing.supplier}</p>
+                            <p className="text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
+                              {ing.supplier}
+                            </p>
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-xs font-medium whitespace-nowrap">
                           {isOut ? (
-                            <span className="text-red-700">{t.inventory.statusOut}</span>
+                            <span className="text-red-700 dark:text-[#F87171]">
+                              {t.inventory.statusOut}
+                            </span>
                           ) : isLow ? (
-                            <span className="text-amber-700">{t.inventory.statusLow}</span>
+                            <span className="text-amber-700 dark:text-amber-300">
+                              {t.inventory.statusLow}
+                            </span>
                           ) : (
-                            <span className="text-emerald-700">{t.inventory.statusHealthy}</span>
+                            <span className="text-emerald-700 dark:text-[#34D399]">
+                              {t.inventory.statusHealthy}
+                            </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono-num font-semibold text-stone-900 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
                           {formatQty(ing.stockQty, ing.unit)}
-                          <span className="block text-[11px] font-normal text-stone-400">
+                          <span className="block text-[11px] font-normal text-stone-400 dark:text-[#94A39B]">
                             min {formatQty(ing.reorderLevel, ing.unit)}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-700 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-700 dark:text-[#D5DFDA] whitespace-nowrap">
                           {formatKhr(ing.unitCostKhr)} / {ing.unit}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono-num text-xs font-semibold text-stone-900 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right font-mono-num text-xs font-semibold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
                           {formatKhr(Math.max(0, ing.stockQty) * ing.unitCostKhr)}
                         </td>
                         <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-3 text-xs">
+                          <div className="inline-flex items-center gap-1.5 text-xs">
                             <button
                               type="button"
                               onClick={() => openPurchaseModal(target)}
-                              className="inline-flex items-center gap-1 font-semibold text-[#0F5C43] hover:underline"
+                              className="h-9 px-2.5 inline-flex items-center gap-1 font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                             >
                               <ArrowDownCircle className="w-3.5 h-3.5" />
                               {isVi ? 'Nhập mua' : 'Purchase'}
@@ -938,7 +974,7 @@ export const InventoryView: React.FC = () => {
                                 setOpeningUnitCost(String(ing.unitCostKhr));
                                 setOpeningNote('');
                               }}
-                              className="text-stone-600 hover:text-stone-900"
+                              className="h-9 px-2.5 text-stone-600 dark:text-[#D5DFDA] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                             >
                               {isVi ? 'Đầu kỳ' : 'Opening'}
                             </button>
@@ -949,10 +985,10 @@ export const InventoryView: React.FC = () => {
                                 setCountedQty(String(ing.stockQty));
                                 setCountNote('');
                               }}
-                              className="text-stone-600 hover:text-stone-900"
+                              className="w-9 h-9 inline-flex items-center justify-center text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                               title="Stock Count"
                             >
-                              <ClipboardCheck className="w-3.5 h-3.5" />
+                              <ClipboardCheck className="w-4 h-4" />
                             </button>
                             <button
                               type="button"
@@ -962,18 +998,18 @@ export const InventoryView: React.FC = () => {
                                 setAdjustDelta('');
                                 setAdjustNote('');
                               }}
-                              className="text-stone-600 hover:text-stone-900"
+                              className="w-9 h-9 inline-flex items-center justify-center text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                               title="Adjust / Damaged / Expired"
                             >
-                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                              <SlidersHorizontal className="w-4 h-4" />
                             </button>
                             <button
                               type="button"
                               onClick={() => openEditIngredient(ing)}
-                              className="p-1 text-stone-400 hover:text-stone-800"
+                              className="w-9 h-9 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-800 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                               aria-label={t.common.edit}
                             >
-                              <Edit2 className="w-3.5 h-3.5" />
+                              <Edit2 className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -990,7 +1026,7 @@ export const InventoryView: React.FC = () => {
         {activeTab === 'prepared_stock' && (
           <div className="overflow-x-auto">
             {filteredPrepared.length === 0 ? (
-              <p className="p-10 text-center text-sm text-stone-500">
+              <p className="p-10 text-center text-sm text-stone-500 dark:text-[#94A39B]">
                 {isVi
                   ? 'Chưa có sản phẩm pha sẵn. Thêm ở mục Sản phẩm với loại Pha sẵn trữ lạnh.'
                   : 'No prepared-stock items yet. Add one under Products with classification "Prepared Stock".'}
@@ -998,63 +1034,78 @@ export const InventoryView: React.FC = () => {
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-stone-200 text-xs text-stone-500 bg-stone-50/70">
-                    <th className="py-3 px-5 font-medium">{isVi ? 'Sản phẩm pha sẵn' : 'Prepared Item'}</th>
+                  <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
+                    <th className="py-3 px-5 font-medium">
+                      {isVi ? 'Sản phẩm pha sẵn' : 'Prepared Item'}
+                    </th>
                     <th className="py-3 px-4 font-medium">{t.common.status}</th>
-                    <th className="py-3 px-4 font-medium text-right">{isVi ? 'Sẵn bán' : 'Ready Qty'}</th>
+                    <th className="py-3 px-4 font-medium text-right">
+                      {isVi ? 'Sẵn bán' : 'Ready Qty'}
+                    </th>
                     <th className="py-3 px-4 font-medium text-right">{t.inventory.avgUnitCost}</th>
-                    <th className="py-3 px-4 font-medium text-right">{isVi ? 'Giá trị' : 'Value'}</th>
+                    <th className="py-3 px-4 font-medium text-right">
+                      {isVi ? 'Giá trị' : 'Value'}
+                    </th>
                     <th className="py-3 px-5 font-medium text-right">{t.common.actions}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-100 text-sm">
+                <tbody className="divide-y divide-stone-100 dark:divide-[#1F3028] text-sm">
                   {filteredPrepared.map((prod) => {
                     const isOut = prod.stockQty <= 0;
                     const isLow = !isOut && prod.stockQty <= prod.reorderLevel;
                     const target = toTargetFromProduct(prod);
                     return (
-                      <tr key={prod.id} className="hover:bg-stone-50/60">
+                      <tr
+                        key={prod.id}
+                        className="hover:bg-stone-50/60 dark:hover:bg-[#18251F]/70 transition-colors"
+                      >
                         <td className="py-3.5 px-5">
-                          <p className="font-medium text-stone-900">
+                          <p className="font-medium text-stone-900 dark:text-[#F1F5F3]">
                             {isVi ? prod.nameVi || prod.name : prod.name}
                           </p>
-                          <p className="text-xs text-stone-500 mt-0.5">
+                          <p className="text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
                             {prod.recipe.length > 0
                               ? isVi
                                 ? `Công thức mẻ: ${prod.recipe.length} nguyên liệu (không trừ lại khi bán POS)`
                                 : `Batch recipe: ${prod.recipe.length} ingredients (never double-deducted at POS)`
                               : isVi
-                              ? 'Nhập trực tiếp thành phẩm'
-                              : 'Direct finished-goods entry'}
+                                ? 'Nhập trực tiếp thành phẩm'
+                                : 'Direct finished-goods entry'}
                           </p>
                         </td>
                         <td className="py-3.5 px-4 text-xs font-medium whitespace-nowrap">
                           {isOut ? (
-                            <span className="text-red-700">{t.inventory.statusOut}</span>
+                            <span className="text-red-700 dark:text-[#F87171]">
+                              {t.inventory.statusOut}
+                            </span>
                           ) : isLow ? (
-                            <span className="text-amber-700">{t.inventory.statusLow}</span>
+                            <span className="text-amber-700 dark:text-amber-300">
+                              {t.inventory.statusLow}
+                            </span>
                           ) : (
-                            <span className="text-emerald-700">{t.inventory.statusHealthy}</span>
+                            <span className="text-emerald-700 dark:text-[#34D399]">
+                              {t.inventory.statusHealthy}
+                            </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono-num font-semibold text-stone-900 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
                           {formatQty(prod.stockQty, prod.unit)}
-                          <span className="block text-[11px] font-normal text-stone-400">
+                          <span className="block text-[11px] font-normal text-stone-400 dark:text-[#94A39B]">
                             min {prod.reorderLevel}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-700 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-700 dark:text-[#D5DFDA] whitespace-nowrap">
                           {formatKhr(prod.costPriceKhr)}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono-num text-xs font-semibold text-stone-900 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right font-mono-num text-xs font-semibold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
                           {formatKhr(Math.max(0, prod.stockQty) * prod.costPriceKhr)}
                         </td>
                         <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-3 text-xs">
+                          <div className="inline-flex items-center gap-1.5 text-xs">
                             <button
                               type="button"
                               onClick={() => openBatchPrepModal(prod)}
-                              className="inline-flex items-center gap-1 font-semibold text-[#0F5C43] hover:underline"
+                              className="h-9 px-2.5 inline-flex items-center gap-1 font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                             >
                               <FlaskConical className="w-3.5 h-3.5" />
                               {isVi ? 'Pha mẻ mới' : 'Prepare Batch'}
@@ -1067,7 +1118,7 @@ export const InventoryView: React.FC = () => {
                                 setOpeningUnitCost(String(prod.costPriceKhr));
                                 setOpeningNote('');
                               }}
-                              className="text-stone-600 hover:text-stone-900"
+                              className="h-9 px-2.5 text-stone-600 dark:text-[#D5DFDA] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                             >
                               {isVi ? 'Đầu kỳ' : 'Opening'}
                             </button>
@@ -1078,10 +1129,10 @@ export const InventoryView: React.FC = () => {
                                 setCountedQty(String(prod.stockQty));
                                 setCountNote('');
                               }}
-                              className="text-stone-600 hover:text-stone-900"
+                              className="w-9 h-9 inline-flex items-center justify-center text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                               title="Stock Count"
                             >
-                              <ClipboardCheck className="w-3.5 h-3.5" />
+                              <ClipboardCheck className="w-4 h-4" />
                             </button>
                             <button
                               type="button"
@@ -1091,10 +1142,10 @@ export const InventoryView: React.FC = () => {
                                 setAdjustDelta('');
                                 setAdjustNote('');
                               }}
-                              className="text-stone-600 hover:text-stone-900"
+                              className="w-9 h-9 inline-flex items-center justify-center text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                               title="Adjust / Damaged / Expired"
                             >
-                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                              <SlidersHorizontal className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -1111,48 +1162,59 @@ export const InventoryView: React.FC = () => {
         {activeTab === 'movements' && (
           <div className="overflow-x-auto">
             {filteredMovements.length === 0 ? (
-              <p className="p-10 text-center text-sm text-stone-500">{t.common.noResults}</p>
+              <p className="p-10 text-center text-sm text-stone-500 dark:text-[#94A39B]">
+                {t.common.noResults}
+              </p>
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-stone-200 text-xs text-stone-500 bg-stone-50/70">
+                  <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
                     <th className="py-3 px-5 font-medium">{t.common.date}</th>
-                    <th className="py-3 px-4 font-medium">{isVi ? 'Mặt hàng / Nhóm' : 'Item / Tier'}</th>
+                    <th className="py-3 px-4 font-medium">
+                      {isVi ? 'Mặt hàng / Nhóm' : 'Item / Tier'}
+                    </th>
                     <th className="py-3 px-4 font-medium">{t.inventory.movementType}</th>
-                    <th className="py-3 px-4 font-medium text-right">{t.inventory.quantityChange}</th>
+                    <th className="py-3 px-4 font-medium text-right">
+                      {t.inventory.quantityChange}
+                    </th>
                     <th className="py-3 px-4 font-medium text-right">{t.inventory.costImpact}</th>
                     <th className="py-3 px-5 font-medium">{t.common.note}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-100 text-sm">
+                <tbody className="divide-y divide-stone-100 dark:divide-[#1F3028] text-sm">
                   {filteredMovements.map((mov) => (
-                    <tr key={mov.id} className="hover:bg-stone-50/60">
-                      <td className="py-3 px-5 font-mono-num text-xs text-stone-600 whitespace-nowrap">
+                    <tr
+                      key={mov.id}
+                      className="hover:bg-stone-50/60 dark:hover:bg-[#18251F]/70 transition-colors"
+                    >
+                      <td className="py-3 px-5 font-mono-num text-xs text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
                         {mov.movementDate}
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <p className="font-medium text-stone-900">
+                        <p className="font-medium text-stone-900 dark:text-[#F1F5F3]">
                           {mov.itemName || mov.ingredientName}
                         </p>
-                        <p className="text-[11px] text-stone-400 uppercase tracking-wide">
+                        <p className="text-[11px] text-stone-400 dark:text-[#94A39B] uppercase tracking-wide">
                           {(mov.itemClassification || 'ingredient').replace('_', ' ')}
                         </p>
                       </td>
-                      <td className="py-3 px-4 text-xs text-stone-600 whitespace-nowrap">
+                      <td className="py-3 px-4 text-xs text-stone-600 dark:text-[#D5DFDA] whitespace-nowrap">
                         {t.movementTypes[mov.movementType]} · {mov.recordedBy}
                       </td>
                       <td
                         className={`py-3 px-4 text-right font-mono-num font-semibold whitespace-nowrap ${
-                          mov.deltaQty >= 0 ? 'text-emerald-700' : 'text-amber-700'
+                          mov.deltaQty >= 0
+                            ? 'text-emerald-700 dark:text-[#34D399]'
+                            : 'text-amber-700 dark:text-amber-300'
                         }`}
                       >
                         {mov.deltaQty > 0 ? '+' : ''}
                         {formatQty(mov.deltaQty, mov.unit)}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono-num text-xs text-stone-700 whitespace-nowrap">
+                      <td className="py-3 px-4 text-right font-mono-num text-xs text-stone-700 dark:text-[#D5DFDA] whitespace-nowrap">
                         {formatKhr(mov.totalCostKhr)}
                       </td>
-                      <td className="py-3 px-5 text-xs text-stone-500 max-w-xs truncate">
+                      <td className="py-3 px-5 text-xs text-stone-500 dark:text-[#94A39B] max-w-xs truncate">
                         {mov.note || '—'}
                       </td>
                     </tr>
@@ -1166,23 +1228,24 @@ export const InventoryView: React.FC = () => {
 
       {/* Add / Edit Ingredient Modal */}
       {ingModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold text-stone-900">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
+              <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
                 {editingIng ? t.inventory.editIngredient : t.inventory.addIngredient}
               </h2>
               <button
                 type="button"
                 onClick={() => setIngModalOpen(false)}
-                className="p-1.5 text-stone-500 hover:text-stone-900"
+                className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors shrink-0"
+                aria-label={t.common.close}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleSaveIngredient} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.inventory.ingredientName}
                 </label>
                 <input
@@ -1191,11 +1254,11 @@ export const InventoryView: React.FC = () => {
                   maxLength={100}
                   value={ingName}
                   onChange={(e) => setIngName(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.inventory.ingredientNameVi}
                 </label>
                 <input
@@ -1203,18 +1266,18 @@ export const InventoryView: React.FC = () => {
                   maxLength={100}
                   value={ingNameVi}
                   onChange={(e) => setIngNameVi(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.inventory.unit}
                   </label>
                   <select
                     value={ingUnit}
                     onChange={(e) => setIngUnit(e.target.value as IngredientUnit)}
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white"
+                    className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   >
                     {(['g', 'kg', 'ml', 'L', 'pcs'] as IngredientUnit[]).map((u) => (
                       <option key={u} value={u}>
@@ -1224,7 +1287,7 @@ export const InventoryView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.inventory.inStock}
                   </label>
                   <input
@@ -1232,13 +1295,13 @@ export const InventoryView: React.FC = () => {
                     step="any"
                     value={ingStock}
                     onChange={(e) => setIngStock(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.inventory.reorderAt}
                   </label>
                   <input
@@ -1247,11 +1310,11 @@ export const InventoryView: React.FC = () => {
                     step="any"
                     value={ingReorder}
                     onChange={(e) => setIngReorder(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.inventory.avgUnitCost} (KHR)
                   </label>
                   <input
@@ -1260,12 +1323,12 @@ export const InventoryView: React.FC = () => {
                     step="any"
                     value={ingCost}
                     onChange={(e) => setIngCost(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.inventory.supplier}
                 </label>
                 <input
@@ -1273,20 +1336,20 @@ export const InventoryView: React.FC = () => {
                   maxLength={100}
                   value={ingSupplier}
                   onChange={(e) => setIngSupplier(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
               </div>
-              <div className="pt-3 border-t border-stone-200 flex justify-end gap-3">
+              <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIngModalOpen(false)}
-                  className="px-4 py-2 text-sm text-stone-700 hover:bg-stone-100 rounded-lg"
+                  className="h-11 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
                 >
                   {t.common.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg"
+                  className="h-11 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
                 >
                   {t.common.save}
                 </button>
@@ -1298,23 +1361,24 @@ export const InventoryView: React.FC = () => {
 
       {/* Stock-In / Purchase Modal (Supports Carton/Pack Multiplication & Zero COGS Double-Counting) */}
       {purchaseTarget && (
-        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold text-stone-900">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
+              <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                 {isVi ? 'Nhập kho mua hàng' : 'Record Stock-In Purchase'}:{' '}
                 {isVi ? purchaseTarget.nameVi || purchaseTarget.name : purchaseTarget.name}
               </h2>
               <button
                 type="button"
                 onClick={() => setPurchaseTarget(null)}
-                className="p-1.5 text-stone-500 hover:text-stone-900"
+                className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors shrink-0"
+                aria-label={t.common.close}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleSavePurchase} className="p-6 space-y-4">
-              <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <p className="text-xs text-emerald-800 dark:text-[#D1FAE5] bg-emerald-50 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 rounded-lg p-3">
                 {isVi
                   ? 'Ghi nhận vào Sổ Mua Hàng (Dòng tiền chi ra) và tăng Giá trị Tồn kho — không tính trùng hai lần vào chi phí vận hành P&L.'
                   : 'Recorded as an Inventory Purchase (Cash Flow outflow & Stock Asset increase) — never double-counted with COGS in Accrual P&L.'}
@@ -1322,12 +1386,12 @@ export const InventoryView: React.FC = () => {
 
               {/* Carton / Pack Mode Toggle */}
               {purchaseTarget.classification === 'packaged' && (
-                <label className="inline-flex items-center gap-2 text-xs font-semibold text-stone-700 cursor-pointer">
+                <label className="min-h-[44px] inline-flex items-center gap-2.5 text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={purchaseUsePacks}
                     onChange={(e) => setPurchaseUsePacks(e.target.checked)}
-                    className="w-4 h-4 accent-[#0F5C43]"
+                    className="w-5 h-5 accent-[#0F5C43] dark:accent-[#10B981] rounded"
                   />
                   {isVi
                     ? 'Nhập theo Thùng / Lốc (tự nhân số lượng lẻ)'
@@ -1338,7 +1402,7 @@ export const InventoryView: React.FC = () => {
               {purchaseUsePacks ? (
                 <div className="grid grid-cols-3 gap-2.5 items-end">
                   <div>
-                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                    <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                       {isVi ? 'Số thùng' : 'Packs / Cartons'}
                     </label>
                     <input
@@ -1347,11 +1411,11 @@ export const InventoryView: React.FC = () => {
                       min={1}
                       value={purchasePackCount}
                       onChange={(e) => setPurchasePackCount(e.target.value)}
-                      className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                      className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                    <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                       {isVi ? 'SL / thùng' : 'Units / Pack'}
                     </label>
                     <input
@@ -1360,12 +1424,14 @@ export const InventoryView: React.FC = () => {
                       min={1}
                       value={purchaseUnitsPerPack}
                       onChange={(e) => setPurchaseUnitsPerPack(e.target.value)}
-                      className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                      className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                     />
                   </div>
-                  <div className="p-2 bg-stone-50 border border-stone-200 rounded-lg text-center">
-                    <span className="block text-[10px] text-stone-500">Total Added</span>
-                    <span className="font-mono-num text-sm font-bold text-[#0F5C43]">
+                  <div className="h-11 px-2 bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg flex flex-col items-center justify-center text-center">
+                    <span className="block text-[10px] leading-tight text-stone-500 dark:text-[#94A39B]">
+                      Total Added
+                    </span>
+                    <span className="font-mono-num text-sm leading-tight font-bold text-[#0F5C43] dark:text-[#34D399]">
                       {(Number(purchasePackCount) || 0) * (Number(purchaseUnitsPerPack) || 0)}{' '}
                       {purchaseTarget.unit}
                     </span>
@@ -1373,7 +1439,7 @@ export const InventoryView: React.FC = () => {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.inventory.purchaseQty} ({purchaseTarget.unit})
                   </label>
                   <input
@@ -1383,14 +1449,14 @@ export const InventoryView: React.FC = () => {
                     step="any"
                     value={purchaseQty}
                     onChange={(e) => setPurchaseQty(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.inventory.totalPaidKhr}
                   </label>
                   <input
@@ -1400,17 +1466,17 @@ export const InventoryView: React.FC = () => {
                     step={500}
                     value={purchaseCostKhr}
                     onChange={(e) => setPurchaseCostKhr(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.common.payment}
                   </label>
                   <select
                     value={purchasePayment}
                     onChange={(e) => setPurchasePayment(e.target.value as PaymentMethod)}
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white"
+                    className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   >
                     {(['cash', 'khqr', 'aba', 'wing'] as PaymentMethod[]).map((pm) => (
                       <option key={pm} value={pm}>
@@ -1423,18 +1489,18 @@ export const InventoryView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.common.date}
                   </label>
                   <input
                     type="date"
                     value={purchaseDate}
                     onChange={(e) => setPurchaseDate(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.inventory.supplier}
                   </label>
                   <input
@@ -1442,13 +1508,13 @@ export const InventoryView: React.FC = () => {
                     maxLength={100}
                     value={purchaseSupplier}
                     onChange={(e) => setPurchaseSupplier(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.common.note}
                 </label>
                 <input
@@ -1456,21 +1522,21 @@ export const InventoryView: React.FC = () => {
                   maxLength={200}
                   value={purchaseNote}
                   onChange={(e) => setPurchaseNote(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
               </div>
 
-              <div className="pt-3 border-t border-stone-200 flex justify-end gap-3">
+              <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setPurchaseTarget(null)}
-                  className="px-4 py-2 text-sm text-stone-700 hover:bg-stone-100 rounded-lg"
+                  className="h-11 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
                 >
                   {t.common.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg"
+                  className="h-11 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
                 >
                   {t.common.save}
                 </button>
@@ -1482,30 +1548,31 @@ export const InventoryView: React.FC = () => {
 
       {/* Opening Stock Modal (Valuation Only — Non-Expense) */}
       {openingTarget && (
-        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
-              <h2 className="font-display text-base font-semibold text-stone-900">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
+              <h2 className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                 {isVi ? 'Nhập tồn đầu kỳ' : 'Opening Stock'}:{' '}
                 {isVi ? openingTarget.nameVi || openingTarget.name : openingTarget.name}
               </h2>
               <button
                 type="button"
                 onClick={() => setOpeningTarget(null)}
-                className="p-1.5 text-stone-500"
+                className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors shrink-0"
+                aria-label={t.common.close}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleSaveOpeningStock} className="p-6 space-y-4">
-              <p className="text-xs text-stone-600 bg-stone-50 border border-stone-200 rounded-lg p-3">
+              <p className="text-xs text-stone-600 dark:text-[#D5DFDA] bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg p-3">
                 {isVi
                   ? 'Tồn kho đầu kỳ chỉ tăng số dư và giá trị tài sản kho — KHÔNG tính là chi phí hay tiền chi ra.'
                   : 'Opening stock adds initial on-hand inventory valuation ONLY — it is NEVER recorded as an expense or cash outflow.'}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {isVi ? 'Số lượng thêm' : 'Opening Qty'} ({openingTarget.unit})
                   </label>
                   <input
@@ -1515,11 +1582,11 @@ export const InventoryView: React.FC = () => {
                     step="any"
                     value={openingQty}
                     onChange={(e) => setOpeningQty(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {isVi ? 'Đơn giá vốn (KHR)' : 'Unit Cost (KHR)'}
                   </label>
                   <input
@@ -1528,12 +1595,12 @@ export const InventoryView: React.FC = () => {
                     step="any"
                     value={openingUnitCost}
                     onChange={(e) => setOpeningUnitCost(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.common.note}
                 </label>
                 <input
@@ -1542,20 +1609,20 @@ export const InventoryView: React.FC = () => {
                   value={openingNote}
                   onChange={(e) => setOpeningNote(e.target.value)}
                   placeholder="Initial count before system go-live"
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
               </div>
-              <div className="pt-3 border-t border-stone-200 flex justify-end gap-3">
+              <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setOpeningTarget(null)}
-                  className="px-4 py-2 text-sm text-stone-700 hover:bg-stone-100 rounded-lg"
+                  className="h-11 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
                 >
                   {t.common.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] rounded-lg"
+                  className="h-11 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
                 >
                   {t.common.save}
                 </button>
@@ -1567,12 +1634,12 @@ export const InventoryView: React.FC = () => {
 
       {/* Prepare Batch Modal for PREPARED_STOCK (Both Modes: Deduct Ingredients OR Direct Add) */}
       {batchProduct && (
-        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <PackageCheck className="w-5 h-5 text-[#0F5C43]" />
-                <h2 className="font-display text-base font-bold text-stone-900">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <PackageCheck className="w-5 h-5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+                <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
                   {isVi ? 'Pha mẻ hàng trữ sẵn' : 'Prepare Batch'}:{' '}
                   {isVi ? batchProduct.nameVi || batchProduct.name : batchProduct.name}
                 </h2>
@@ -1580,27 +1647,28 @@ export const InventoryView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setBatchProduct(null)}
-                className="p-1.5 text-stone-500"
+                className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors shrink-0"
+                aria-label={t.common.close}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleSaveBatchPrep} className="p-6 space-y-4">
               {/* Mode Toggle */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
                   onClick={() => setBatchMode('deduct_ingredients')}
-                  className={`p-3 rounded-lg border text-left text-xs transition-colors ${
+                  className={`min-h-[56px] p-3 rounded-lg border text-left text-xs transition-colors ${
                     batchMode === 'deduct_ingredients'
-                      ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
-                      : 'border-stone-200 text-stone-700'
+                      ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
+                      : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                   }`}
                 >
                   <div className="font-semibold">
                     {isVi ? 'Trừ nguyên liệu theo mẻ' : 'Deduct Raw Ingredients'}
                   </div>
-                  <div className="text-[11px] text-stone-500 mt-0.5">
+                  <div className="text-[11px] text-stone-500 dark:text-[#94A39B] mt-0.5">
                     {isVi
                       ? 'Dùng công thức pha mẻ & tính giá vốn tự động'
                       : 'Uses batch recipe & updates unit cost'}
@@ -1609,16 +1677,16 @@ export const InventoryView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setBatchMode('direct_add')}
-                  className={`p-3 rounded-lg border text-left text-xs transition-colors ${
+                  className={`min-h-[56px] p-3 rounded-lg border text-left text-xs transition-colors ${
                     batchMode === 'direct_add'
-                      ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
-                      : 'border-stone-200 text-stone-700'
+                      ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
+                      : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                   }`}
                 >
                   <div className="font-semibold">
                     {isVi ? 'Thêm trực tiếp thành phẩm' : 'Direct Add Finished Stock'}
                   </div>
-                  <div className="text-[11px] text-stone-500 mt-0.5">
+                  <div className="text-[11px] text-stone-500 dark:text-[#94A39B] mt-0.5">
                     {isVi
                       ? 'Không trừ kho nguyên liệu thô'
                       : 'Skip raw ingredient deduction'}
@@ -1628,7 +1696,7 @@ export const InventoryView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {isVi ? 'Số lượng thành phẩm' : 'Batch Quantity'} ({batchProduct.unit})
                   </label>
                   <input
@@ -1638,12 +1706,12 @@ export const InventoryView: React.FC = () => {
                     step="any"
                     value={batchQty}
                     onChange={(e) => setBatchQty(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
                 {batchMode === 'direct_add' && (
                   <div>
-                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                    <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                       {isVi ? 'Giá vốn / đơn vị (KHR)' : 'Unit Cost (KHR)'}
                     </label>
                     <input
@@ -1652,14 +1720,14 @@ export const InventoryView: React.FC = () => {
                       step={100}
                       value={batchDirectUnitCost}
                       onChange={(e) => setBatchDirectUnitCost(e.target.value)}
-                      className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                      className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                     />
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.common.note}
                 </label>
                 <input
@@ -1668,12 +1736,12 @@ export const InventoryView: React.FC = () => {
                   value={batchNote}
                   onChange={(e) => setBatchNote(e.target.value)}
                   placeholder="Morning chill batch"
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
               </div>
 
               {batchError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-900 space-y-1">
+                <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/40 rounded-lg text-xs text-red-900 dark:text-red-200 space-y-1">
                   <div className="flex items-center gap-1.5 font-semibold">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     <span>{batchError}</span>
@@ -1691,17 +1759,17 @@ export const InventoryView: React.FC = () => {
                 </div>
               )}
 
-              <div className="pt-3 border-t border-stone-200 flex justify-end gap-3">
+              <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setBatchProduct(null)}
-                  className="px-4 py-2 text-sm text-stone-700 hover:bg-stone-100 rounded-lg"
+                  className="h-11 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
                 >
                   {t.common.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg"
+                  className="h-11 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
                 >
                   {isVi ? 'Hoàn tất mẻ pha' : 'Confirm Batch'}
                 </button>
@@ -1713,30 +1781,31 @@ export const InventoryView: React.FC = () => {
 
       {/* Physical Stock Count Modal */}
       {countTarget && (
-        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
-              <h2 className="font-display text-base font-semibold text-stone-900">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
+              <h2 className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                 {isVi ? 'Kiểm kê thực tế' : 'Physical Stock Count'}:{' '}
                 {isVi ? countTarget.nameVi || countTarget.name : countTarget.name}
               </h2>
               <button
                 type="button"
                 onClick={() => setCountTarget(null)}
-                className="p-1.5 text-stone-500"
+                className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors shrink-0"
+                aria-label={t.common.close}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleSaveStockCount} className="p-6 space-y-4">
-              <p className="text-xs text-stone-500 font-mono-num">
+              <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
                 {isVi ? 'Tồn hệ thống hiện tại:' : 'System stock:'}{' '}
-                <span className="font-semibold text-stone-900">
+                <span className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
                   {formatQty(countTarget.stockQty, countTarget.unit)}
                 </span>
               </p>
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {isVi ? 'Số lượng đếm được thực tế' : 'Actual Counted Quantity'} (
                   {countTarget.unit})
                 </label>
@@ -1747,11 +1816,11 @@ export const InventoryView: React.FC = () => {
                   step="any"
                   value={countedQty}
                   onChange={(e) => setCountedQty(e.target.value)}
-                  className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.common.note}
                 </label>
                 <input
@@ -1760,20 +1829,20 @@ export const InventoryView: React.FC = () => {
                   value={countNote}
                   onChange={(e) => setCountNote(e.target.value)}
                   placeholder="End-of-week count"
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
               </div>
-              <div className="pt-3 border-t border-stone-200 flex justify-end gap-3">
+              <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setCountTarget(null)}
-                  className="px-4 py-2 text-sm text-stone-700 hover:bg-stone-100 rounded-lg"
+                  className="h-11 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
                 >
                   {t.common.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] rounded-lg"
+                  className="h-11 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
                 >
                   {t.common.save}
                 </button>
@@ -1785,36 +1854,40 @@ export const InventoryView: React.FC = () => {
 
       {/* Manual Adjustment / Damaged / Expired Modal */}
       {adjustTarget && (
-        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
-              <h2 className="font-display text-base font-semibold text-stone-900">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
+              <h2 className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                 {t.inventory.adjustStock}:{' '}
                 {isVi ? adjustTarget.nameVi || adjustTarget.name : adjustTarget.name}
               </h2>
               <button
                 type="button"
                 onClick={() => setAdjustTarget(null)}
-                className="p-1.5 text-stone-500"
+                className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors shrink-0"
+                aria-label={t.common.close}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleSaveAdjustment} className="p-6 space-y-4">
-              <p className="text-xs text-stone-500 font-mono-num">
-                {t.inventory.inStock}: {formatQty(adjustTarget.stockQty, adjustTarget.unit)}
+              <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
+                {t.inventory.inStock}:{' '}
+                <span className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                  {formatQty(adjustTarget.stockQty, adjustTarget.unit)}
+                </span>
               </p>
 
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-3 gap-2">
                 {(['adjustment', 'damaged', 'expired'] as const).map((k) => (
                   <button
                     key={k}
                     type="button"
                     onClick={() => setAdjustKind(k)}
-                    className={`py-2 px-2 text-xs font-semibold rounded-lg border transition-colors ${
+                    className={`h-11 px-2 text-xs font-semibold rounded-lg border transition-colors ${
                       adjustKind === k
-                        ? 'border-[#0F5C43] bg-emerald-50 text-[#0F5C43]'
-                        : 'border-stone-200 text-stone-600'
+                        ? 'border-[#0F5C43] bg-emerald-50 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
+                        : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-600 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                     }`}
                   >
                     {k === 'adjustment'
@@ -1833,7 +1906,7 @@ export const InventoryView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {adjustKind === 'adjustment'
                     ? `${t.inventory.deltaQty} (${adjustTarget.unit})`
                     : `${isVi ? 'Số lượng hủy' : 'Write-off Quantity'} (${adjustTarget.unit})`}
@@ -1845,11 +1918,11 @@ export const InventoryView: React.FC = () => {
                   placeholder={adjustKind === 'adjustment' ? '-2 or +5' : '2'}
                   value={adjustDelta}
                   onChange={(e) => setAdjustDelta(e.target.value)}
-                  className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.inventory.adjustReason}
                 </label>
                 <input
@@ -1857,20 +1930,20 @@ export const InventoryView: React.FC = () => {
                   maxLength={200}
                   value={adjustNote}
                   onChange={(e) => setAdjustNote(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
               </div>
-              <div className="pt-3 border-t border-stone-200 flex justify-end gap-3">
+              <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setAdjustTarget(null)}
-                  className="px-4 py-2 text-sm text-stone-700 hover:bg-stone-100 rounded-lg"
+                  className="h-11 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
                 >
                   {t.common.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg"
+                  className="h-11 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
                 >
                   {t.common.save}
                 </button>

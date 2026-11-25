@@ -28,8 +28,24 @@
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function () {
+        try {
+          var saved = window.localStorage.getItem('juiceflow_theme');
+          var isDark =
+            saved === 'dark' ||
+            (saved !== 'light' &&
+              window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', isDark);
+          document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', isDark ? '#0b110e' : '#0f5c43');
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-[#F6F7F5] text-stone-900 antialiased selection:bg-emerald-900/15 selection:text-emerald-950">
+  <body class="bg-[#F6F7F5] text-stone-900 dark:bg-[#0B110E] dark:text-[#F1F5F3] antialiased selection:bg-emerald-900/15 selection:text-emerald-950 dark:selection:bg-emerald-400/25 dark:selection:text-emerald-200">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

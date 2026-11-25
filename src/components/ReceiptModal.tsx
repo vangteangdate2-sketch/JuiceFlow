@@ -113,20 +113,20 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-4 print:bg-white print:p-0 print:static">
-      <div className="w-full max-w-md bg-white border border-stone-200 rounded-xl shadow-xl overflow-hidden print:border-0 print:shadow-none print:max-w-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 print:bg-white print:p-0 print:static">
+      <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl shadow-xl overflow-hidden print:border-0 print:shadow-none print:max-w-none print:bg-white">
         {/* Modal Header (hidden on print) */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-200 print:hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-200 dark:border-[#24352C] print:hidden">
           <div className="flex items-center gap-3">
-            <h3 className="text-base font-bold text-stone-900">Receipt {sale.orderNumber}</h3>
-            <div className="flex border border-stone-200 rounded-lg overflow-hidden text-xs font-semibold">
+            <h3 className="text-base font-bold text-stone-900 dark:text-[#F1F5F3]">Receipt {sale.orderNumber}</h3>
+            <div className="flex border border-stone-200 dark:border-[#24352C] rounded-lg overflow-hidden text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => setPaperWidth('58mm')}
-                className={`px-2.5 py-1 transition-colors ${
+                className={`h-9 px-3 transition-colors ${
                   paperWidth === '58mm'
-                    ? 'bg-[#0F5C43] text-white'
-                    : 'bg-stone-50 text-stone-600 hover:bg-stone-100'
+                    ? 'bg-[#0F5C43] text-white dark:bg-[#10B981] dark:text-[#042419]'
+                    : 'bg-stone-50 dark:bg-[#18251F] text-stone-600 dark:text-[#94A39B] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
                 }`}
               >
                 58mm
@@ -134,10 +134,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
               <button
                 type="button"
                 onClick={() => setPaperWidth('80mm')}
-                className={`px-2.5 py-1 transition-colors ${
+                className={`h-9 px-3 transition-colors ${
                   paperWidth === '80mm'
-                    ? 'bg-[#0F5C43] text-white'
-                    : 'bg-stone-50 text-stone-600 hover:bg-stone-100'
+                    ? 'bg-[#0F5C43] text-white dark:bg-[#10B981] dark:text-[#042419]'
+                    : 'bg-stone-50 dark:bg-[#18251F] text-stone-600 dark:text-[#94A39B] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
                 }`}
               >
                 80mm
@@ -147,15 +147,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-stone-500 hover:text-stone-800 hover:bg-stone-100"
+            className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-800 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]"
             aria-label="Close receipt"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Printable Thermal Receipt Preview */}
-        <div className="p-5 bg-stone-50 flex justify-center max-h-[65vh] overflow-y-auto print:p-0 print:bg-white print:max-h-none print:overflow-visible">
+        {/* Printable Thermal Receipt Preview (paper stays crisp white for authentic print preview) */}
+        <div className="p-5 bg-stone-50 dark:bg-[#0B110E] flex justify-center max-h-[65vh] overflow-y-auto print:p-0 print:bg-white print:max-h-none print:overflow-visible">
           <div
             id="thermal-receipt-sheet"
             className={`bg-white border border-stone-200 rounded-lg p-4 text-stone-900 font-mono-num text-xs leading-relaxed print:border-0 print:rounded-none print:p-0 ${
@@ -284,19 +284,19 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
         </div>
 
         {/* Footer Actions (hidden on print) */}
-        <div className="px-5 py-3.5 border-t border-stone-200 flex items-center justify-end gap-2.5 print:hidden">
+        <div className="px-5 py-3.5 border-t border-stone-200 dark:border-[#24352C] flex items-center justify-end gap-2.5 print:hidden">
           <button
             type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 h-11 px-4 text-sm font-semibold text-stone-700 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] border border-transparent dark:border-[#24352C] hover:bg-stone-200 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
           >
-            {copied ? <Check className="w-4 h-4 text-[#0F5C43]" /> : <Copy className="w-4 h-4" />}
+            {copied ? <Check className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" /> : <Copy className="w-4 h-4" />}
             {copied ? 'Copied!' : 'Copy Summary'}
           </button>
           <button
             type="button"
             onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4633] rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 h-11 px-4 text-sm font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4633] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors"
           >
             <Printer className="w-4 h-4" />
             Print Thermal ({paperWidth})

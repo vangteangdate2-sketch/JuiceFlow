@@ -43,11 +43,11 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
       <div className="flex items-center justify-between gap-2">
         <h2
           id="daily-summary-heading"
-          className="font-display text-base font-semibold text-stone-900 tracking-tight"
+          className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3] tracking-tight"
         >
           {isVi ? 'Tổng kết hôm nay' : 'Daily Summary'}
         </h2>
-        <span className="text-xs font-mono-num text-stone-500">{dateLabel}</span>
+        <span className="text-xs font-mono-num text-stone-500 dark:text-[#94A39B]">{dateLabel}</span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -62,29 +62,29 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
               onNavigate('sales');
             }
           }}
-          className={`bg-white border border-stone-200 rounded-xl p-5 flex flex-col justify-between transition-colors ${
+          className={`bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between transition-colors ${
             onNavigate
-              ? 'cursor-pointer hover:border-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]'
+              ? 'cursor-pointer hover:border-stone-300 dark:hover:border-[#344E41] dark:hover:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
               : ''
           }`}
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="w-8 h-8 rounded-lg bg-emerald-50 text-[#0F5C43] flex items-center justify-center shrink-0">
+              <span className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-[#064E3B] text-[#0F5C43] dark:text-[#34D399] flex items-center justify-center shrink-0">
                 <ShoppingBag className="w-4 h-4" />
               </span>
-              <span className="text-xs font-medium text-stone-600 truncate">
+              <span className="text-xs font-medium text-stone-600 dark:text-[#94A39B] truncate">
                 {isVi ? 'Doanh thu hôm nay' : 'Total Sales (Today)'}
               </span>
             </div>
-            {onNavigate && <ArrowUpRight className="w-4 h-4 text-stone-400 shrink-0" />}
+            {onNavigate && <ArrowUpRight className="w-4 h-4 text-stone-400 dark:text-[#94A39B] shrink-0" />}
           </div>
 
           <div className="mt-4">
-            <p className="font-mono-num text-2xl font-bold text-stone-900 tracking-tight">
+            <p className="font-mono-num text-2xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
               {formatKhr(todaySalesKhr)}
             </p>
-            <p className="mt-1.5 text-xs text-stone-500 font-mono-num truncate">
+            <p className="mt-1.5 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate">
               {todayOrderCount} {isVi ? 'đơn' : todayOrderCount === 1 ? 'order' : 'orders'} ·{' '}
               {todayUnitsSold} {isVi ? 'món' : 'units'} · {formatUsdRef(todaySalesKhr, usdRate)}
             </p>
@@ -102,33 +102,33 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
               onNavigate('inventory');
             }
           }}
-          className={`bg-white border border-stone-200 rounded-xl p-5 flex flex-col justify-between transition-colors ${
+          className={`bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between transition-colors ${
             onNavigate
-              ? 'cursor-pointer hover:border-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]'
+              ? 'cursor-pointer hover:border-stone-300 dark:hover:border-[#344E41] dark:hover:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
               : ''
           }`}
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="w-8 h-8 rounded-lg bg-stone-100 text-stone-700 flex items-center justify-center shrink-0">
+              <span className="w-8 h-8 rounded-lg bg-stone-100 dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] flex items-center justify-center shrink-0">
                 <Package className="w-4 h-4" />
               </span>
-              <span className="text-xs font-medium text-stone-600 truncate">
+              <span className="text-xs font-medium text-stone-600 dark:text-[#94A39B] truncate">
                 {isVi ? 'Mặt hàng tồn kho hoạt động' : 'Active Inventory Items'}
               </span>
             </div>
-            {onNavigate && <ArrowUpRight className="w-4 h-4 text-stone-400 shrink-0" />}
+            {onNavigate && <ArrowUpRight className="w-4 h-4 text-stone-400 dark:text-[#94A39B] shrink-0" />}
           </div>
 
           <div className="mt-4">
-            <p className="font-mono-num text-2xl font-bold text-stone-900 tracking-tight">
+            <p className="font-mono-num text-2xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
               {activeInventoryCount}
             </p>
-            <p className="mt-1.5 text-xs text-stone-500 font-mono-num truncate">
+            <p className="mt-1.5 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate">
               {activeDirectProductsCount} {isVi ? 'sản phẩm' : 'products'} ·{' '}
               {activeIngredientsCount} {isVi ? 'nguyên liệu' : 'ingredients'}
               {lowStockCount > 0 && (
-                <span className="text-amber-700 font-semibold">
+                <span className="text-amber-700 dark:text-amber-400 font-semibold">
                   {' '}
                   · {lowStockCount} {isVi ? 'sắp hết' : 'low'}
                 </span>
@@ -148,29 +148,29 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
               onNavigate('expenses');
             }
           }}
-          className={`bg-white border border-stone-200 rounded-xl p-5 flex flex-col justify-between transition-colors ${
+          className={`bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between transition-colors ${
             onNavigate
-              ? 'cursor-pointer hover:border-stone-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]'
+              ? 'cursor-pointer hover:border-stone-300 dark:hover:border-[#344E41] dark:hover:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
               : ''
           }`}
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+              <span className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
                 <Receipt className="w-4 h-4" />
               </span>
-              <span className="text-xs font-medium text-stone-600 truncate">
+              <span className="text-xs font-medium text-stone-600 dark:text-[#94A39B] truncate">
                 {isVi ? 'Tổng chi phí hôm nay' : 'Total Expenses (Today)'}
               </span>
             </div>
-            {onNavigate && <ArrowUpRight className="w-4 h-4 text-stone-400 shrink-0" />}
+            {onNavigate && <ArrowUpRight className="w-4 h-4 text-stone-400 dark:text-[#94A39B] shrink-0" />}
           </div>
 
           <div className="mt-4">
-            <p className="font-mono-num text-2xl font-bold text-stone-900 tracking-tight">
+            <p className="font-mono-num text-2xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
               {formatKhr(todayExpensesKhr)}
             </p>
-            <p className="mt-1.5 text-xs text-stone-500 font-mono-num truncate">
+            <p className="mt-1.5 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate">
               {todayExpenseEntriesCount}{' '}
               {isVi ? 'khoản chi' : todayExpenseEntriesCount === 1 ? 'entry' : 'entries'}
               {todayStockPurchasesKhr > 0 && todayOperatingExpensesKhr > 0

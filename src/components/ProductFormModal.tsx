@@ -88,16 +88,18 @@ const CollapsibleFieldset: React.FC<CollapsibleFieldsetProps> = ({
 }) => {
   const containerClass =
     variant === 'card'
-      ? 'bg-white border border-stone-200 rounded-xl overflow-hidden'
-      : 'border-t border-stone-200 pt-3.5 mt-4';
+      ? 'bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden'
+      : 'border-t border-stone-200 dark:border-[#24352C] pt-3.5 mt-4';
 
   const buttonClass =
     variant === 'card'
-      ? 'w-full px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-stone-50/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0F5C43]'
-      : 'w-full py-1 flex items-center justify-between gap-3 text-left text-stone-700 hover:text-stone-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] rounded';
+      ? 'w-full min-h-[44px] px-5 py-3 flex items-center justify-between gap-3 text-left hover:bg-stone-50/80 dark:hover:bg-[#18251F] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
+      : 'w-full min-h-[44px] py-1 flex items-center justify-between gap-3 text-left text-stone-700 dark:text-[#D5DFDA] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981] rounded';
 
   const bodyClass =
-    variant === 'card' ? 'px-5 pb-5 pt-3 border-t border-stone-100' : 'pt-3';
+    variant === 'card'
+      ? 'px-5 pb-5 pt-3 border-t border-stone-100 dark:border-[#1F3028]'
+      : 'pt-3';
 
   return (
     <fieldset className={containerClass}>
@@ -111,22 +113,22 @@ const CollapsibleFieldset: React.FC<CollapsibleFieldsetProps> = ({
       >
         <span className="inline-flex items-center gap-2 min-w-0">
           {open ? (
-            <ChevronDown className="w-4 h-4 text-stone-400 shrink-0" />
+            <ChevronDown className="w-4 h-4 text-stone-400 dark:text-[#94A39B] shrink-0" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />
+            <ChevronRight className="w-4 h-4 text-stone-400 dark:text-[#94A39B] shrink-0" />
           )}
           <span
             className={
               variant === 'card'
-                ? 'font-display text-sm font-semibold text-stone-900 truncate'
-                : 'text-xs font-semibold text-stone-700 truncate'
+                ? 'font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3] truncate'
+                : 'text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] truncate'
             }
           >
             {title}
           </span>
         </span>
         {summary && !open && (
-          <span className="font-mono-num text-[11px] text-stone-500 truncate max-w-[160px]">
+          <span className="font-mono-num text-[11px] text-stone-500 dark:text-[#94A39B] truncate max-w-[160px]">
             {summary}
           </span>
         )}
@@ -792,23 +794,23 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-3 sm:p-5">
+      <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-3 sm:p-5">
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="product-form-modal-title"
-          className="w-full max-w-4xl bg-[#F6F7F5] border border-stone-200 rounded-xl max-h-[92vh] flex flex-col overflow-hidden"
+          className="w-full max-w-4xl bg-[#F6F7F5] dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-xl max-h-[92vh] flex flex-col overflow-hidden shadow-xl"
         >
           {/* Sticky Modal Header */}
-          <div className="px-6 py-4 bg-white border-b border-stone-200 flex items-center justify-between gap-4 shrink-0">
+          <div className="px-6 py-4 bg-white dark:bg-[#131D18] border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-4 shrink-0">
             <div>
               <h2
                 id="product-form-modal-title"
-                className="font-display text-lg font-bold text-stone-900 tracking-tight"
+                className="font-display text-lg font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight"
               >
                 {editingProduct ? t.products.editProduct : t.products.addProduct}
               </h2>
-              <p className="text-xs text-stone-500 mt-0.5">
+              <p className="text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
                 {isVi
                   ? 'Điền thông tin cơ bản, giá bán và cài đặt tồn kho bên dưới.'
                   : 'Organize product details, pricing, and inventory settings.'}
@@ -817,7 +819,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+              className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors shrink-0"
               aria-label={t.common.close}
             >
               <X className="w-4 h-4" />
@@ -833,13 +835,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   role="status"
                   className={`px-4 py-3 rounded-xl border text-xs flex items-start gap-2.5 ${
                     prefillBanner === 'off_prefill'
-                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-                      : 'bg-white border-stone-200 text-stone-700'
+                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950 dark:bg-[#064E3B] dark:border-[#10B981]/50 dark:text-[#D1FAE5]'
+                      : 'bg-white border-stone-200 text-stone-700 dark:bg-[#131D18] dark:border-[#24352C] dark:text-[#D5DFDA]'
                   }`}
                 >
-                  <Info className="w-4 h-4 text-[#0F5C43] shrink-0 mt-0.5" />
+                  <Info className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0 mt-0.5" />
                   <div className="space-y-0.5">
-                    <p className="font-semibold text-stone-900">
+                    <p className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
                       {prefillBanner === 'off_prefill'
                         ? isVi
                           ? 'Đã điền thông tin tham khảo từ Open Food Facts'
@@ -848,7 +850,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           ? `Đăng ký sản phẩm mới cho mã vạch ${barcode}`
                           : `Registering new product for barcode ${barcode}`}
                     </p>
-                    <p className="text-stone-600">
+                    <p className="text-stone-600 dark:text-[#D5DFDA]">
                       {prefillBanner === 'off_prefill'
                         ? isVi
                           ? 'Chỉ tự động gợi ý tên, thương hiệu và danh mục. Vui lòng nhập giá bán (KHR), giá vốn và tồn kho của cửa hàng.'
@@ -865,9 +867,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               {(saveError || barcodeConflicts.length > 0) && (
                 <div
                   role="alert"
-                  className="px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-xs text-red-900 flex items-start gap-2.5"
+                  className="px-4 py-3 rounded-xl border border-red-200 dark:border-red-500/40 bg-red-50 dark:bg-red-950/50 text-xs text-red-900 dark:text-red-200 flex items-start gap-2.5"
                 >
-                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-red-600 dark:text-[#F87171] shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-semibold">
                       {saveError ||
@@ -895,15 +897,15 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               )}
 
               {/* Top Bar: Inventory Classification Selector */}
-              <fieldset className="bg-white border border-stone-200 rounded-xl p-4 sm:p-5">
+              <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-4 sm:p-5">
                 <legend className="sr-only">
                   {isVi ? 'Phân loại tồn kho' : 'Inventory Classification'}
                 </legend>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                  <span className="font-display text-sm font-semibold text-stone-900">
+                  <span className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                     {isVi ? 'Loại sản phẩm' : 'Product Type'}
                   </span>
-                  <span className="text-xs text-stone-500">
+                  <span className="text-xs text-stone-500 dark:text-[#94A39B]">
                     {isVi
                       ? 'Quyết định cách hệ thống tự động trừ tồn kho khi bán hàng'
                       : 'Determines how stock is deducted automatically at checkout'}
@@ -920,16 +922,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           type="button"
                           onClick={() => handleProductTypeChange(pt)}
                           aria-pressed={selected}
-                          className={`px-4 py-3 rounded-lg border text-left transition-colors ${
+                          className={`min-h-[56px] px-4 py-3 rounded-lg border text-left transition-colors ${
                             selected
-                              ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
-                              : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                              ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
+                              : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                           }`}
                         >
                           <div className="text-xs font-semibold truncate">
                             {t.productTypes[pt]}
                           </div>
-                          <div className="text-[11px] font-normal text-stone-500 mt-0.5 truncate">
+                          <div className="text-[11px] font-normal text-stone-500 dark:text-[#94A39B] mt-0.5 truncate">
                             {pt === 'PACKAGED'
                               ? isVi
                                 ? 'Trừ trực tiếp số lượng đóng gói'
@@ -954,20 +956,20 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 {/* LEFT COLUMN (7 cols): Basic Info & Inventory Settings */}
                 <div className="lg:col-span-7 space-y-5">
                   {/* SECTION 1: Basic Info */}
-                  <fieldset className="bg-white border border-stone-200 rounded-xl p-5">
+                  <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5">
                     <legend className="sr-only">
                       {isVi ? 'Thông tin cơ bản' : 'Basic Info'}
                     </legend>
-                    <div className="flex items-center justify-between gap-2 pb-3 mb-4 border-b border-stone-100">
-                      <h3 className="font-display text-sm font-semibold text-stone-900">
+                    <div className="flex items-center justify-between gap-2 pb-3 mb-4 border-b border-stone-100 dark:border-[#1F3028]">
+                      <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                         {isVi ? 'Thông tin cơ bản' : 'Basic Info'}
                       </h3>
-                      <label className="inline-flex items-center gap-2 text-xs font-medium text-stone-700 cursor-pointer select-none">
+                      <label className="min-h-[44px] inline-flex items-center gap-2.5 text-xs font-medium text-stone-700 dark:text-[#D5DFDA] cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={active}
                           onChange={(e) => setActive(e.target.checked)}
-                          className="w-4 h-4 accent-[#0F5C43] rounded"
+                          className="w-5 h-5 accent-[#0F5C43] dark:accent-[#10B981] rounded"
                         />
                         {isVi ? 'Hiện trên POS' : 'Show on POS'}
                       </label>
@@ -977,7 +979,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       <div className="sm:col-span-7">
                         <label
                           htmlFor="pf-name"
-                          className="block text-xs font-medium text-stone-700 mb-1.5"
+                          className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                         >
                           {isVi ? 'Tên sản phẩm' : 'Product Name'} *
                         </label>
@@ -993,14 +995,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               ? 'VD: Nước cam tươi, Dasani 500ml'
                               : 'e.g. Fresh Orange Juice, Dasani 500ml'
                           }
-                          className="w-full px-3.5 py-2.5 text-sm border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                          className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                         />
                       </div>
 
                       <div className="sm:col-span-5">
                         <label
                           htmlFor="pf-category"
-                          className="block text-xs font-medium text-stone-700 mb-1.5"
+                          className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                         >
                           {t.products.category}
                         </label>
@@ -1008,7 +1010,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           id="pf-category"
                           value={category}
                           onChange={(e) => setCategory(e.target.value as ProductCategory)}
-                          className="w-full px-3.5 py-2.5 text-sm border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                          className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                         >
                           {ALL_CATEGORIES.map((c) => (
                             <option key={c} value={c}>
@@ -1036,7 +1038,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         <div>
                           <label
                             htmlFor="pf-name-vi"
-                            className="block text-xs font-medium text-stone-600 mb-1.5"
+                            className="block text-xs font-medium text-stone-600 dark:text-[#D5DFDA] mb-1.5"
                           >
                             {t.products.nameVi}
                           </label>
@@ -1051,14 +1053,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 ? 'Tên hiển thị khi dùng tiếng Việt'
                                 : 'Optional Vietnamese display name'
                             }
-                            className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                            className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                           />
                         </div>
 
                         <div>
                           <label
                             htmlFor="pf-brand"
-                            className="block text-xs font-medium text-stone-600 mb-1.5"
+                            className="block text-xs font-medium text-stone-600 dark:text-[#D5DFDA] mb-1.5"
                           >
                             {isVi ? 'Thương hiệu' : 'Brand'}
                           </label>
@@ -1069,7 +1071,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             value={brand}
                             onChange={(e) => setBrand(e.target.value)}
                             placeholder="e.g. Coca-Cola, House"
-                            className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                            className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                           />
                         </div>
                       </div>
@@ -1077,15 +1079,15 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   </fieldset>
 
                   {/* SECTION 2: Inventory Settings (Stock / Recipe / Variants) */}
-                  <fieldset className="bg-white border border-stone-200 rounded-xl p-5">
+                  <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5">
                     <legend className="sr-only">
                       {isVi ? 'Cài đặt tồn kho' : 'Inventory Settings'}
                     </legend>
-                    <div className="flex items-center justify-between gap-2 pb-3 mb-4 border-b border-stone-100">
-                      <h3 className="font-display text-sm font-semibold text-stone-900">
+                    <div className="flex items-center justify-between gap-2 pb-3 mb-4 border-b border-stone-100 dark:border-[#1F3028]">
+                      <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                         {isVi ? 'Cài đặt kho & Công thức' : 'Inventory Settings'}
                       </h3>
-                      <span className="text-[11px] font-medium text-stone-500">
+                      <span className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
                         {t.productTypes[productType]}
                       </span>
                     </div>
@@ -1096,7 +1098,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         <div className="col-span-1 sm:col-span-4">
                           <label
                             htmlFor="pf-stock"
-                            className="block text-xs font-medium text-stone-700 mb-1.5"
+                            className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                           >
                             {t.inventory.inStock}
                           </label>
@@ -1106,14 +1108,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             step="any"
                             value={stockQty}
                             onChange={(e) => setStockQty(e.target.value)}
-                            className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                            className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                           />
                         </div>
 
                         <div className="col-span-1 sm:col-span-4">
                           <label
                             htmlFor="pf-reorder"
-                            className="block text-xs font-medium text-stone-700 mb-1.5"
+                            className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                           >
                             {t.inventory.reorderAt}
                           </label>
@@ -1124,14 +1126,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             step="any"
                             value={reorderLevel}
                             onChange={(e) => setReorderLevel(e.target.value)}
-                            className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                            className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                           />
                         </div>
 
                         <div className="col-span-1 sm:col-span-4">
                           <label
                             htmlFor="pf-unit"
-                            className="block text-xs font-medium text-stone-700 mb-1.5"
+                            className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                           >
                             {t.inventory.unit}
                           </label>
@@ -1139,7 +1141,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             id="pf-unit"
                             value={unit}
                             onChange={(e) => setUnit(e.target.value as IngredientUnit)}
-                            className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                            className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                           >
                             {ALL_UNITS.map((u) => (
                               <option key={u} value={u}>
@@ -1149,10 +1151,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           </select>
                         </div>
 
-                        <div className="col-span-1 sm:col-span-12">
+                        <div className="col-span-2 sm:col-span-12">
                           <label
                             htmlFor="pf-supplier"
-                            className="block text-xs font-medium text-stone-700 mb-1.5"
+                            className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                           >
                             {t.inventory.supplier}
                           </label>
@@ -1165,7 +1167,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             placeholder={
                               isVi ? 'Tên nhà cung cấp (tùy chọn)' : 'Optional supplier name'
                             }
-                            className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                            className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                           />
                         </div>
                       </div>
@@ -1176,13 +1178,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       <div
                         className={
                           productType === 'PREPARED_STOCK'
-                            ? 'pt-4 border-t border-stone-100 space-y-3'
+                            ? 'pt-4 border-t border-stone-100 dark:border-[#1F3028] space-y-3'
                             : 'space-y-3'
                         }
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div>
-                            <span className="text-xs font-semibold text-stone-800 block">
+                            <span className="text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] block">
                               {productType === 'PREPARED_STOCK'
                                 ? isVi
                                   ? 'Công thức pha mẻ (cho 1 đơn vị thành phẩm)'
@@ -1190,9 +1192,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 : t.products.recipeSection}
                             </span>
                             {recipe.length > 0 && (
-                              <span className="text-[11px] text-stone-500">
+                              <span className="text-[11px] text-stone-500 dark:text-[#94A39B]">
                                 {isVi ? 'Giá vốn công thức ước tính:' : 'Est. recipe cost:'}{' '}
-                                <span className="font-mono-num font-semibold text-stone-700">
+                                <span className="font-mono-num font-semibold text-stone-700 dark:text-[#D5DFDA]">
                                   {formatKhr(recipeCogs)}
                                 </span>
                               </span>
@@ -1201,7 +1203,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           <button
                             type="button"
                             onClick={addRecipeRow}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline whitespace-nowrap shrink-0"
+                            className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#064E3B]/50 rounded-lg transition-colors whitespace-nowrap shrink-0"
                           >
                             <Plus className="w-3.5 h-3.5" />
                             {t.products.addIngredientRow}
@@ -1209,7 +1211,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         </div>
 
                         {recipe.length === 0 ? (
-                          <p className="text-xs text-stone-400 py-2">{t.products.noRecipeYet}</p>
+                          <p className="text-xs text-stone-400 dark:text-[#94A39B] py-2">
+                            {t.products.noRecipeYet}
+                          </p>
                         ) : (
                           <div className="space-y-2">
                             {recipe.map((row, index) => {
@@ -1227,7 +1231,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                     onChange={(e) =>
                                       updateRecipeRow(index, { ingredientId: e.target.value })
                                     }
-                                    className="col-span-6 px-2.5 py-2 text-xs border border-stone-200 rounded-lg bg-white"
+                                    className="col-span-6 h-11 px-2.5 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                                   >
                                     {ingredients.map((ing) => (
                                       <option key={ing.id} value={ing.id}>
@@ -1245,7 +1249,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                         quantity: Math.max(0, Number(e.target.value) || 0),
                                       })
                                     }
-                                    className="col-span-3 px-2.5 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white"
+                                    className="col-span-3 h-11 px-2.5 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                                   />
                                   <select
                                     value={row.unit || chosenIng?.unit || 'pcs'}
@@ -1254,7 +1258,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                         unit: e.target.value as IngredientUnit,
                                       })
                                     }
-                                    className="col-span-2 px-2 py-2 text-xs border border-stone-200 rounded-lg bg-white"
+                                    className="col-span-2 h-11 px-2 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                                   >
                                     {compatibleUnits.map((u) => (
                                       <option key={u} value={u}>
@@ -1265,7 +1269,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => removeRecipeRow(index)}
-                                    className="col-span-1 flex items-center justify-center p-1.5 text-stone-400 hover:text-red-700"
+                                    className="col-span-1 h-11 flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] rounded-lg"
                                     aria-label="Remove ingredient"
                                   >
                                     <X className="w-4 h-4" />
@@ -1298,8 +1302,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       >
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-stone-500 flex items-center gap-1.5">
-                              <Layers className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                            <p className="text-xs text-stone-500 dark:text-[#94A39B] flex items-center gap-1.5">
+                              <Layers className="w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] shrink-0" />
                               {isVi
                                 ? 'Mỗi cỡ có giá bán, mã vạch và công thức riêng.'
                                 : 'Give each size its own price, barcode, and recipe.'}
@@ -1307,7 +1311,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             <button
                               type="button"
                               onClick={() => addVariant()}
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline whitespace-nowrap shrink-0"
+                              className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#064E3B]/50 rounded-lg transition-colors whitespace-nowrap shrink-0"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               {isVi ? 'Thêm cỡ' : 'Add Size'}
@@ -1321,7 +1325,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             return (
                               <div
                                 key={variant.id}
-                                className="p-3.5 bg-stone-50 border border-stone-200 rounded-lg space-y-3"
+                                className="p-3.5 bg-stone-50 dark:bg-[#0F1814] border border-stone-200 dark:border-[#24352C] rounded-lg space-y-3"
                               >
                                 <div className="grid grid-cols-12 gap-2 items-center">
                                   <input
@@ -1331,7 +1335,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                       updateVariant(vIdx, { name: e.target.value })
                                     }
                                     placeholder={isVi ? 'Tên cỡ (VD: Nhỏ)' : 'Size (e.g. Small)'}
-                                    className="col-span-4 px-2.5 py-2 text-xs border border-stone-200 rounded-lg bg-white"
+                                    className="col-span-4 h-11 px-2.5 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
                                   />
                                   <input
                                     type="number"
@@ -1344,7 +1348,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                       })
                                     }
                                     placeholder="Price KHR"
-                                    className="col-span-3 px-2.5 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white"
+                                    className="col-span-3 h-11 px-2.5 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
                                   />
                                   <div className="col-span-4 flex items-center gap-1">
                                     <input
@@ -1355,14 +1359,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                         updateVariant(vIdx, { barcode: e.target.value })
                                       }
                                       placeholder={isVi ? 'Mã vạch cỡ' : 'Variant code'}
-                                      className="w-full min-w-0 px-2 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white"
+                                      className="w-full min-w-0 h-11 px-2 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
                                     />
                                     <button
                                       type="button"
                                       onClick={() =>
                                         setScannerTarget({ kind: 'variant', index: vIdx })
                                       }
-                                      className="p-1.5 text-stone-500 hover:text-[#0F5C43] shrink-0"
+                                      className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] rounded-lg shrink-0"
                                       title={isVi ? 'Quét mã vạch' : 'Scan barcode'}
                                     >
                                       <ScanBarcode className="w-4 h-4" />
@@ -1371,25 +1375,25 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => removeVariant(vIdx)}
-                                    className="col-span-1 flex items-center justify-center p-1.5 text-stone-400 hover:text-red-700"
+                                    className="col-span-1 h-11 flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] rounded-lg"
                                     aria-label="Remove size variant"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
 
-                                <div className="space-y-2 pt-2 border-t border-stone-200/70">
-                                  <div className="flex items-center justify-between text-[11px] text-stone-500">
+                                <div className="space-y-2 pt-2 border-t border-stone-200/70 dark:border-[#24352C]">
+                                  <div className="flex items-center justify-between text-[11px] text-stone-500 dark:text-[#94A39B]">
                                     <span>
                                       {isVi ? 'Công thức' : 'Recipe'} ·{' '}
-                                      <span className="font-mono-num text-stone-700 font-semibold">
+                                      <span className="font-mono-num text-stone-700 dark:text-[#D5DFDA] font-semibold">
                                         COGS {formatKhr(vCost)}
                                       </span>
                                     </span>
                                     <button
                                       type="button"
                                       onClick={() => addVariantRecipeRow(vIdx)}
-                                      className="text-[#0F5C43] font-semibold hover:underline"
+                                      className="h-9 px-2 text-[#0F5C43] dark:text-[#34D399] font-semibold hover:underline"
                                     >
                                       + {t.products.addIngredientRow}
                                     </button>
@@ -1412,7 +1416,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                               ingredientId: e.target.value,
                                             })
                                           }
-                                          className="col-span-6 px-2 py-1.5 text-xs border border-stone-200 rounded bg-white"
+                                          className="col-span-6 h-11 px-2 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                                         >
                                           {ingredients.map((ing) => (
                                             <option key={ing.id} value={ing.id}>
@@ -1431,7 +1435,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                               quantity: Math.max(0, Number(e.target.value) || 0),
                                             })
                                           }
-                                          className="col-span-3 px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded bg-white"
+                                          className="col-span-3 h-11 px-2 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                                         />
                                         <select
                                           value={row.unit || chosenIng?.unit || 'pcs'}
@@ -1440,7 +1444,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                               unit: e.target.value as IngredientUnit,
                                             })
                                           }
-                                          className="col-span-2 px-1.5 py-1.5 text-xs border border-stone-200 rounded bg-white"
+                                          className="col-span-2 h-11 px-1.5 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                                         >
                                           {compatibleUnits.map((u) => (
                                             <option key={u} value={u}>
@@ -1451,7 +1455,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                         <button
                                           type="button"
                                           onClick={() => removeVariantRecipeRow(vIdx, rIdx)}
-                                          className="col-span-1 flex items-center justify-center p-1 text-stone-400 hover:text-red-700"
+                                          className="col-span-1 h-11 flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] rounded-lg"
                                           aria-label="Remove variant ingredient"
                                         >
                                           <X className="w-3.5 h-3.5" />
@@ -1472,15 +1476,15 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 {/* RIGHT COLUMN (5 cols): Pricing, Photo & Advanced Barcodes */}
                 <div className="lg:col-span-5 space-y-5">
                   {/* SECTION 3: Pricing */}
-                  <fieldset className="bg-white border border-stone-200 rounded-xl p-5">
+                  <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5">
                     <legend className="sr-only">
                       {isVi ? 'Giá bán & Lợi nhuận' : 'Pricing'}
                     </legend>
-                    <div className="flex items-center justify-between gap-2 pb-3 mb-4 border-b border-stone-100">
-                      <h3 className="font-display text-sm font-semibold text-stone-900">
+                    <div className="flex items-center justify-between gap-2 pb-3 mb-4 border-b border-stone-100 dark:border-[#1F3028]">
+                      <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                         {isVi ? 'Giá bán & Chi phí' : 'Pricing'}
                       </h3>
-                      <span className="font-mono-num text-[11px] font-semibold text-emerald-700">
+                      <span className="font-mono-num text-[11px] font-semibold text-emerald-700 dark:text-[#34D399]">
                         {liveMarginPct}% {isVi ? 'biên lãi' : 'margin'}
                       </span>
                     </div>
@@ -1489,7 +1493,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       <div className={productType === 'PREPARED_TO_ORDER' ? 'sm:col-span-2' : ''}>
                         <label
                           htmlFor="pf-price"
-                          className="block text-xs font-medium text-stone-700 mb-1.5"
+                          className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                         >
                           {t.products.sellingPrice}
                         </label>
@@ -1504,10 +1508,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             setManualPriceOverride(true);
                             setPriceKhr(e.target.value);
                           }}
-                          className="w-full px-3 py-2.5 text-sm font-mono-num font-semibold text-stone-900 border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                          className="w-full h-11 px-3 text-sm font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                         />
                         {productType === 'PREPARED_TO_ORDER' && variants.length > 0 && (
-                          <p className="text-[11px] text-stone-500 mt-1">
+                          <p className="text-[11px] text-stone-500 dark:text-[#94A39B] mt-1">
                             {isVi
                               ? 'Đang dùng giá theo từng kích cỡ S/M/L.'
                               : 'Using size variant prices below.'}
@@ -1519,7 +1523,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         <div>
                           <label
                             htmlFor="pf-cost"
-                            className="block text-xs font-medium text-stone-700 mb-1.5"
+                            className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                           >
                             {isVi ? 'Giá vốn (KHR)' : 'Unit Cost (KHR)'}
                           </label>
@@ -1530,31 +1534,35 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             step={100}
                             value={costPriceKhr}
                             onChange={(e) => handleCostOrMarkupChange(e.target.value, markupPercent)}
-                            className="w-full px-3 py-2.5 text-sm font-mono-num border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                            className="w-full h-11 px-3 text-sm font-mono-num text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                           />
                         </div>
                       )}
                     </div>
 
                     {/* Live Cost / Profit Readout */}
-                    <div className="mt-4 pt-3 border-t border-stone-100 grid grid-cols-2 gap-3 text-xs">
+                    <div className="mt-4 pt-3 border-t border-stone-100 dark:border-[#1F3028] grid grid-cols-2 gap-3 text-xs">
                       <div>
-                        <span className="text-stone-500 block">
+                        <span className="text-stone-500 dark:text-[#94A39B] block">
                           {productType === 'PACKAGED'
                             ? isVi
                               ? 'Giá vốn nhập'
                               : 'Est. Unit Cost'
                             : t.products.recipeCost}
                         </span>
-                        <span className="font-mono-num font-semibold text-stone-900">
+                        <span className="font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3]">
                           {formatKhr(liveUnitCost)}
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-stone-500 block">{t.products.grossMargin}</span>
+                        <span className="text-stone-500 dark:text-[#94A39B] block">
+                          {t.products.grossMargin}
+                        </span>
                         <span
                           className={`font-mono-num font-semibold ${
-                            liveProfit >= 0 ? 'text-emerald-700' : 'text-red-700'
+                            liveProfit >= 0
+                              ? 'text-emerald-700 dark:text-[#34D399]'
+                              : 'text-red-700 dark:text-[#F87171]'
                           }`}
                         >
                           {formatKhr(liveProfit)}
@@ -1580,7 +1588,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           <div>
                             <label
                               htmlFor="pf-markup-input"
-                              className="block text-xs font-medium text-stone-600 mb-1.5"
+                              className="block text-xs font-medium text-stone-600 dark:text-[#D5DFDA] mb-1.5"
                             >
                               {isVi ? 'Phần trăm lãi (%)' : 'Target Markup (%)'}
                             </label>
@@ -1595,10 +1603,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 setManualPriceOverride(false);
                                 handleCostOrMarkupChange(costPriceKhr, e.target.value, false);
                               }}
-                              className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg bg-white"
+                              className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                             />
                           </div>
-                          <label className="inline-flex items-center gap-2 text-xs text-stone-600 cursor-pointer select-none">
+                          <label className="min-h-[44px] inline-flex items-center gap-2.5 text-xs text-stone-600 dark:text-[#D5DFDA] cursor-pointer select-none">
                             <input
                               type="checkbox"
                               checked={manualPriceOverride}
@@ -1609,7 +1617,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   handleCostOrMarkupChange(costPriceKhr, markupPercent, false);
                                 }
                               }}
-                              className="w-3.5 h-3.5 accent-[#0F5C43]"
+                              className="w-5 h-5 accent-[#0F5C43] dark:accent-[#10B981] rounded"
                             />
                             {isVi
                               ? 'Giữ giá bán nhập tay (không tự tính)'
@@ -1621,21 +1629,22 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   </fieldset>
 
                   {/* SECTION 4: Product Photo */}
-                  <fieldset className="bg-white border border-stone-200 rounded-xl p-5">
+                  <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5">
                     <legend className="sr-only">{t.products.imagePreset}</legend>
-                    <h3 className="font-display text-sm font-semibold text-stone-900 pb-3 mb-4 border-b border-stone-100">
+                    <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3] pb-3 mb-4 border-b border-stone-100 dark:border-[#1F3028]">
                       {t.products.imagePreset}
                     </h3>
 
                     <div className="space-y-3">
-                      <div className="w-full h-32 rounded-lg overflow-hidden border border-stone-200 relative bg-stone-100">
+                      <div className="w-full h-32 rounded-lg overflow-hidden border border-stone-200 dark:border-[#24352C] relative bg-stone-100 dark:bg-[#18251F]">
                         <ProductPhoto
                           src={imageUrl}
                           alt={name || t.products.imagePreset}
+                          category={category}
                           className="w-full h-full"
                         />
                         {uploadingPhoto && (
-                          <div className="absolute inset-0 bg-black/45 flex items-center justify-center text-white text-xs gap-1.5">
+                          <div className="absolute inset-0 bg-black/55 flex items-center justify-center text-white text-xs gap-1.5">
                             <Loader2 className="w-4 h-4 animate-spin" />
                           </div>
                         )}
@@ -1646,9 +1655,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           type="button"
                           disabled={uploadingPhoto}
                           onClick={() => photoInputRef.current?.click()}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 rounded-lg transition-colors whitespace-nowrap"
+                          className="h-11 inline-flex items-center justify-center gap-1.5 px-3 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
                         >
-                          <ImagePlus className="w-3.5 h-3.5 text-[#0F5C43]" />
+                          <ImagePlus className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
                           {uploadingPhoto ? t.products.processingPhoto : t.products.uploadFromPhotos}
                         </button>
 
@@ -1656,9 +1665,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           type="button"
                           disabled={uploadingPhoto}
                           onClick={() => setDrivePickerOpen(true)}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 rounded-lg transition-colors whitespace-nowrap"
+                          className="h-11 inline-flex items-center justify-center gap-1.5 px-3 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
                         >
-                          <HardDrive className="w-3.5 h-3.5 text-[#0F5C43]" />
+                          <HardDrive className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
                           {t.products.pickFromDrive}
                         </button>
 
@@ -1671,7 +1680,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         />
                       </div>
 
-                      {photoError && <p className="text-xs text-red-700 font-medium">{photoError}</p>}
+                      {photoError && (
+                        <p className="text-xs text-red-700 dark:text-[#F87171] font-medium">
+                          {photoError}
+                        </p>
+                      )}
 
                       <div className="grid grid-cols-5 gap-1.5">
                         {DRINK_IMAGE_PRESETS.map((preset) => (
@@ -1683,11 +1696,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               setImageUrl(preset.url);
                             }}
                             className={`rounded-lg overflow-hidden border-2 transition-colors ${
-                              imageUrl === preset.url ? 'border-[#0F5C43]' : 'border-transparent'
+                              imageUrl === preset.url
+                                ? 'border-[#0F5C43] dark:border-[#10B981]'
+                                : 'border-transparent'
                             }`}
                             title={isVi ? preset.labelVi : preset.label}
                           >
-                            <ProductPhoto src={preset.url} alt={preset.label} className="w-full h-10" />
+                            <ProductPhoto src={preset.url} alt={preset.label} className="w-full h-11" />
                           </button>
                         ))}
                       </div>
@@ -1698,11 +1713,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             </div>
 
             {/* Sticky Bottom Bar + Docked Advanced Barcode Configuration Drawer (All Product Types) */}
-            <div className="shrink-0 border-t border-stone-200 bg-white">
+            <div className="shrink-0 border-t border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18]">
               {showBarcodes && (
                 <fieldset
                   id="pf-barcodes-panel"
-                  className="bg-[#FAFBF9] border-b border-stone-200 px-5 sm:px-6 py-4 max-h-64 overflow-y-auto"
+                  className="bg-[#FAFBF9] dark:bg-[#0F1814] border-b border-stone-200 dark:border-[#24352C] px-5 sm:px-6 py-4 max-h-72 overflow-y-auto"
                 >
                   <legend className="sr-only">
                     {isVi ? 'Cấu hình mã vạch nâng cao' : 'Advanced Barcode Configurations'}
@@ -1710,36 +1725,36 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2 min-w-0">
-                      <Barcode className="w-4 h-4 text-[#0F5C43] shrink-0" />
-                      <span className="font-display text-xs font-semibold text-stone-900">
+                      <Barcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+                      <span className="font-display text-xs font-semibold text-stone-900 dark:text-[#F1F5F3]">
                         {isVi ? 'Cấu hình mã vạch nâng cao' : 'Advanced Barcode Configurations'}
                       </span>
-                      <span className="text-[11px] text-stone-500 truncate">
+                      <span className="text-[11px] text-stone-500 dark:text-[#94A39B] truncate">
                         · {t.productTypes[productType]}
                       </span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setShowBarcodes(false)}
-                      className="p-1 text-stone-400 hover:text-stone-700 rounded transition-colors"
+                      className="w-11 h-11 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors shrink-0"
                       aria-label={t.common.close}
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                     {/* Unit Barcode / SKU (All product types) */}
-                    <div className="md:col-span-6 space-y-1.5">
+                    <div className="md:col-span-6 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <label
                           htmlFor="pf-barcode"
-                          className="block text-xs font-medium text-stone-700"
+                          className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA]"
                         >
                           {isVi ? 'Mã vạch đơn vị / SKU' : 'Unit Barcode / SKU'}
                         </label>
                         {detectedUnitFormat && (
-                          <span className="font-mono-num text-[11px] font-semibold text-[#0F5C43]">
+                          <span className="font-mono-num text-[11px] font-semibold text-[#0F5C43] dark:text-[#34D399]">
                             {formatBarcodeTypeLabel(detectedUnitFormat)}
                           </span>
                         )}
@@ -1756,12 +1771,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             setExternalLookupNote('');
                           }}
                           placeholder="e.g. 0049000042566"
-                          className="flex-1 min-w-[130px] px-3 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                          className="flex-1 min-w-[130px] h-11 px-3 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                         />
                         <button
                           type="button"
                           onClick={handleAutoGenerateSku}
-                          className="px-2.5 py-2 text-xs font-semibold text-[#0F5C43] bg-emerald-50/80 border border-emerald-200 hover:bg-emerald-100/70 rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                          className="h-11 px-3 text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
                           title={
                             isVi
                               ? 'Tự động tạo mã SKU duy nhất'
@@ -1774,15 +1789,15 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         <button
                           type="button"
                           onClick={() => setScannerTarget({ kind: 'unit' })}
-                          className="px-2.5 py-2 text-xs font-semibold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                          className="h-11 px-3 text-xs font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
                         >
-                          <ScanBarcode className="w-3.5 h-3.5 text-[#0F5C43]" />
+                          <ScanBarcode className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
                           {isVi ? 'Quét' : 'Scan'}
                         </button>
                       </div>
 
                       {/* External Lookup + Label Studio Action Row */}
-                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <div className="flex flex-wrap items-center gap-3 pt-1">
                         {settings.enableOpenFoodFactsLookup !== false &&
                           barcode.trim().length >= 6 &&
                           detectedUnitFormat !== 'INTERNAL' && (
@@ -1790,12 +1805,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               type="button"
                               disabled={lookingUpExternal}
                               onClick={handleExternalPrefillLookup}
-                              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#0F5C43] hover:underline disabled:opacity-50"
+                              className="min-h-[36px] inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#0F5C43] dark:text-[#34D399] hover:underline disabled:opacity-50"
                             >
                               {lookingUpExternal ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               ) : (
-                                <Globe className="w-3 h-3" />
+                                <Globe className="w-3.5 h-3.5" />
                               )}
                               {isVi
                                 ? 'Tra Open Food Facts (chỉ gợi ý tên)'
@@ -1807,18 +1822,20 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setLabelModalOpen(true)}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-stone-700 hover:text-[#0F5C43]"
+                            className="min-h-[36px] inline-flex items-center gap-1.5 text-[11px] font-semibold text-stone-700 dark:text-[#D5DFDA] hover:text-[#0F5C43] dark:hover:text-[#34D399]"
                           >
-                            <Printer className="w-3 h-3 text-[#0F5C43]" />
+                            <Printer className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
                             {isVi ? 'In tem Code 128 / QR' : 'Print Code 128 / QR Label'}
                           </button>
                         )}
                       </div>
 
                       {externalLookupNote ? (
-                        <p className="text-[11px] text-stone-600">{externalLookupNote}</p>
+                        <p className="text-[11px] text-stone-600 dark:text-[#D5DFDA]">
+                          {externalLookupNote}
+                        </p>
                       ) : (
-                        <p className="text-[11px] text-stone-500">
+                        <p className="text-[11px] text-stone-500 dark:text-[#94A39B]">
                           {isVi
                             ? 'Giữ nguyên số 0 ở đầu (EAN-13/8, UPC-A/E, Code 128, QR).'
                             : 'Preserves leading zeros across EAN-13/8, UPC-A/E, Code 128, and QR.'}
@@ -1829,13 +1846,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     {/* Carton / Pack / Multi-Unit Barcodes (All product types) */}
                     <div className="md:col-span-6 space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-stone-700">
+                        <span className="text-xs font-medium text-stone-700 dark:text-[#D5DFDA]">
                           {isVi ? 'Mã vạch Thùng / Lốc / Gói' : 'Carton / Pack / Bundle Barcodes'}
                         </span>
                         <button
                           type="button"
                           onClick={addPackagingBarcode}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline whitespace-nowrap"
+                          className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#064E3B]/50 rounded-lg transition-colors whitespace-nowrap"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           {isVi ? 'Thêm mã gói' : 'Add Pack'}
@@ -1843,7 +1860,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       </div>
 
                       {packagingBarcodes.length === 0 ? (
-                        <p className="text-[11px] text-stone-500 py-1.5">
+                        <p className="text-[11px] text-stone-500 dark:text-[#94A39B] py-1.5">
                           {isVi
                             ? 'Gắn thêm mã vạch thùng/lốc để tự động nhân số lượng khi quét POS hoặc nhập kho.'
                             : 'Map multi-unit pack or tray barcodes to auto-multiply quantity on scan.'}
@@ -1853,7 +1870,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           {packagingBarcodes.map((pb, idx) => (
                             <div
                               key={idx}
-                              className="grid grid-cols-12 gap-1.5 items-center bg-white p-2 border border-stone-200 rounded-lg"
+                              className="grid grid-cols-12 gap-1.5 items-center bg-white dark:bg-[#131D18] p-2 border border-stone-200 dark:border-[#24352C] rounded-lg"
                             >
                               <input
                                 type="text"
@@ -1862,7 +1879,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 onChange={(e) =>
                                   updatePackagingBarcode(idx, { barcode: e.target.value })
                                 }
-                                className="col-span-4 px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded bg-white"
+                                className="col-span-4 h-11 px-2 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
                               />
                               <input
                                 type="text"
@@ -1871,7 +1888,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 onChange={(e) =>
                                   updatePackagingBarcode(idx, { label: e.target.value })
                                 }
-                                className="col-span-4 px-2 py-1.5 text-xs border border-stone-200 rounded bg-white"
+                                className="col-span-4 h-11 px-2 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
                               />
                               <input
                                 type="number"
@@ -1882,25 +1899,25 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                     unitsPerPack: Math.max(1, Number(e.target.value) || 1),
                                   })
                                 }
-                                className="col-span-2 px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded bg-white"
+                                className="col-span-2 h-11 px-2 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                                 title={isVi ? 'Số đơn vị / gói' : 'Units per pack'}
                               />
                               <div className="col-span-2 flex items-center justify-end gap-0.5">
                                 <button
                                   type="button"
                                   onClick={() => setScannerTarget({ kind: 'pack', index: idx })}
-                                  className="p-1.5 text-stone-500 hover:text-[#0F5C43]"
+                                  className="w-9 h-9 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] rounded-lg"
                                   title={isVi ? 'Quét mã gói' : 'Scan pack barcode'}
                                 >
-                                  <ScanBarcode className="w-3.5 h-3.5" />
+                                  <ScanBarcode className="w-4 h-4" />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => removePackagingBarcode(idx)}
-                                  className="p-1.5 text-stone-400 hover:text-red-700"
+                                  className="w-9 h-9 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] rounded-lg"
                                   aria-label="Remove pack barcode"
                                 >
-                                  <X className="w-3.5 h-3.5" />
+                                  <X className="w-4 h-4" />
                                 </button>
                               </div>
                             </div>
@@ -1915,19 +1932,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               {/* Bottom Action Bar: Price & Profit | Advanced Barcode Config | Cancel & Save */}
               <div className="px-5 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
-                  <div className="hidden sm:flex items-center gap-2.5 text-xs text-stone-500 whitespace-nowrap">
+                  <div className="hidden sm:flex items-center gap-2.5 text-xs text-stone-500 dark:text-[#94A39B] whitespace-nowrap">
                     <span>
                       {isVi ? 'Giá bán:' : 'Price:'}{' '}
-                      <strong className="font-mono-num text-stone-900">
+                      <strong className="font-mono-num text-stone-900 dark:text-[#F1F5F3]">
                         {formatKhr(liveSellingPrice)}
                       </strong>
                     </span>
-                    <span className="text-stone-300">|</span>
+                    <span className="text-stone-300 dark:text-[#24352C]">|</span>
                     <span>
                       {isVi ? 'Lãi gộp:' : 'Profit:'}{' '}
                       <strong
                         className={`font-mono-num ${
-                          liveProfit >= 0 ? 'text-emerald-700' : 'text-red-700'
+                          liveProfit >= 0
+                            ? 'text-emerald-700 dark:text-[#34D399]'
+                            : 'text-red-700 dark:text-[#F87171]'
                         }`}
                       >
                         {formatKhr(liveProfit)} ({liveMarginPct}%)
@@ -1935,20 +1954,20 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     </span>
                   </div>
 
-                  <span className="hidden md:inline text-stone-200">|</span>
+                  <span className="hidden md:inline text-stone-200 dark:text-[#24352C]">|</span>
 
                   <button
                     type="button"
                     aria-expanded={showBarcodes}
                     aria-controls="pf-barcodes-panel"
                     onClick={() => setShowBarcodes((prev) => !prev)}
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
+                    className={`h-11 inline-flex items-center gap-2 px-3.5 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
                       showBarcodes || barcodeSummary
-                        ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
-                        : 'border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100'
+                        ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
+                        : 'border-stone-200 dark:border-[#24352C] bg-stone-50 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
                     }`}
                   >
-                    <Barcode className="w-3.5 h-3.5 shrink-0" />
+                    <Barcode className="w-4 h-4 shrink-0" />
                     <span>
                       {isVi ? 'Cấu hình mã vạch' : 'Advanced Barcode'}
                     </span>
@@ -1969,14 +1988,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
+                    className="h-11 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
                   >
                     {t.common.cancel}
                   </button>
                   <button
                     type="submit"
                     disabled={barcodeConflicts.length > 0}
-                    className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] disabled:opacity-45 rounded-lg transition-colors"
+                    className="h-11 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors"
                   >
                     {t.common.save}
                   </button>

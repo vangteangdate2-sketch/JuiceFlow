@@ -323,23 +323,23 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
   const copyIndices = Array.from({ length: Math.min(40, Math.max(1, copies)) }, (_, i) => i);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="barcode-label-modal-title"
-        className="w-full max-w-3xl bg-[#F6F7F5] border border-stone-200 rounded-xl max-h-[92vh] flex flex-col overflow-hidden"
+        className="w-full max-w-3xl bg-[#F6F7F5] dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-xl max-h-[92vh] flex flex-col overflow-hidden shadow-xl"
       >
         {/* Header */}
-        <div className="px-6 py-4 bg-white border-b border-stone-200 flex items-center justify-between gap-4 shrink-0">
+        <div className="px-6 py-4 bg-white dark:bg-[#131D18] border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-4 shrink-0">
           <div>
             <h2
               id="barcode-label-modal-title"
-              className="font-display text-lg font-bold text-stone-900 tracking-tight"
+              className="font-display text-lg font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight"
             >
               {isVi ? 'In tem mã vạch & Mã QR' : 'Internal Barcode & QR Label Studio'}
             </h2>
-            <p className="text-xs text-stone-500 mt-0.5">
+            <p className="text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
               {isVi
                 ? 'Tạo tem nhiệt 40×30mm / 50×30mm và tải ảnh PNG chất lượng cao.'
                 : 'Generate 40×30mm or 50×30mm thermal sticker sheets plus high-DPI PNG downloads.'}
@@ -348,21 +348,21 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg"
+            className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
             aria-label={isVi ? 'Đóng' : 'Close'}
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
           {options.length === 0 ? (
-            <div className="bg-white border border-stone-200 rounded-xl p-8 text-center space-y-2">
-              <p className="text-sm font-semibold text-stone-900">
+            <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-8 text-center space-y-2">
+              <p className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                 {isVi ? 'Sản phẩm chưa có mã vạch hoặc SKU' : 'No barcode or internal SKU assigned yet'}
               </p>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-stone-500 dark:text-[#94A39B]">
                 {isVi
                   ? 'Mở chỉnh sửa sản phẩm và nhấn "Tạo mã SKU" để cấp mã nội bộ trước khi in tem.'
                   : 'Edit this product and click "Auto-Generate SKU" to assign an internal code first.'}
@@ -371,16 +371,16 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
           ) : (
             <>
               {/* Controls Grid */}
-              <div className="bg-white border border-stone-200 rounded-xl p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-12 gap-4">
+              <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-12 gap-4">
                 {/* Barcode Selector */}
                 <div className="sm:col-span-6">
-                  <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {isVi ? 'Mã cần in tem' : 'Barcode / SKU to Print'}
                   </label>
                   <select
                     value={activeOption?.id || ''}
                     onChange={(e) => setSelectedOptionId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white"
+                    className="w-full h-11 px-3 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                   >
                     {options.map((opt) => (
                       <option key={opt.id} value={opt.id}>
@@ -389,9 +389,9 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
                     ))}
                   </select>
                   {activeOption && (
-                    <p className="text-[11px] text-stone-500 mt-1">
+                    <p className="text-[11px] text-stone-500 dark:text-[#94A39B] mt-1">
                       {isVi ? 'Định dạng gốc:' : 'Detected format:'}{' '}
-                      <span className="font-mono-num font-semibold text-stone-700">
+                      <span className="font-mono-num font-semibold text-stone-700 dark:text-[#D5DFDA]">
                         {formatBarcodeTypeLabel(detectBarcodeFormat(activeOption.code))}
                       </span>
                     </p>
@@ -400,17 +400,17 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
 
                 {/* Label Symbology */}
                 <div className="sm:col-span-6">
-                  <span className="block text-xs font-medium text-stone-700 mb-1.5">
+                  <span className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {isVi ? 'Loại tem nhãn' : 'Label Symbology'}
                   </span>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setLabelFormat('CODE128')}
-                      className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors ${
+                      className={`h-11 inline-flex items-center justify-center gap-1.5 px-3 text-xs font-semibold rounded-lg border transition-colors ${
                         labelFormat === 'CODE128'
-                          ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
-                          : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                          ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
+                          : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                       }`}
                     >
                       <Barcode className="w-3.5 h-3.5" />
@@ -419,10 +419,10 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setLabelFormat('QR')}
-                      className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors ${
+                      className={`h-11 inline-flex items-center justify-center gap-1.5 px-3 text-xs font-semibold rounded-lg border transition-colors ${
                         labelFormat === 'QR'
-                          ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
-                          : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                          ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
+                          : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                       }`}
                     >
                       <QrCode className="w-3.5 h-3.5" />
@@ -433,7 +433,7 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
 
                 {/* Thermal Sticker Dimensions */}
                 <div className="sm:col-span-5">
-                  <span className="block text-xs font-medium text-stone-700 mb-1.5">
+                  <span className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {isVi ? 'Khổ tem nhiệt' : 'Thermal Sticker Size'}
                   </span>
                   <div className="grid grid-cols-2 gap-2">
@@ -442,10 +442,10 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
                         key={sz}
                         type="button"
                         onClick={() => setStickerSize(sz)}
-                        className={`px-3 py-2 text-xs font-mono-num font-semibold rounded-lg border transition-colors ${
+                        className={`h-11 px-3 text-xs font-mono-num font-semibold rounded-lg border transition-colors ${
                           stickerSize === sz
-                            ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
-                            : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                            ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
+                            : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                         }`}
                       >
                         {sz === '40x30' ? '40 × 30 mm' : '50 × 30 mm'}
@@ -458,7 +458,7 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
                 <div className="sm:col-span-3">
                   <label
                     htmlFor="lbl-copies"
-                    className="block text-xs font-medium text-stone-700 mb-1.5"
+                    className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                   >
                     {isVi ? 'Số lượng tem' : 'Sheet Copies'}
                   </label>
@@ -469,18 +469,18 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
                     max={40}
                     value={copies}
                     onChange={(e) => setCopies(Math.min(40, Math.max(1, Number(e.target.value) || 1)))}
-                    className="w-full px-3 py-2 text-xs font-mono-num border border-stone-200 rounded-lg bg-white"
+                    className="w-full h-11 px-3 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                   />
                 </div>
 
                 {/* Include KHR Price */}
-                <div className="sm:col-span-4 flex items-end pb-1.5">
-                  <label className="inline-flex items-center gap-2 text-xs font-medium text-stone-700 cursor-pointer select-none">
+                <div className="sm:col-span-4 flex items-end pb-2">
+                  <label className="inline-flex items-center gap-2.5 text-xs font-medium text-stone-700 dark:text-[#D5DFDA] cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={showPrice}
                       onChange={(e) => setShowPrice(e.target.checked)}
-                      className="w-4 h-4 accent-[#0F5C43]"
+                      className="w-5 h-5 accent-[#0F5C43] dark:accent-[#10B981]"
                     />
                     {isVi ? 'Hiển thị giá bán (KHR)' : 'Show selling price (KHR)'}
                   </label>
@@ -488,16 +488,16 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
               </div>
 
               {renderError && (
-                <div className="px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 font-medium">
+                <div className="px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-500/40 text-xs text-amber-900 dark:text-amber-200 font-medium">
                   {renderError}
                 </div>
               )}
 
               {/* Live Thermal Sheet Preview (also serves as the print target #barcode-label-sheet) */}
               {activeOption && graphicDataUrl && (
-                <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-3">
-                  <div className="flex items-center justify-between text-xs text-stone-500">
-                    <span className="font-semibold text-stone-800">
+                <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 space-y-3">
+                  <div className="flex items-center justify-between text-xs text-stone-500 dark:text-[#94A39B]">
+                    <span className="font-semibold text-stone-800 dark:text-[#F1F5F3]">
                       {isVi ? 'Xem trước trang in tem nhiệt' : 'Thermal Sticker Sheet Preview'}
                     </span>
                     <span className="font-mono-num">
@@ -507,7 +507,7 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
 
                   <div
                     id="barcode-label-sheet"
-                    className="flex flex-wrap gap-2.5 justify-start bg-stone-50/70 border border-dashed border-stone-200 rounded-lg p-3 max-h-80 overflow-y-auto"
+                    className="flex flex-wrap gap-2.5 justify-start bg-stone-50/70 dark:bg-[#0F1814] border border-dashed border-stone-200 dark:border-[#24352C] rounded-lg p-3 max-h-80 overflow-y-auto"
                   >
                     {copyIndices.map((idx) => (
                       <div
@@ -566,11 +566,11 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-3.5 bg-white border-t border-stone-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="px-6 py-3.5 bg-white dark:bg-[#131D18] border-t border-stone-200 dark:border-[#24352C] flex flex-wrap items-center justify-between gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded-lg"
+            className="h-11 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
           >
             {isVi ? 'Đóng' : 'Close'}
           </button>
@@ -580,16 +580,16 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
               type="button"
               disabled={!graphicDataUrl || downloading}
               onClick={handleDownloadPng}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-stone-800 bg-white border border-stone-300 hover:bg-stone-50 disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+              className="h-11 inline-flex items-center gap-1.5 px-4 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
             >
-              <Download className="w-3.5 h-3.5 text-[#0F5C43]" />
+              <Download className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
               {isVi ? 'Tải ảnh PNG' : 'Download PNG'}
             </button>
             <button
               type="button"
               disabled={!graphicDataUrl}
               onClick={handlePrintSheet}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+              className="h-11 inline-flex items-center gap-1.5 px-4 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
             >
               <Printer className="w-3.5 h-3.5" />
               {isVi ? 'In trang tem nhiệt' : 'Print Thermal Sheet'}

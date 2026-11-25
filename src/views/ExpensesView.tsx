@@ -127,15 +127,15 @@ export const ExpensesView: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
             {t.expenses.title}
           </h1>
-          <p className="mt-1 text-sm text-stone-500">{t.expenses.subtitle}</p>
+          <p className="mt-1 text-sm text-stone-500 dark:text-[#94A39B]">{t.expenses.subtitle}</p>
         </div>
         <button
           type="button"
           onClick={openNew}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
+          className="inline-flex items-center gap-2 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           {t.expenses.addExpense}
@@ -143,8 +143,8 @@ export const ExpensesView: React.FC = () => {
       </div>
 
       {/* Accounting Separation Notice */}
-      <div className="bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs text-stone-600">
-        <Info className="w-4 h-4 text-[#0F5C43] shrink-0 mt-0.5" />
+      <div className="bg-stone-50 dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs text-stone-600 dark:text-[#94A39B]">
+        <Info className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0 mt-0.5" />
         <p>
           {isVi
             ? 'Ghi nhận chi phí vận hành (điện, thuê mặt bằng, vận chuyển, gia đình) tại đây. Để nhập hàng tồn kho & nguyên liệu, hãy dùng mục Kho hàng để tự động cập nhật tồn kho và không bị tính trùng với giá vốn (COGS).'
@@ -153,53 +153,55 @@ export const ExpensesView: React.FC = () => {
       </div>
 
       {/* 3-Column Summary Strip */}
-      <div className="bg-white border border-stone-200 rounded-xl grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-stone-200">
+      <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-stone-200 dark:divide-[#24352C]">
         <div className="p-5">
-          <p className="text-xs font-medium text-stone-500">
+          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
             {isVi ? 'Chi phí vận hành (P&L)' : 'Operating Expenses (P&L)'}
           </p>
-          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900">
+          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(totals.operating)}
           </p>
-          <p className="mt-1 text-xs text-stone-400 font-mono-num">
+          <p className="mt-1 text-xs text-stone-400 dark:text-[#94A39B] font-mono-num">
             {formatUsdRef(totals.operating, settings.usdRate)}
           </p>
         </div>
         <div className="p-5">
-          <p className="text-xs font-medium text-stone-500">
+          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
             {isVi ? 'Nhập kho (Chỉ tính dòng tiền)' : 'Inventory Purchases (Cash Flow Only)'}
           </p>
-          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900">
+          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(totals.stockPurchasesTotal)}
           </p>
-          <p className="mt-1 text-xs text-stone-400 font-mono-num">
+          <p className="mt-1 text-xs text-stone-400 dark:text-[#94A39B] font-mono-num">
             {formatUsdRef(totals.stockPurchasesTotal, settings.usdRate)}
           </p>
         </div>
         <div className="p-5">
-          <p className="text-xs font-medium text-stone-500">{t.expenses.householdTotal}</p>
-          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900">
+          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+            {t.expenses.householdTotal}
+          </p>
+          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(totals.household)}
           </p>
-          <p className="mt-1 text-xs text-stone-400 font-mono-num">
+          <p className="mt-1 text-xs text-stone-400 dark:text-[#94A39B] font-mono-num">
             {formatUsdRef(totals.household, settings.usdRate)}
           </p>
         </div>
       </div>
 
       {/* Filters & Table */}
-      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-stone-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="inline-flex items-center p-1 bg-stone-100 rounded-lg self-start">
+      <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+        <div className="p-4 border-b border-stone-200 dark:border-[#24352C] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="inline-flex items-center p-1 bg-stone-100 dark:bg-[#18251F] border border-transparent dark:border-[#24352C] rounded-lg self-start">
             {(['all', 'business', 'household'] as const).map((sc) => (
               <button
                 key={sc}
                 type="button"
                 onClick={() => setScopeFilter(sc)}
-                className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+                className={`h-9 px-3.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
                   scopeFilter === sc
-                    ? 'bg-white text-stone-900 shadow-xs'
-                    : 'text-stone-600 hover:text-stone-900'
+                    ? 'bg-white dark:bg-[#064E3B] text-stone-900 dark:text-[#D1FAE5] shadow-xs'
+                    : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
                 }`}
               >
                 {sc === 'all'
@@ -215,7 +217,7 @@ export const ExpensesView: React.FC = () => {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value as 'all' | ExpenseCategory)}
-              className="px-3 py-2 text-xs border border-stone-200 rounded-lg bg-white text-stone-700"
+              className="h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3]"
             >
               <option value="all">{t.common.all}</option>
               {ALL_CATEGORIES.map((c) => (
@@ -226,25 +228,27 @@ export const ExpensesView: React.FC = () => {
             </select>
 
             <div className="relative">
-              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-stone-400 dark:text-[#94A39B] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t.common.search}
-                className="w-full sm:w-56 pl-9 pr-3 py-2 text-sm border border-stone-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+                className="w-full sm:w-56 h-11 pl-9 pr-3 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]/70 border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
               />
             </div>
           </div>
         </div>
 
         {filtered.length === 0 ? (
-          <p className="p-10 text-center text-sm text-stone-500">{t.expenses.emptyExpenses}</p>
+          <p className="p-10 text-center text-sm text-stone-500 dark:text-[#94A39B]">
+            {t.expenses.emptyExpenses}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-stone-200 text-xs text-stone-500 bg-stone-50/70">
+                <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
                   <th className="py-3 px-5 font-medium">{t.common.date}</th>
                   <th className="py-3 px-4 font-medium">{t.expenses.titleLabel}</th>
                   <th className="py-3 px-4 font-medium">{t.expenses.categoryLabel}</th>
@@ -254,17 +258,20 @@ export const ExpensesView: React.FC = () => {
                   <th className="py-3 px-5 font-medium text-right">{t.common.actions}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100 text-sm">
+              <tbody className="divide-y divide-stone-100 dark:divide-[#1F3028] text-sm">
                 {filtered.map((exp) => {
                   const isInvPurchase = isLegacyInventoryPurchaseExpense(exp);
                   return (
-                    <tr key={exp.id} className="hover:bg-stone-50/60 transition-colors">
-                      <td className="py-3.5 px-5 font-mono-num text-xs text-stone-600 whitespace-nowrap">
+                    <tr
+                      key={exp.id}
+                      className="hover:bg-stone-50/60 dark:hover:bg-[#18251F]/70 transition-colors"
+                    >
+                      <td className="py-3.5 px-5 font-mono-num text-xs text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
                         {exp.expenseDate}
                       </td>
                       <td className="py-3.5 px-4 max-w-xs">
-                        <p className="font-medium text-stone-900">{exp.title}</p>
-                        <p className="text-xs text-stone-500 truncate mt-0.5">
+                        <p className="font-medium text-stone-900 dark:text-[#F1F5F3]">{exp.title}</p>
+                        <p className="text-xs text-stone-500 dark:text-[#94A39B] truncate mt-0.5">
                           {[
                             exp.vendor,
                             exp.note,
@@ -279,15 +286,17 @@ export const ExpensesView: React.FC = () => {
                         </p>
                       </td>
                       <td className="py-3.5 px-4 text-xs whitespace-nowrap">
-                        <span className="text-stone-800">{t.expenseCategories[exp.category]}</span>
-                        <span className="text-stone-400"> · </span>
+                        <span className="text-stone-800 dark:text-[#F1F5F3]">
+                          {t.expenseCategories[exp.category]}
+                        </span>
+                        <span className="text-stone-400 dark:text-[#94A39B]"> · </span>
                         <span
                           className={
                             exp.scope === 'household'
-                              ? 'text-amber-700 font-medium'
+                              ? 'text-amber-700 dark:text-amber-300 font-medium'
                               : isInvPurchase
-                                ? 'text-emerald-700 font-medium'
-                                : 'text-stone-500'
+                                ? 'text-emerald-700 dark:text-[#34D399] font-medium'
+                                : 'text-stone-500 dark:text-[#94A39B]'
                           }
                         >
                           {exp.scope === 'household'
@@ -299,13 +308,13 @@ export const ExpensesView: React.FC = () => {
                               : t.expenses.scopeBusiness}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
+                      <td className="py-3.5 px-4 text-xs text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
                         {t.paymentMethods[exp.paymentMethod]}
                       </td>
-                      <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
+                      <td className="py-3.5 px-4 text-xs text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
                         {exp.recordedBy}
                       </td>
-                      <td className="py-3.5 px-4 text-right font-mono-num font-semibold text-stone-900 whitespace-nowrap">
+                      <td className="py-3.5 px-4 text-right font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
                         {formatKhr(exp.amountKhr)}
                       </td>
                       <td className="py-3.5 px-5 text-right whitespace-nowrap">
@@ -313,10 +322,10 @@ export const ExpensesView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => openEdit(exp)}
-                            className="p-1 text-stone-400 hover:text-stone-900"
+                            className="p-1.5 text-stone-400 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]"
                             aria-label={t.common.edit}
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <Edit2 className="w-4 h-4" />
                           </button>
                           {confirmDeleteId === exp.id ? (
                             <span className="inline-flex items-center gap-2 text-xs">
@@ -326,14 +335,14 @@ export const ExpensesView: React.FC = () => {
                                   await deleteExpense(exp.id);
                                   setConfirmDeleteId(null);
                                 }}
-                                className="font-semibold text-red-700 hover:underline"
+                                className="font-semibold text-red-700 dark:text-[#F87171] hover:underline"
                               >
                                 {t.common.delete}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setConfirmDeleteId(null)}
-                                className="text-stone-500"
+                                className="text-stone-500 dark:text-[#94A39B]"
                               >
                                 {t.common.cancel}
                               </button>
@@ -342,10 +351,10 @@ export const ExpensesView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteId(exp.id)}
-                              className="p-1 text-stone-400 hover:text-red-700"
+                              className="p-1.5 text-stone-400 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171]"
                               aria-label={t.common.delete}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           )}
                         </div>
@@ -361,33 +370,33 @@ export const ExpensesView: React.FC = () => {
 
       {/* Add / Edit Expense Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold text-stone-900">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between">
+              <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
                 {editing ? t.expenses.editExpense : t.expenses.addExpense}
               </h2>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="p-1.5 text-stone-500 hover:text-stone-900"
+                className="w-9 h-9 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.expenses.scopeLabel}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => handleScopeChange('business')}
-                    className={`py-2 text-xs font-semibold rounded-lg border transition-colors ${
+                    className={`h-11 text-xs font-semibold rounded-lg border transition-colors ${
                       scope === 'business'
-                        ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43]'
-                        : 'border-stone-200 text-stone-700 hover:bg-stone-50'
+                        ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
+                        : 'border-stone-200 dark:border-[#24352C] text-stone-700 dark:text-[#D5DFDA] dark:bg-[#18251F] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                     }`}
                   >
                     {t.expenses.scopeBusiness}
@@ -395,10 +404,10 @@ export const ExpensesView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleScopeChange('household')}
-                    className={`py-2 text-xs font-semibold rounded-lg border transition-colors ${
+                    className={`h-11 text-xs font-semibold rounded-lg border transition-colors ${
                       scope === 'household'
-                        ? 'border-amber-700 bg-amber-50 text-amber-800'
-                        : 'border-stone-200 text-stone-700 hover:bg-stone-50'
+                        ? 'border-amber-700 bg-amber-50 text-amber-800 dark:border-amber-500/50 dark:bg-amber-950/50 dark:text-amber-300'
+                        : 'border-stone-200 dark:border-[#24352C] text-stone-700 dark:text-[#D5DFDA] dark:bg-[#18251F] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                     }`}
                   >
                     {t.expenses.scopeHousehold}
@@ -407,7 +416,7 @@ export const ExpensesView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1">
                   {t.expenses.titleLabel}
                 </label>
                 <input
@@ -416,13 +425,13 @@ export const ExpensesView: React.FC = () => {
                   maxLength={120}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1">
                     {t.common.amountKhr}
                   </label>
                   <input
@@ -432,31 +441,31 @@ export const ExpensesView: React.FC = () => {
                     step={500}
                     value={amountKhr}
                     onChange={(e) => setAmountKhr(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3 text-sm font-mono-num bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1">
                     {t.common.date}
                   </label>
                   <input
                     type="date"
                     value={expenseDate}
                     onChange={(e) => setExpenseDate(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono-num border border-stone-200 rounded-lg"
+                    className="w-full h-11 px-3 text-sm font-mono-num bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1">
                     {t.expenses.categoryLabel}
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white"
+                    className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                   >
                     {ALL_CATEGORIES.map((c) => (
                       <option key={c} value={c}>
@@ -466,13 +475,13 @@ export const ExpensesView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-stone-700 mb-1">
+                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1">
                     {t.common.payment}
                   </label>
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg bg-white"
+                    className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                   >
                     {(['cash', 'khqr', 'aba', 'wing'] as PaymentMethod[]).map((pm) => (
                       <option key={pm} value={pm}>
@@ -484,7 +493,7 @@ export const ExpensesView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1">
                   {t.expenses.vendorLabel}
                 </label>
                 <input
@@ -492,12 +501,12 @@ export const ExpensesView: React.FC = () => {
                   maxLength={100}
                   value={vendor}
                   onChange={(e) => setVendor(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1">
                   {t.common.note}
                 </label>
                 <input
@@ -505,21 +514,21 @@ export const ExpensesView: React.FC = () => {
                   maxLength={200}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg"
+                  className="w-full h-11 px-3 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg"
                 />
               </div>
 
-              <div className="pt-3 border-t border-stone-200 flex justify-end gap-3">
+              <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-sm text-stone-700 hover:bg-stone-100 rounded-lg"
+                  className="h-11 px-4 text-sm text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg"
                 >
                   {t.common.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-lg"
+                  className="h-11 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg"
                 >
                   {t.common.save}
                 </button>

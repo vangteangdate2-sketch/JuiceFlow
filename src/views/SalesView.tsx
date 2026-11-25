@@ -582,18 +582,18 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
     <div className="space-y-4">
       {/* Condensed Single-Row Header: Title + Inline POS / Sales Ledger Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
+        <h1 className="font-display text-xl sm:text-2xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
           {t.sales.title}
         </h1>
 
-        <div className="inline-flex items-center p-1 bg-stone-200/70 rounded-lg shrink-0">
+        <div className="inline-flex items-center p-1 bg-stone-200/70 dark:bg-[#131D18] border border-transparent dark:border-[#24352C] rounded-lg shrink-0 gap-1">
           <button
             type="button"
             onClick={() => setSubTab('pos')}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
+            className={`h-11 px-4 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
               subTab === 'pos'
-                ? 'bg-white text-stone-900 shadow-xs'
-                : 'text-stone-600 hover:text-stone-900'
+                ? 'bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] shadow-xs'
+                : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
             }`}
           >
             {t.sales.tabPos}
@@ -601,10 +601,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
           <button
             type="button"
             onClick={() => setSubTab('ledger')}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
+            className={`h-11 px-4 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
               subTab === 'ledger'
-                ? 'bg-white text-stone-900 shadow-xs'
-                : 'text-stone-600 hover:text-stone-900'
+                ? 'bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] shadow-xs'
+                : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
             }`}
           >
             {t.sales.tabLedger} ({sales.length})
@@ -616,17 +616,17 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
       {toastMessage && (
         <div
           role="status"
-          className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-4 py-3 rounded-lg text-sm font-medium flex flex-wrap items-center justify-between gap-3"
+          className="bg-emerald-50 dark:bg-[#064E3B]/60 border border-emerald-200 dark:border-[#10B981]/40 text-emerald-900 dark:text-[#D1FAE5] px-4 py-3 rounded-lg text-sm font-medium flex flex-wrap items-center justify-between gap-3"
         >
           <div className="flex items-center gap-2">
-            <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+            <Check className="w-4 h-4 text-emerald-700 dark:text-[#34D399] shrink-0" />
             <span>{toastMessage}</span>
           </div>
           {lastCompletedSale && (
             <button
               type="button"
               onClick={() => setReceiptSale(lastCompletedSale)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] rounded-md"
+              className="inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg"
             >
               <Printer className="w-3.5 h-3.5" />
               {isVi ? `In hóa đơn ${lastCompletedSale.orderNumber}` : `Receipt ${lastCompletedSale.orderNumber}`}
@@ -640,7 +640,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
           {/* Product Grid & Barcode Search */}
           <div className="lg:col-span-8 space-y-4">
             {/* Unified Search + Camera & USB/Bluetooth Barcode Scanner */}
-            <div className="bg-white border border-stone-200 rounded-xl p-4 sm:p-5 space-y-3">
+            <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-4 sm:p-5 space-y-3 transition-colors">
               <BarcodeScanner
                 enabled={
                   subTab === 'pos' &&
@@ -665,13 +665,13 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                     onClick={() => setFiltersOpen((prev) => !prev)}
                     aria-expanded={filtersOpen}
                     aria-controls="pos-catalog-filters"
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap ${
+                    className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap border ${
                       filtersOpen || activeFilterCount > 0
-                        ? 'bg-stone-100 text-stone-900 hover:bg-stone-200/70'
-                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                        ? 'bg-stone-100 dark:bg-[#18251F] border-transparent dark:border-[#24352C] text-stone-900 dark:text-[#F1F5F3] hover:bg-stone-200/70 dark:hover:bg-[#1F3028]'
+                        : 'bg-transparent border-transparent text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
                     }`}
                   >
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] shrink-0" />
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
                     <span>
                       {activeFilterCount > 0
                         ? filtersOpen
@@ -690,7 +690,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                             : 'Show Filters'}
                     </span>
                     <ChevronDown
-                      className={`w-3.5 h-3.5 text-stone-400 transition-transform duration-200 motion-reduce:transition-none ${
+                      className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-200 motion-reduce:transition-none ${
                         filtersOpen ? 'rotate-180' : ''
                       }`}
                     />
@@ -705,7 +705,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       setTypeFilter('ALL');
                       setPosSearch('');
                     }}
-                    className="text-xs font-medium text-[#0D5C3E] hover:underline disabled:text-stone-400 disabled:no-underline disabled:cursor-default transition-colors whitespace-nowrap"
+                    className="inline-flex items-center justify-center h-11 px-3 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors whitespace-nowrap"
                   >
                     {isVi ? 'Đặt lại tất cả' : 'Reset All'}
                   </button>
@@ -716,9 +716,9 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               {lookingUpBarcode && (
                 <div
                   role="status"
-                  className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-stone-50 border border-stone-200 text-xs text-stone-700"
+                  className="flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] text-xs text-stone-700 dark:text-[#F1F5F3]"
                 >
-                  <Loader2 className="w-3.5 h-3.5 text-[#0D5C3E] animate-spin shrink-0" />
+                  <Loader2 className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] animate-spin shrink-0" />
                   <span>
                     {isVi
                       ? `Đang kiểm tra sổ mã vạch JuiceFlow cho "${lookingUpBarcode}"...`
@@ -731,21 +731,21 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               {unknownBarcodePrompt && !lookingUpBarcode && (
                 <div
                   role="status"
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg bg-stone-50 border border-stone-300"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C]"
                 >
                   <div className="flex items-start gap-2.5 min-w-0">
-                    <ScanBarcode className="w-4 h-4 text-[#0D5C3E] shrink-0 mt-0.5" />
+                    <ScanBarcode className="w-4 h-4 text-[#0D5C3E] dark:text-[#10B981] shrink-0 mt-0.5" />
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-stone-900">
+                      <p className="text-xs font-semibold text-stone-900 dark:text-[#F1F5F3]">
                         {isVi ? 'Mã vạch chưa đăng ký' : 'Unregistered Barcode'}:{' '}
-                        <span className="font-mono-num text-[#0D5C3E]">
+                        <span className="font-mono-num text-[#0D5C3E] dark:text-[#34D399]">
                           {unknownBarcodePrompt.code}
                         </span>{' '}
-                        <span className="font-normal text-stone-500">
+                        <span className="font-normal text-stone-500 dark:text-[#94A39B]">
                           ({formatBarcodeTypeLabel(unknownBarcodePrompt.format)})
                         </span>
                       </p>
-                      <p className="text-[11px] text-stone-600 truncate mt-0.5">
+                      <p className="text-[11px] text-stone-600 dark:text-[#94A39B] truncate mt-0.5">
                         {unknownBarcodePrompt.prefill
                           ? isVi
                             ? `Tìm thấy từ Open Food Facts: ${unknownBarcodePrompt.prefill.name}${unknownBarcodePrompt.prefill.brand ? ` · ${unknownBarcodePrompt.prefill.brand}` : ''} (giá KHR & tồn kho bạn tự nhập)`
@@ -760,7 +760,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                     <button
                       type="button"
                       onClick={() => setQuickRegisterOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0D5C3E] hover:bg-[#0A4A31] rounded-md transition-colors whitespace-nowrap"
+                      className="inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0D5C3E] hover:bg-[#0A4A31] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       {isVi ? 'Đăng ký ngay' : 'Register Now'}
@@ -769,40 +769,40 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       type="button"
                       onClick={() => setUnknownBarcodePrompt(null)}
                       aria-label={t.common.close}
-                      className="p-1.5 text-stone-400 hover:text-stone-700 rounded-md"
+                      className="w-11 h-11 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-lg"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Smooth Collapsible Category & Product Type Filter Drawer */}
+              {/* Smooth Collapsible Category & Product Type Filter Drawer (minimum 44px touch pills) */}
               <div
                 id="pos-catalog-filters"
                 className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
                   filtersOpen
-                    ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-stone-100'
+                    ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-stone-100 dark:border-[#24352C]'
                     : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
                 }`}
               >
                 <div className="overflow-hidden">
                   <div className="space-y-2.5">
-                    {/* Row 1: Single-Line Horizontal Category Pills */}
+                    {/* Row 1: Single-Line Horizontal Category Pills (h-11 = 44px) */}
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-[11px] font-semibold text-stone-500 w-16 shrink-0">
+                      <span className="text-[11px] font-semibold text-stone-500 dark:text-[#94A39B] w-16 shrink-0">
                         {isVi ? 'Danh mục' : 'Category'}
                       </span>
-                      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {POS_CATEGORIES.map((cat) => (
                           <button
                             key={cat}
                             type="button"
                             onClick={() => setCategoryFilter(cat)}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 ${
+                            className={`h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${
                               categoryFilter === cat
-                                ? 'bg-[#0D5C3E] text-white'
-                                : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                                ? 'bg-[#0D5C3E] text-white border-[#0D5C3E] dark:bg-[#10B981] dark:text-[#042419] dark:border-[#10B981] font-semibold'
+                                : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
                             }`}
                           >
                             {cat === 'all' ? t.common.all : t.productCategories[cat]}
@@ -811,22 +811,22 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       </div>
                     </div>
 
-                    {/* Row 2: Unified Soft-Green Item Type Pills */}
+                    {/* Row 2: Unified Soft-Green Item Type Pills (h-11 = 44px) */}
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-[11px] font-semibold text-stone-500 w-16 shrink-0">
+                      <span className="text-[11px] font-semibold text-stone-500 dark:text-[#94A39B] w-16 shrink-0">
                         {isVi ? 'Loại hàng' : 'Item Type'}
                       </span>
-                      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {(['ALL', 'PREPARED_TO_ORDER', 'PACKAGED', 'PREPARED_STOCK'] as const).map(
                           (pt) => (
                             <button
                               key={pt}
                               type="button"
                               onClick={() => setTypeFilter(pt)}
-                              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 ${
+                              className={`h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${
                                 typeFilter === pt
-                                  ? 'bg-[#E6F2ED] text-[#0D5C3E] ring-1 ring-inset ring-[#0D5C3E]/25 font-semibold'
-                                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                                  ? 'bg-[#E6F2ED] text-[#0D5C3E] border-[#0D5C3E]/30 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/45 font-semibold'
+                                  : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
                               }`}
                             >
                               {pt === 'ALL' ? t.common.all : t.productTypes[pt]}
@@ -841,7 +841,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
             </div>
 
             {activeProducts.length === 0 ? (
-              <div className="bg-white border border-stone-200 rounded-xl p-10 text-center text-sm text-stone-500">
+              <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-10 text-center text-sm text-stone-500 dark:text-[#94A39B]">
                 {t.common.noResults}
               </div>
             ) : (
@@ -891,16 +891,16 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                               : 'Stock limit reached in cart'
                             : undefined
                       }
-                      className={`group text-left bg-white rounded-xl overflow-hidden transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] ${
+                      className={`group text-left bg-white dark:bg-[#18251F] rounded-xl overflow-hidden transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
                         outBlocked
-                          ? 'opacity-60 grayscale-[40%] border border-stone-200 cursor-not-allowed'
+                          ? 'opacity-60 grayscale-[40%] dark:opacity-55 dark:grayscale-[50%] border border-stone-200 dark:border-[#24352C] cursor-not-allowed'
                           : qtyInCart > 0
-                            ? `border-2 border-[#0D5C3E] ring-2 ring-[#0D5C3E]/15 shadow-sm ${
-                                atStockLimit ? 'cursor-not-allowed' : ''
+                            ? `border-2 border-[#0D5C3E] dark:border-[#10B981] ring-2 ring-[#0D5C3E]/15 dark:ring-[#10B981]/25 shadow-sm ${
+                                atStockLimit ? 'cursor-not-allowed' : 'dark:hover:bg-[#1F3028]'
                               }`
                             : atStockLimit
-                              ? 'opacity-75 border border-stone-200 cursor-not-allowed'
-                              : 'border border-stone-200 hover:border-stone-300 hover:shadow-2xs'
+                              ? 'opacity-75 border border-stone-200 dark:border-[#24352C] cursor-not-allowed'
+                              : 'border border-stone-200 dark:border-[#24352C] hover:border-stone-300 dark:hover:border-[#344E41] dark:hover:bg-[#1F3028] hover:shadow-2xs'
                       }`}
                     >
                       <div className="relative">
@@ -912,27 +912,27 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                         />
 
                         {outBlocked && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-stone-900/20">
-                            <span className="px-3 py-1 rounded-full bg-stone-900/85 text-white text-xs font-semibold tracking-wide shadow-xs">
+                          <div className="absolute inset-0 flex items-center justify-center bg-stone-900/20 dark:bg-black/45">
+                            <span className="px-3 py-1 rounded-full bg-stone-900/85 dark:bg-red-950/95 text-white dark:text-red-200 border border-transparent dark:border-red-500/50 text-xs font-semibold tracking-wide shadow-xs">
                               {isVi ? 'Hết hàng' : 'Out of Stock'}
                             </span>
                           </div>
                         )}
 
                         {!outBlocked && qtyInCart > 0 && (
-                          <span className="absolute top-2 right-2 bg-[#0D5C3E] text-white font-mono-num text-[11px] font-semibold px-2.5 py-0.5 rounded-full shadow-xs">
+                          <span className="absolute top-2 right-2 bg-[#0D5C3E] text-white dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border dark:border-[#10B981]/50 font-mono-num text-[11px] font-semibold px-2.5 py-0.5 rounded-full shadow-xs">
                             {isVi ? `${qtyInCart} trong giỏ` : `${qtyInCart} in cart`}
                           </span>
                         )}
                       </div>
                       <div className="p-3">
                         <div className="flex items-center justify-between gap-2 text-[11px]">
-                          <span className="text-stone-500 truncate">
+                          <span className="text-stone-500 dark:text-[#94A39B] truncate">
                             {t.productTypes[product.productType]}
                             {hasMultiVariants ? ` · ${product.variants.length} sizes` : ''}
                           </span>
                           {atStockLimit ? (
-                            <span className="font-mono-num font-semibold text-amber-700 shrink-0">
+                            <span className="font-mono-num font-semibold text-amber-700 dark:text-amber-400 shrink-0">
                               {isVi ? 'Đạt giới hạn' : 'Max limit'}
                             </span>
                           ) : (
@@ -940,10 +940,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                               <span
                                 className={`font-mono-num font-semibold shrink-0 ${
                                   availability.status === 'out'
-                                    ? 'text-red-700'
+                                    ? 'text-red-700 dark:text-[#F87171]'
                                     : availability.status === 'low'
-                                    ? 'text-amber-700'
-                                    : 'text-[#0D5C3E]'
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : 'text-[#0D5C3E] dark:text-[#34D399]'
                                 }`}
                               >
                                 {availability.status === 'out'
@@ -957,14 +957,14 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                             )
                           )}
                         </div>
-                        <h3 className="mt-1 font-display text-sm font-semibold text-stone-900 truncate">
+                        <h3 className="mt-1 font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                           {displayName}
                         </h3>
                         <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                          <span className="font-mono-num text-sm font-bold text-[#0D5C3E]">
+                          <span className="font-mono-num text-sm font-bold text-[#0D5C3E] dark:text-[#34D399]">
                             {hasMultiVariants ? `${formatKhr(minPrice)}+` : formatKhr(minPrice)}
                           </span>
-                          <span className="text-[11px] text-stone-400 font-mono-num">
+                          <span className="text-[11px] text-stone-400 dark:text-[#94A39B] font-mono-num">
                             {formatUsdRef(minPrice, settings.usdRate)}
                           </span>
                         </div>
@@ -976,20 +976,20 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
             )}
           </div>
 
-          {/* Pinned Right-Hand "Current Order" Checkout Panel (Full-height flex column; ONLY cart items scroll) */}
+          {/* Pinned Right-Hand "Current Order" Checkout Panel (4-region layout keeps Total & 48px Charge CTA permanently pinned) */}
           <form
             onSubmit={handleCheckout}
-            className="lg:col-span-4 bg-white border border-stone-200 rounded-xl flex flex-col overflow-hidden lg:sticky lg:top-[72px] lg:h-[calc(100vh-88px)]"
+            className="lg:col-span-4 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl flex flex-col overflow-hidden lg:sticky lg:top-[80px] lg:h-[calc(100vh-96px)] transition-colors"
           >
-            {/* Pinned Panel Header */}
-            <div className="px-4 sm:px-5 py-3.5 border-b border-stone-200 flex items-center justify-between gap-2 shrink-0">
+            {/* Region 1: Pinned Panel Header */}
+            <div className="px-4 sm:px-5 py-2.5 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2 min-w-0">
-                <ShoppingBag className="w-4 h-4 text-[#0D5C3E] shrink-0" />
-                <h2 className="font-display text-base font-semibold text-stone-900 truncate">
+                <ShoppingBag className="w-4 h-4 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
+                <h2 className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                   {t.sales.cartTitle}
                 </h2>
                 {cartLines.length > 0 && (
-                  <span className="font-mono-num text-xs font-semibold text-[#0D5C3E] bg-[#E6F2ED] px-2 py-0.5 rounded-full shrink-0">
+                  <span className="font-mono-num text-xs font-semibold text-[#0D5C3E] dark:text-[#6EE7B7] bg-[#E6F2ED] dark:bg-[#064E3B] px-2 py-0.5 rounded-full shrink-0">
                     {cartLines.reduce((s, l) => s + l.quantity, 0)}
                   </span>
                 )}
@@ -1004,58 +1004,59 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                     setCheckoutError(null);
                     setCheckoutShortages([]);
                   }}
-                  className="text-xs font-medium text-stone-500 hover:text-red-700 transition-colors shrink-0"
+                  className="h-11 px-2.5 -mr-2 text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] rounded-lg transition-colors shrink-0"
                 >
                   {isVi ? 'Xóa giỏ' : 'Clear'}
                 </button>
               )}
             </div>
 
-            {/* ONLY Scrollable Region: Cart Line Items + Stock Warnings */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-5 py-2 space-y-3">
+            {/* Region 2: Scrollable Cart Line Items + Stock Warnings */}
+            <div className="flex-1 min-h-[120px] overflow-y-auto px-4 sm:px-5 py-2 space-y-3">
               {cartLines.length === 0 ? (
-                <div className="h-full min-h-[120px] flex flex-col items-center justify-center text-center py-8 text-sm text-stone-400">
-                  <ShoppingBag className="w-7 h-7 text-stone-300 mb-2" />
+                <div className="h-full min-h-[110px] flex flex-col items-center justify-center text-center py-6 text-sm text-stone-400 dark:text-[#94A39B]">
+                  <ShoppingBag className="w-7 h-7 text-stone-300 dark:text-[#24352C] mb-2" />
                   <p>{t.sales.emptyCart}</p>
                 </div>
               ) : (
-                <ul className="divide-y divide-stone-100">
+                <ul className="divide-y divide-stone-100 dark:divide-[#24352C]">
                   {cartLines.map(({ key, product, variant, unitPrice, quantity, lineTotal }) => {
                     const incCheck = canAddToCart(product.id, variant?.id, 1);
                     return (
-                      <li key={key} className="py-2.5 flex items-center justify-between gap-2">
+                      <li key={key} className="py-3 flex items-center justify-between gap-2.5">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-stone-900 truncate">
+                          <p className="text-sm font-medium text-stone-900 dark:text-[#F1F5F3] truncate">
                             {isVi ? product.nameVi || product.name : product.name}
                             {variant ? (
-                              <span className="text-stone-500 font-normal">
+                              <span className="text-stone-500 dark:text-[#94A39B] font-normal">
                                 {' '}
                                 ({isVi ? variant.nameVi || variant.name : variant.name})
                               </span>
                             ) : null}
                           </p>
-                          <div className="flex items-center gap-1.5 text-xs text-stone-500 font-mono-num">
+                          <div className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num mt-0.5">
                             <span>
                               {formatKhr(unitPrice)} × {quantity}
                             </span>
                             {!incCheck.allowed && (
-                              <span className="text-[10px] font-sans font-semibold text-amber-700">
+                              <span className="text-[10px] font-sans font-semibold text-amber-700 dark:text-amber-400">
                                 · {isVi ? 'Tối đa' : 'Max'}
                               </span>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <div className="inline-flex items-center border border-stone-200 rounded-lg bg-white">
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* Touch-Friendly 36x36px (- / +) Steppers with 8px spacing */}
+                          <div className="inline-flex items-center gap-2">
                             <button
                               type="button"
                               onClick={() => updateCartQty(key, -1)}
                               aria-label="Decrease quantity"
-                              className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-50 rounded-l-lg transition-colors"
+                              className="w-9 h-9 inline-flex items-center justify-center border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                             >
-                              <Minus className="w-3.5 h-3.5" />
+                              <Minus className="w-4 h-4" />
                             </button>
-                            <span className="px-2 font-mono-num text-xs font-semibold text-stone-900 min-w-[24px] text-center">
+                            <span className="font-mono-num text-xs font-semibold text-stone-900 dark:text-[#F1F5F3] min-w-[20px] text-center">
                               {quantity}
                             </span>
                             <button
@@ -1068,12 +1069,12 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                                   ? incCheck.reason || (isVi ? 'Đã đạt giới hạn tồn kho' : 'Stock limit reached')
                                   : undefined
                               }
-                              className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-50 disabled:opacity-35 disabled:cursor-not-allowed rounded-r-lg transition-colors"
+                              className="w-9 h-9 inline-flex items-center justify-center border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] disabled:opacity-35 disabled:cursor-not-allowed rounded-lg transition-colors"
                             >
-                              <Plus className="w-3.5 h-3.5" />
+                              <Plus className="w-4 h-4" />
                             </button>
                           </div>
-                          <span className="font-mono-num text-xs font-semibold text-stone-900 w-20 text-right">
+                          <span className="font-mono-num text-xs font-semibold text-stone-900 dark:text-[#F1F5F3] w-[72px] text-right">
                             {formatKhr(lineTotal)}
                           </span>
                         </div>
@@ -1089,8 +1090,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   role="alert"
                   className={`p-3 rounded-lg border text-xs space-y-1.5 ${
                     settings.allowNegativeStock && !checkoutError
-                      ? 'bg-amber-50 border-amber-200 text-amber-900'
-                      : 'bg-red-50 border-red-200 text-red-900'
+                      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-500/40 text-amber-900 dark:text-amber-200'
+                      : 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-500/40 text-red-900 dark:text-red-200'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2 font-semibold">
@@ -1115,7 +1116,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                           setCheckoutShortages([]);
                         }}
                         aria-label={t.common.close}
-                        className="p-0.5 opacity-60 hover:opacity-100 shrink-0"
+                        className="w-8 h-8 inline-flex items-center justify-center opacity-70 hover:opacity-100 shrink-0"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1142,28 +1143,28 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               )}
             </div>
 
-            {/* Pinned Bottom Checkout Controls: Accordion Details, Payment, Conditional Cash Box, Total (+ Margin Eye Toggle), Charge Button */}
-            <div className="shrink-0 border-t border-stone-200 bg-white px-4 sm:px-5 py-3 space-y-2.5">
-              {/* Collapsible 1-Line "Order Details & Notes" Accordion */}
-              <div className="border border-stone-200 rounded-lg bg-stone-50/60 overflow-hidden">
+            {/* Region 3: Checkout Controls (Accordion Details, 48px Payment Grid, Conditional Cash Box) */}
+            <div className="shrink-0 max-h-[54%] overflow-y-auto border-t border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] px-4 sm:px-5 py-3 space-y-3">
+              {/* Collapsible 1-Line "Order Details & Notes" Accordion (44px touch height) */}
+              <div className="border border-stone-200 dark:border-[#24352C] rounded-lg bg-stone-50/60 dark:bg-[#18251F] overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setOrderDetailsOpen((prev) => !prev)}
                   aria-expanded={orderDetailsOpen}
                   aria-controls="pos-order-details-panel"
-                  className="w-full px-3 py-1.5 flex items-center justify-between gap-2 text-xs font-medium text-stone-700 hover:bg-stone-100/70 transition-colors"
+                  className="w-full h-11 px-3 flex items-center justify-between gap-2 text-xs font-medium text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-100/70 dark:hover:bg-[#1F3028] transition-colors"
                 >
                   <span className="truncate">
                     {isVi ? 'Chi tiết đơn & Ghi chú' : 'Order Details & Notes'}
                     {(customerName.trim() || note.trim()) && !orderDetailsOpen && (
-                      <span className="text-stone-400 font-normal">
+                      <span className="text-stone-400 dark:text-[#94A39B] font-normal">
                         {' '}
                         · {[customerName.trim(), note.trim()].filter(Boolean).join(' — ')}
                       </span>
                     )}
                   </span>
                   <ChevronDown
-                    className={`w-3.5 h-3.5 text-stone-400 shrink-0 transition-transform duration-200 motion-reduce:transition-none ${
+                    className={`w-4 h-4 text-stone-400 dark:text-[#94A39B] shrink-0 transition-transform duration-200 motion-reduce:transition-none ${
                       orderDetailsOpen ? 'rotate-180' : ''
                     }`}
                   />
@@ -1178,28 +1179,28 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   }`}
                 >
                   <div className="overflow-hidden">
-                    <div className="px-3 pb-3 pt-2 border-t border-stone-200/80 bg-white space-y-2">
+                    <div className="px-3 pb-3 pt-2.5 border-t border-stone-200/80 dark:border-[#24352C] bg-white dark:bg-[#131D18] space-y-2.5">
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[11px] font-medium text-stone-500 mb-0.5">
+                          <label className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1">
                             {t.common.date}
                           </label>
                           <input
                             type="date"
                             value={saleDate}
                             onChange={(e) => setSaleDate(e.target.value)}
-                            className="w-full px-2 py-1.5 text-xs font-mono-num border border-stone-200 rounded-md bg-white text-stone-900"
+                            className="w-full h-11 px-2.5 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-medium text-stone-500 mb-0.5">
+                          <label className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1">
                             {t.common.operator}
                           </label>
                           <input
                             type="text"
                             readOnly
                             value={settings.activeOperator}
-                            className="w-full px-2 py-1.5 text-xs border border-stone-200 rounded-md bg-stone-50 text-stone-700"
+                            className="w-full h-11 px-2.5 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-stone-50 dark:bg-[#0B110E] text-stone-700 dark:text-[#94A39B]"
                           />
                         </div>
                       </div>
@@ -1209,7 +1210,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
                         placeholder={t.sales.customerPlaceholder}
-                        className="w-full px-2.5 py-1.5 text-xs border border-stone-200 rounded-md bg-white text-stone-900 placeholder:text-stone-400"
+                        className="w-full h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
                       />
                       <input
                         type="text"
@@ -1217,31 +1218,29 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                         value={note}
                         onChange={(e) => setNote(e.target.value)}
                         placeholder={t.sales.notePlaceholder}
-                        className="w-full px-2.5 py-1.5 text-xs border border-stone-200 rounded-md bg-white text-stone-900 placeholder:text-stone-400"
+                        className="w-full h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Payment Method Grid */}
-              <div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(['cash', 'khqr', 'aba', 'wing'] as PaymentMethod[]).map((pm) => (
-                    <button
-                      key={pm}
-                      type="button"
-                      onClick={() => setPaymentMethod(pm)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
-                        paymentMethod === pm
-                          ? 'border-[#0D5C3E] bg-[#E6F2ED] text-[#0D5C3E]'
-                          : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
-                      }`}
-                    >
-                      {t.paymentMethods[pm]}
-                    </button>
-                  ))}
-                </div>
+              {/* Payment Method Grid (minimum 48px height, generous gap-2.5 spacing) */}
+              <div className="grid grid-cols-2 gap-2.5">
+                {(['cash', 'khqr', 'aba', 'wing'] as PaymentMethod[]).map((pm) => (
+                  <button
+                    key={pm}
+                    type="button"
+                    onClick={() => setPaymentMethod(pm)}
+                    className={`h-12 px-3 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
+                      paymentMethod === pm
+                        ? 'border-[#0D5C3E] bg-[#E6F2ED] text-[#0D5C3E] dark:border-[#10B981] dark:bg-[#064E3B] dark:text-[#D1FAE5]'
+                        : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
+                    }`}
+                  >
+                    {t.paymentMethods[pm]}
+                  </button>
+                ))}
               </div>
 
               {/* Conditional Dual-Currency Cash Received & KHR Change Box (Cash Only) */}
@@ -1254,14 +1253,14 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 }`}
               >
                 <div className="overflow-hidden">
-                  <div className="rounded-lg border border-stone-200 bg-stone-50/70 p-2.5 space-y-2">
+                  <div className="rounded-lg border border-stone-200 dark:border-[#24352C] bg-stone-50/70 dark:bg-[#18251F] p-3 space-y-2.5">
                     {/* Cash Box Header + Rate Indicator + Quick Clear */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-semibold text-stone-700">
+                      <span className="text-xs font-semibold text-stone-700 dark:text-[#F1F5F3]">
                         {isVi ? 'Tiền khách đưa & Tiền thối' : 'Cash Received & Change'}
                       </span>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[11px] font-mono-num text-stone-500">
+                        <span className="text-[11px] font-mono-num text-stone-500 dark:text-[#94A39B]">
                           {isVi ? 'Tỷ giá' : 'Rate'}: {posExchangeRate.toLocaleString('en-US')} ៛/$
                         </span>
                         {cashCalc.hasAnyInput && (
@@ -1272,7 +1271,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                               setCashUsdInput('');
                               setCashKhrInput('');
                             }}
-                            className="text-[11px] font-medium text-stone-500 hover:text-stone-900 underline"
+                            className="text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] underline px-1 py-1"
                           >
                             {isVi ? 'Xóa' : 'Clear'}
                           </button>
@@ -1280,18 +1279,18 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       </div>
                     </div>
 
-                    {/* Side-by-Side USD & KHR Numeric Inputs + Quick-Tap Chips */}
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* Side-by-Side 48px USD & KHR Numeric Inputs + Touch Quick-Tap Chips (48px Exact button) */}
+                    <div className="grid grid-cols-2 gap-2.5">
                       {/* Left: USD Received ($) */}
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         <label
                           htmlFor="pos-cash-usd"
-                          className="block text-[11px] font-medium text-stone-600"
+                          className="block text-[11px] font-medium text-stone-600 dark:text-[#94A39B]"
                         >
                           {isVi ? 'Nhận USD ($)' : 'USD Received ($)'}
                         </label>
                         <div className="relative">
-                          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-stone-400">
+                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-400 dark:text-[#94A39B]">
                             $
                           </span>
                           <input
@@ -1304,7 +1303,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                             value={cashUsdInput}
                             onChange={(e) => setCashUsdInput(e.target.value)}
                             placeholder="0"
-                            className="w-full pl-6 pr-6 py-1.5 text-xs font-mono-num font-semibold text-stone-900 bg-white border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0D5C3E]/30 focus:border-[#0D5C3E]"
+                            className="w-full h-12 pl-7 pr-8 text-sm font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] bg-white dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C3E]/30 dark:focus:ring-[#10B981]/30 focus:border-[#0D5C3E] dark:focus:border-[#10B981]"
                           />
                           {cashUsdInput && (
                             <button
@@ -1312,20 +1311,22 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                               tabIndex={isCashSelected ? 0 : -1}
                               onClick={() => setCashUsdInput('')}
                               aria-label="Clear USD"
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-700"
+                              className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]"
                             >
-                              <X className="w-3 h-3" />
+                              <X className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-1">
-                          {[1, 5, 10, 20].map((amt) => (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {[1, 5, 10, 20].map((amt, idx) => (
                             <button
                               key={amt}
                               type="button"
                               tabIndex={isCashSelected ? 0 : -1}
                               onClick={() => handleQuickAddUsd(amt)}
-                              className="py-1 px-1.5 text-[11px] font-mono-num font-semibold text-stone-700 bg-white border border-stone-200 hover:border-[#0D5C3E] hover:text-[#0D5C3E] hover:bg-[#E6F2ED]/50 rounded-md transition-colors whitespace-nowrap"
+                              className={`${
+                                idx < 2 ? 'h-12' : 'h-11'
+                              } px-1.5 text-xs font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:text-[#0D5C3E] dark:hover:text-[#34D399] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap`}
                             >
                               ${amt}
                             </button>
@@ -1334,10 +1335,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       </div>
 
                       {/* Right: KHR Received (៛) */}
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         <label
                           htmlFor="pos-cash-khr"
-                          className="block text-[11px] font-medium text-stone-600"
+                          className="block text-[11px] font-medium text-stone-600 dark:text-[#94A39B]"
                         >
                           {isVi ? 'Nhận KHR (៛)' : 'KHR Received (៛)'}
                         </label>
@@ -1352,7 +1353,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                             value={cashKhrInput}
                             onChange={(e) => setCashKhrInput(e.target.value)}
                             placeholder="0"
-                            className="w-full pl-2.5 pr-7 py-1.5 text-xs font-mono-num font-semibold text-stone-900 bg-white border border-stone-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0D5C3E]/30 focus:border-[#0D5C3E]"
+                            className="w-full h-12 pl-3 pr-8 text-sm font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] bg-white dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C3E]/30 dark:focus:ring-[#10B981]/30 focus:border-[#0D5C3E] dark:focus:border-[#10B981]"
                           />
                           {cashKhrInput ? (
                             <button
@@ -1360,33 +1361,35 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                               tabIndex={isCashSelected ? 0 : -1}
                               onClick={() => setCashKhrInput('')}
                               aria-label="Clear KHR"
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-700"
+                              className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]"
                             >
-                              <X className="w-3 h-3" />
+                              <X className="w-3.5 h-3.5" />
                             </button>
                           ) : (
-                            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-stone-400">
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-400 dark:text-[#94A39B]">
                               ៛
                             </span>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-1">
+                        <div className="grid grid-cols-2 gap-1.5">
                           <button
                             type="button"
                             tabIndex={isCashSelected ? 0 : -1}
                             onClick={handleExactKhr}
                             disabled={cartTotal <= 0}
-                            className="py-1 px-1.5 text-[11px] font-semibold text-[#0D5C3E] bg-[#E6F2ED] border border-[#0D5C3E]/25 hover:bg-[#D5EAE0] disabled:opacity-45 rounded-md transition-colors whitespace-nowrap"
+                            className="h-12 px-1.5 text-xs font-semibold text-[#0D5C3E] dark:text-[#6EE7B7] bg-[#E6F2ED] dark:bg-[#064E3B] border border-[#0D5C3E]/25 dark:border-[#10B981]/45 hover:bg-[#D5EAE0] dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
                           >
                             {isVi ? 'Đủ tiền' : 'Exact'}
                           </button>
-                          {[5000, 10000, 50000].map((amt) => (
+                          {[5000, 10000, 50000].map((amt, idx) => (
                             <button
                               key={amt}
                               type="button"
                               tabIndex={isCashSelected ? 0 : -1}
                               onClick={() => handleQuickAddKhr(amt)}
-                              className="py-1 px-1 text-[11px] font-mono-num font-semibold text-stone-700 bg-white border border-stone-200 hover:border-[#0D5C3E] hover:text-[#0D5C3E] hover:bg-[#E6F2ED]/50 rounded-md transition-colors whitespace-nowrap"
+                              className={`${
+                                idx === 0 ? 'h-12' : 'h-11'
+                              } px-1 text-[11px] font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:text-[#0D5C3E] dark:hover:text-[#34D399] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap`}
                             >
                               {amt.toLocaleString('en-US')} ៛
                             </button>
@@ -1397,41 +1400,41 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
                     {/* Subtle Mixed-Currency Combined Breakdown Line */}
                     {cashCalc.isMixed && (
-                      <p className="text-[11px] font-mono-num text-stone-600 text-center pt-0.5">
+                      <p className="text-[11px] font-mono-num text-stone-600 dark:text-[#94A39B] text-center pt-0.5">
                         {formatUsdClean(cashCalc.usdReceived)} ({formatKhr(cashCalc.usdEquivalentKhr)}) +{' '}
                         {formatKhr(cashCalc.khrReceived)} ={' '}
-                        <span className="font-semibold text-stone-900">
+                        <span className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
                           {formatKhr(cashCalc.totalTenderedKhr)}
                         </span>
                       </p>
                     )}
 
                     {/* Real-Time Change Due / Remaining Due Output Row */}
-                    <div className="pt-1.5 border-t border-stone-200/80 flex items-center justify-between gap-2">
+                    <div className="pt-2 border-t border-stone-200/80 dark:border-[#24352C] flex items-center justify-between gap-2">
                       {cartTotal === 0 ? (
                         <>
-                          <span className="text-xs font-medium text-stone-500">
+                          <span className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
                             {isVi ? 'Tiền thối lại' : 'Change Due'}
                           </span>
-                          <span className="font-mono-num text-sm font-semibold text-stone-400">
+                          <span className="font-mono-num text-sm font-semibold text-stone-400 dark:text-[#94A39B]">
                             0 ៛
                           </span>
                         </>
                       ) : cashCalc.isCovered ? (
                         <>
-                          <span className="text-xs font-semibold text-stone-700">
+                          <span className="text-xs font-semibold text-stone-700 dark:text-[#F1F5F3]">
                             {isVi ? 'Tiền thối lại' : 'Change Due'}
                           </span>
-                          <span className="font-mono-num text-base font-bold text-[#0D5C3E]">
+                          <span className="font-mono-num text-base font-bold text-[#0D5C3E] dark:text-[#34D399]">
                             {formatKhr(cashCalc.changeDueKhr)}
                           </span>
                         </>
                       ) : (
                         <>
-                          <span className="text-xs font-medium text-red-700">
+                          <span className="text-xs font-medium text-red-700 dark:text-[#F87171]">
                             {isVi ? 'Còn thiếu' : 'Remaining Due'}
                           </span>
-                          <span className="font-mono-num text-xs font-semibold text-red-700">
+                          <span className="font-mono-num text-xs font-semibold text-red-700 dark:text-[#F87171]">
                             {isVi
                               ? `Thiếu ${formatKhr(cashCalc.remainingDueKhr)}`
                               : `Short by ${formatKhr(cashCalc.remainingDueKhr)}`}
@@ -1442,16 +1445,19 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   </div>
                 </div>
               </div>
+            </div>
 
+            {/* Region 4: Permanently Pinned Total Row + 48px Primary Charge CTA */}
+            <div className="shrink-0 border-t border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] px-4 sm:px-5 py-3 space-y-2.5">
               {/* Optional Hidden Margin Breakdown + Total Row with Eye Toggle */}
-              <div className="pt-2 border-t border-stone-100 space-y-1.5">
+              <div className="space-y-1.5">
                 {showMargins && (
-                  <div className="space-y-1 pb-1.5 border-b border-stone-100 text-xs">
-                    <div className="flex justify-between text-stone-500">
+                  <div className="space-y-1 pb-1.5 border-b border-stone-100 dark:border-[#24352C] text-xs">
+                    <div className="flex justify-between text-stone-500 dark:text-[#94A39B]">
                       <span>{t.sales.estimatedCogs}</span>
                       <span className="font-mono-num">{formatKhr(cartCogs)}</span>
                     </div>
-                    <div className="flex justify-between text-[#0D5C3E] font-medium">
+                    <div className="flex justify-between text-[#0D5C3E] dark:text-[#34D399] font-medium">
                       <span>{t.sales.estProfit}</span>
                       <span className="font-mono-num">{formatKhr(cartTotal - cartCogs)}</span>
                     </div>
@@ -1459,8 +1465,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 )}
 
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold text-stone-900">{t.common.total}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                      {t.common.total}
+                    </span>
                     <button
                       type="button"
                       onClick={() => setShowMargins((prev) => !prev)}
@@ -1482,27 +1490,27 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                             ? 'Hiện giá vốn & lợi nhuận'
                             : 'Show cost & profit'
                       }
-                      className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+                      className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors"
                     >
                       {showMargins ? (
-                        <EyeOff className="w-3.5 h-3.5" />
+                        <EyeOff className="w-4 h-4" />
                       ) : (
-                        <Eye className="w-3.5 h-3.5" />
+                        <Eye className="w-4 h-4" />
                       )}
                     </button>
                   </div>
                   <div className="text-right">
-                    <span className="font-mono-num text-xl font-bold text-stone-900 leading-none">
+                    <span className="font-mono-num text-xl font-bold text-stone-900 dark:text-[#F1F5F3] leading-none">
                       {formatKhr(cartTotal)}
                     </span>
-                    <span className="block font-mono-num text-[11px] text-stone-400 mt-0.5">
+                    <span className="block font-mono-num text-[11px] text-stone-400 dark:text-[#94A39B] mt-0.5">
                       {formatUsdRef(cartTotal, isCashSelected ? posExchangeRate : settings.usdRate)}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Pinned Full-Width Primary Charge CTA */}
+              {/* Pinned Full-Width 48px Primary Charge CTA */}
               <button
                 type="submit"
                 disabled={
@@ -1511,7 +1519,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   !liveStockValidation.ok ||
                   cashInsufficient
                 }
-                className="w-full py-2.5 px-4 text-sm font-semibold text-white bg-[#0D5C3E] hover:bg-[#0A4A31] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap font-mono-num"
+                className="w-full h-12 px-4 text-sm font-bold text-white dark:text-[#042419] bg-[#0D5C3E] hover:bg-[#0A4A31] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap font-mono-num"
               >
                 {submitting
                   ? isVi
@@ -1526,29 +1534,29 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
         </div>
       ) : (
         /* Sales Ledger Tab */
-        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-stone-200 dark:border-[#24352C] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-sm">
-              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-stone-400 dark:text-[#94A39B] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t.sales.searchOrders}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-stone-200 rounded-lg bg-white text-stone-900"
+                className="w-full h-11 pl-10 pr-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
               />
             </div>
 
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               {(['all', 'cash', 'khqr', 'aba', 'wing'] as const).map((pm) => (
                 <button
                   key={pm}
                   type="button"
                   onClick={() => setPaymentFilter(pm)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                  className={`h-11 px-3.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 border ${
                     paymentFilter === pm
-                      ? 'bg-stone-900 text-white'
-                      : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                      ? 'bg-stone-900 text-white border-stone-900 dark:bg-[#10B981] dark:text-[#042419] dark:border-[#10B981] font-semibold'
+                      : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
                   }`}
                 >
                   {pm === 'all' ? t.common.all : t.paymentMethods[pm]}
@@ -1559,36 +1567,36 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
           {/* End-of-Day Dual-Currency Cash Drawer Reconciliation Strip */}
           {cashDrawerSummary.cashOrderCount > 0 && (
-            <div className="px-5 py-3 bg-stone-50/80 border-b border-stone-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="px-5 py-3 bg-stone-50/80 dark:bg-[#18251F]/70 border-b border-stone-200 dark:border-[#24352C] grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>
-                <span className="block text-[11px] text-stone-500">
+                <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
                   {isVi ? 'Tiền USD thu vào' : 'USD Bills Received'}
                 </span>
-                <span className="font-mono-num text-sm font-semibold text-stone-900">
+                <span className="font-mono-num text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                   {formatUsdClean(cashDrawerSummary.usdBillsIn)}
                 </span>
               </div>
               <div>
-                <span className="block text-[11px] text-stone-500">
+                <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
                   {isVi ? 'Tiền KHR thu vào' : 'KHR Cash Received'}
                 </span>
-                <span className="font-mono-num text-sm font-semibold text-stone-900">
+                <span className="font-mono-num text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                   {formatKhr(cashDrawerSummary.khrCashIn)}
                 </span>
               </div>
               <div>
-                <span className="block text-[11px] text-stone-500">
+                <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
                   {isVi ? 'Tiền thối KHR đã trả' : 'KHR Change Given'}
                 </span>
-                <span className="font-mono-num text-sm font-semibold text-amber-700">
+                <span className="font-mono-num text-sm font-semibold text-amber-700 dark:text-amber-400">
                   -{formatKhr(cashDrawerSummary.changeGivenKhr)}
                 </span>
               </div>
               <div>
-                <span className="block text-[11px] text-stone-500">
+                <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
                   {isVi ? 'KHR thực giữ trong két' : 'Net KHR in Drawer'}
                 </span>
-                <span className="font-mono-num text-sm font-semibold text-[#0D5C3E]">
+                <span className="font-mono-num text-sm font-semibold text-[#0D5C3E] dark:text-[#34D399]">
                   {formatKhr(cashDrawerSummary.netKhrDrawer)}
                 </span>
               </div>
@@ -1596,12 +1604,12 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
           )}
 
           {filteredSales.length === 0 ? (
-            <p className="p-10 text-center text-sm text-stone-500">{t.common.noResults}</p>
+            <p className="p-10 text-center text-sm text-stone-500 dark:text-[#94A39B]">{t.common.noResults}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-stone-200 text-xs text-stone-500 bg-stone-50/70">
+                  <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/60">
                     <th className="py-3 px-5 font-medium">Order / {t.common.date}</th>
                     <th className="py-3 px-4 font-medium">{t.sales.itemsSummary}</th>
                     <th className="py-3 px-4 font-medium">{t.common.payment}</th>
@@ -1610,7 +1618,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                     <th className="py-3 px-5 font-medium text-right">{t.common.actions}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-100 text-sm">
+                <tbody className="divide-y divide-stone-100 dark:divide-[#24352C] text-sm">
                   {filteredSales.map((sale) => {
                     const netTotal =
                       sale.status === 'voided'
@@ -1624,21 +1632,21 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       sale.status === 'completed' || sale.status === 'partially_returned';
 
                     return (
-                      <tr key={sale.id} className="hover:bg-stone-50/60 transition-colors">
+                      <tr key={sale.id} className="hover:bg-stone-50/60 dark:hover:bg-[#18251F]/60 transition-colors">
                         <td className="py-3.5 px-5 whitespace-nowrap">
-                          <p className="font-mono-num font-semibold text-stone-900">
+                          <p className="font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3]">
                             {sale.orderNumber}
                           </p>
-                          <p className="text-xs text-stone-500 font-mono-num">
+                          <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
                             {sale.saleDate} ·{' '}
                             <span
                               className={
                                 sale.status === 'voided'
-                                  ? 'text-red-700 font-medium'
+                                  ? 'text-red-700 dark:text-[#F87171] font-medium'
                                   : sale.status === 'partially_returned' ||
                                     sale.status === 'refunded'
-                                  ? 'text-amber-700 font-medium'
-                                  : 'text-emerald-700'
+                                  ? 'text-amber-700 dark:text-amber-400 font-medium'
+                                  : 'text-emerald-700 dark:text-[#34D399]'
                               }
                             >
                               {sale.status === 'voided'
@@ -1656,7 +1664,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                           </p>
                         </td>
                         <td className="py-3.5 px-4 max-w-xs">
-                          <p className="text-stone-900">
+                          <p className="text-stone-900 dark:text-[#F1F5F3]">
                             {sale.items
                               .map(
                                 (i) =>
@@ -1666,14 +1674,14 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                               )
                               .join(', ')}
                           </p>
-                          <p className="text-xs text-stone-500 truncate mt-0.5">
+                          <p className="text-xs text-stone-500 dark:text-[#94A39B] truncate mt-0.5">
                             {[sale.recordedBy, sale.customerName, sale.note]
                               .filter(Boolean)
                               .join(' · ')}
                           </p>
                         </td>
-                        <td className="py-3.5 px-4 text-xs text-stone-600 whitespace-nowrap">
-                          <span className="font-medium text-stone-700">
+                        <td className="py-3.5 px-4 text-xs text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
+                          <span className="font-medium text-stone-700 dark:text-[#F1F5F3]">
                             {t.paymentMethods[sale.paymentMethod]}
                           </span>
                           {sale.paymentMethod === 'cash' &&
@@ -1681,7 +1689,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                               sale.cash_received_usd !== undefined) ||
                               (sale.cash_received_khr !== null &&
                                 sale.cash_received_khr !== undefined)) && (
-                              <span className="block text-[11px] text-stone-500 font-mono-num mt-0.5">
+                              <span className="block text-[11px] text-stone-500 dark:text-[#94A39B] font-mono-num mt-0.5">
                                 {[
                                   (sale.cash_received_usd ?? 0) > 0
                                     ? formatUsdClean(sale.cash_received_usd ?? 0)
@@ -1699,60 +1707,60 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                               </span>
                             )}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-600 whitespace-nowrap">
+                        <td className="py-3.5 px-4 text-right font-mono-num text-xs text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
                           {formatKhr(netCogs)}
                         </td>
                         <td className="py-3.5 px-4 text-right font-mono-num whitespace-nowrap">
                           <span
                             className={
                               sale.status === 'voided'
-                                ? 'line-through text-stone-400'
-                                : 'font-semibold text-stone-900'
+                                ? 'line-through text-stone-400 dark:text-[#94A39B]/60'
+                                : 'font-semibold text-stone-900 dark:text-[#F1F5F3]'
                             }
                           >
                             {formatKhr(netTotal)}
                           </span>
                           {sale.refundedKhr && sale.refundedKhr > 0 && sale.status !== 'voided' ? (
-                            <span className="block text-[11px] text-amber-700">
+                            <span className="block text-[11px] text-amber-700 dark:text-amber-400">
                               -{formatKhr(sale.refundedKhr)}
                             </span>
                           ) : null}
                         </td>
                         <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-3">
+                          <div className="inline-flex items-center gap-2">
                             <button
                               type="button"
                               onClick={() => setReceiptSale(sale)}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-stone-600 hover:text-[#0F5C43]"
+                              className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:bg-stone-100 dark:hover:bg-[#1F3028]"
                               title="Receipt"
                             >
-                              <Printer className="w-3.5 h-3.5" />
+                              <Printer className="w-4 h-4" />
                             </button>
                             <button
                               type="button"
                               onClick={() => openOrderDetail(sale)}
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-[#0F5C43] hover:underline"
+                              className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-[#E6F2ED] dark:hover:bg-[#064E3B]/50"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               {isVi ? 'Chi tiết' : 'Details'}
                             </button>
                             {canModify &&
                               (confirmVoidId === sale.id ? (
-                                <span className="inline-flex items-center gap-1.5">
+                                <span className="inline-flex items-center gap-2">
                                   <button
                                     type="button"
                                     onClick={async () => {
                                       await voidSale(sale.id, 'Voided from ledger');
                                       setConfirmVoidId(null);
                                     }}
-                                    className="text-xs font-semibold text-red-700 hover:underline"
+                                    className="text-xs font-semibold text-red-700 dark:text-[#F87171] hover:underline"
                                   >
                                     {t.sales.voidOrder}
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => setConfirmVoidId(null)}
-                                    className="text-xs text-stone-500"
+                                    className="text-xs text-stone-500 dark:text-[#94A39B]"
                                   >
                                     {t.common.cancel}
                                   </button>
@@ -1761,10 +1769,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                                 <button
                                   type="button"
                                   onClick={() => setConfirmVoidId(sale.id)}
-                                  className="inline-flex items-center gap-1 text-xs text-stone-400 hover:text-red-700"
+                                  className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-stone-400 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] hover:bg-red-50 dark:hover:bg-red-950/40"
                                   title={t.sales.voidOrder}
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
                               ))}
                           </div>
@@ -1781,23 +1789,23 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
       {/* Size Variant Picker Modal */}
       {variantPickerProduct && (
-        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between">
               <div>
-                <h3 className="font-display text-base font-bold text-stone-900">
+                <h3 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3]">
                   {isVi
                     ? variantPickerProduct.nameVi || variantPickerProduct.name
                     : variantPickerProduct.name}
                 </h3>
-                <p className="text-xs text-stone-500">
+                <p className="text-xs text-stone-500 dark:text-[#94A39B]">
                   {isVi ? 'Chọn kích cỡ để thêm vào đơn' : 'Choose size variant to add to order'}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setVariantPickerProduct(null)}
-                className="p-1.5 text-stone-500 hover:text-stone-900"
+                className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1822,19 +1830,19 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                         setVariantPickerProduct(null);
                       }
                     }}
-                    className="w-full px-4 py-3 border border-stone-200 hover:border-[#0D5C3E] hover:bg-[#E6F2ED]/50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center justify-between transition-colors"
+                    className="w-full min-h-[52px] px-4 py-3 bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center justify-between transition-colors"
                   >
                     <div className="text-left">
-                      <div className="text-sm font-semibold text-stone-900">
+                      <div className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                         {isVi ? variant.nameVi || variant.name : variant.name}
                       </div>
                       {!outBlocked && !variantLimitCheck.allowed ? (
-                        <div className="text-[11px] text-amber-700 font-medium">
+                        <div className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
                           {isVi ? 'Đã đạt giới hạn tồn kho' : 'Stock limit reached in cart'}
                         </div>
                       ) : (
                         avail.availableUnits !== null && (
-                          <div className="text-[11px] text-stone-500 font-mono-num">
+                          <div className="text-[11px] text-stone-500 dark:text-[#94A39B] font-mono-num">
                             {avail.status === 'out'
                               ? isVi
                                 ? 'Thiếu nguyên liệu'
@@ -1844,7 +1852,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                         )
                       )}
                     </div>
-                    <span className="font-mono-num text-sm font-bold text-[#0D5C3E]">
+                    <span className="font-mono-num text-sm font-bold text-[#0D5C3E] dark:text-[#34D399]">
                       {formatKhr(variant.priceKhr)}
                     </span>
                   </button>
@@ -1857,17 +1865,17 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
       {/* Order Details & Partial Return Modal */}
       {detailSale && (
-        <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="w-full max-w-xl bg-white border border-stone-200 rounded-xl my-8 overflow-hidden">
-            <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-xl bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl my-8 overflow-hidden">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between">
               <div>
-                <h2 className="font-display text-lg font-bold text-stone-900">
+                <h2 className="font-display text-lg font-bold text-stone-900 dark:text-[#F1F5F3]">
                   {detailSale.orderNumber} ·{' '}
-                  <span className="text-sm font-medium text-stone-500">
+                  <span className="text-sm font-medium text-stone-500 dark:text-[#94A39B]">
                     {formatDateTimeInPhnomPenh(detailSale.createdAt)} (ICT)
                   </span>
                 </h2>
-                <p className="text-xs text-stone-500">
+                <p className="text-xs text-stone-500 dark:text-[#94A39B]">
                   {t.paymentMethods[detailSale.paymentMethod]} · {detailSale.recordedBy} ·{' '}
                   {detailSale.customerName}
                 </p>
@@ -1875,7 +1883,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               <button
                 type="button"
                 onClick={() => setDetailSaleId(null)}
-                className="p-1.5 text-stone-500 hover:text-stone-900"
+                className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1888,37 +1896,37 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   detailSale.cash_received_usd !== undefined) ||
                   (detailSale.cash_received_khr !== null &&
                     detailSale.cash_received_khr !== undefined)) && (
-                  <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="p-3.5 bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                     <div>
-                      <span className="block text-[11px] text-stone-500">
+                      <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
                         {isVi ? 'Nhận USD' : 'USD Received'}
                       </span>
-                      <span className="font-mono-num font-semibold text-stone-900">
+                      <span className="font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3]">
                         {formatUsdClean(detailSale.cash_received_usd ?? 0)}
                       </span>
                     </div>
                     <div>
-                      <span className="block text-[11px] text-stone-500">
+                      <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
                         {isVi ? 'Nhận KHR' : 'KHR Received'}
                       </span>
-                      <span className="font-mono-num font-semibold text-stone-900">
+                      <span className="font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3]">
                         {formatKhr(detailSale.cash_received_khr ?? 0)}
                       </span>
                     </div>
                     <div>
-                      <span className="block text-[11px] text-stone-500">
+                      <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
                         {isVi ? 'Tỷ giá áp dụng' : 'Rate Used'}
                       </span>
-                      <span className="font-mono-num font-semibold text-stone-700">
+                      <span className="font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3]">
                         {(detailSale.exchange_rate_used ?? posExchangeRate).toLocaleString('en-US')}{' '}
                         ៛/$
                       </span>
                     </div>
                     <div>
-                      <span className="block text-[11px] text-stone-500">
+                      <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
                         {isVi ? 'Tiền thối KHR' : 'Change Given'}
                       </span>
-                      <span className="font-mono-num font-semibold text-[#0D5C3E]">
+                      <span className="font-mono-num font-semibold text-[#0D5C3E] dark:text-[#34D399]">
                         {formatKhr(detailSale.change_given_khr ?? 0)}
                       </span>
                     </div>
@@ -1927,10 +1935,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
               {/* Line Items + Return Quantity Pickers */}
               <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">
+                <h3 className="text-xs font-semibold text-stone-700 dark:text-[#94A39B] uppercase tracking-wide">
                   {isVi ? 'Chi tiết món & Hoàn trả một phần' : 'Order Items & Partial Returns'}
                 </h3>
-                <div className="divide-y divide-stone-100 border border-stone-200 rounded-lg">
+                <div className="divide-y divide-stone-100 dark:divide-[#24352C] border border-stone-200 dark:border-[#24352C] rounded-lg">
                   {detailSale.items.map((item, idx) => {
                     const lineId = item.lineId || `${detailSale.id}_line_${idx}`;
                     const returned = item.returnedQty ?? 0;
@@ -1945,12 +1953,12 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       <div key={lineId} className="p-3.5 space-y-1.5">
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-stone-900">
+                            <p className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                               {item.quantity}×{' '}
                               {isVi ? item.productNameVi || item.productName : item.productName}
                               {item.variantName ? ` (${item.variantName})` : ''}
                             </p>
-                            <p className="text-xs text-stone-500 font-mono-num">
+                            <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
                               {formatKhr(item.unitPriceKhr)} ea · COGS {formatKhr(item.unitCogsKhr)}
                               {returned > 0 ? ` · Returned: ${returned}` : ''}
                             </p>
@@ -1958,7 +1966,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
                           {canReturnLine && (
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-[11px] text-stone-500">
+                              <span className="text-[11px] text-stone-500 dark:text-[#94A39B]">
                                 {isVi ? 'Trả:' : 'Return:'}
                               </span>
                               <input
@@ -1975,7 +1983,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                                     ),
                                   }))
                                 }
-                                className="w-16 px-2 py-1 text-xs font-mono-num border border-stone-300 rounded-md text-center"
+                                className="w-16 h-11 px-2 text-xs font-mono-num bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] border border-stone-300 dark:border-[#24352C] rounded-md text-center"
                               />
                             </div>
                           )}
@@ -1983,7 +1991,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
                         {/* Immutable Stock Deduction Snapshot */}
                         {item.deductions && item.deductions.length > 0 && (
-                          <p className="text-[11px] text-stone-500 font-mono-num">
+                          <p className="text-[11px] text-stone-500 dark:text-[#94A39B] font-mono-num">
                             {isVi ? 'Đã trừ kho gốc: ' : 'Original deduction snapshot: '}
                             {item.deductions
                               .map((d) => `${d.itemName} (-${formatQty(d.totalDeductedQty, d.unit)})`)
@@ -1999,7 +2007,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               {/* Partial Return Action Bar */}
               {(detailSale.status === 'completed' ||
                 detailSale.status === 'partially_returned') && (
-                <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-lg space-y-2.5">
+                <div className="p-3.5 bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg space-y-2.5">
                   <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
@@ -2010,7 +2018,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                           ? 'Lý do trả hàng (VD: Khách đổi ý, giao nhầm...)'
                           : 'Return reason (e.g., Customer changed mind, wrong size...)'
                       }
-                      className="flex-1 px-3 py-2 text-xs border border-stone-200 rounded-lg bg-white"
+                      className="flex-1 h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#0B110E] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
                     />
                     <button
                       type="button"
@@ -2019,13 +2027,13 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                         Object.values(returnQtyMap).every((q) => !q || q <= 0)
                       }
                       onClick={handleProcessPartialReturn}
-                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 disabled:opacity-45 rounded-lg whitespace-nowrap"
+                      className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 disabled:opacity-45 rounded-lg whitespace-nowrap"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                       {isVi ? 'Xác nhận hoàn trả' : 'Process Return'}
                     </button>
                   </div>
-                  <p className="text-[11px] text-stone-500">
+                  <p className="text-[11px] text-stone-500 dark:text-[#94A39B]">
                     {isVi
                       ? 'Hoàn trả luôn cộng lại đúng số lượng đã trừ khi bán (không bị ảnh hưởng nếu bạn đã sửa công thức sau đó).'
                       : 'Returns always restore exact original deduction snapshots (safe even if product recipes were edited later).'}
@@ -2034,24 +2042,24 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               )}
 
               {returnFeedback && (
-                <p className="text-xs font-semibold text-[#0F5C43]">{returnFeedback}</p>
+                <p className="text-xs font-semibold text-[#0F5C43] dark:text-[#34D399]">{returnFeedback}</p>
               )}
 
               {/* Prior Return History */}
               {detailSale.returns && detailSale.returns.length > 0 && (
                 <div className="space-y-1.5">
-                  <h4 className="text-xs font-semibold text-stone-700">
+                  <h4 className="text-xs font-semibold text-stone-700 dark:text-[#94A39B]">
                     {isVi ? 'Lịch sử hoàn trả' : 'Return History'}
                   </h4>
                   {detailSale.returns.map((ret) => (
                     <div
                       key={ret.id}
-                      className="text-xs text-stone-600 flex justify-between border-b border-stone-100 py-1.5"
+                      className="text-xs text-stone-600 dark:text-[#94A39B] flex justify-between border-b border-stone-100 dark:border-[#24352C] py-1.5"
                     >
                       <span>
                         {ret.returnDate} · {ret.reason} ({ret.recordedBy})
                       </span>
-                      <span className="font-mono-num font-semibold text-amber-700">
+                      <span className="font-mono-num font-semibold text-amber-700 dark:text-amber-400">
                         -{formatKhr(ret.refundTotalKhr)}
                       </span>
                     </div>
@@ -2060,11 +2068,11 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               )}
             </div>
 
-            <div className="px-6 py-3.5 border-t border-stone-200 flex items-center justify-between gap-3">
+            <div className="px-6 py-3.5 border-t border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setReceiptSale(detailSale)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-stone-800 bg-stone-100 hover:bg-stone-200 rounded-lg"
+                className="inline-flex items-center gap-1.5 h-11 px-4 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] border border-transparent dark:border-[#24352C] hover:bg-stone-200 dark:hover:bg-[#1F3028] rounded-lg"
               >
                 <Printer className="w-3.5 h-3.5" />
                 {isVi ? 'In / Chép hóa đơn' : 'Print / Copy Receipt'}
@@ -2072,7 +2080,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               <button
                 type="button"
                 onClick={() => setDetailSaleId(null)}
-                className="px-4 py-2 text-xs font-semibold text-white bg-[#0F5C43] rounded-lg"
+                className="h-11 px-5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg"
               >
                 {t.common.close}
               </button>

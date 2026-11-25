@@ -18,7 +18,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-3 px-4 py-2.5 bg-white border border-[#747775] hover:bg-stone-50 active:bg-stone-100 disabled:opacity-50 text-[#1F1F1F] text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] ${className}`}
+      className={`h-11 inline-flex items-center justify-center gap-3 px-4 bg-white dark:bg-[#18251F] border border-[#747775] dark:border-[#2E4237] hover:bg-stone-50 dark:hover:bg-[#1F3028] active:bg-stone-100 dark:active:bg-[#24352C] disabled:opacity-50 text-[#1F1F1F] dark:text-[#F1F5F3] text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981] ${className}`}
     >
       <svg
         version="1.1"
