@@ -20,6 +20,22 @@ const SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.QR_CODE,
 ];
 
+async function safeStopAndClear(scanner: Html5Qrcode | null): Promise<void> {
+  if (!scanner) return;
+  try {
+    if (scanner.isScanning) {
+      await scanner.stop();
+    }
+  } catch {
+    // Ignore errors when scanner is already stopped, paused, or failed to start
+  }
+  try {
+    scanner.clear();
+  } catch {
+    // Ignore DOM cleanup errors if container was already unmounted
+  }
+}
+
 export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   open,
   title = 'Scan Barcode',
@@ -31,6 +47,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const containerId = `jf_scanner_${reactId}`;
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const detectedOnceRef = useRef(false);
+  const onDetectedRef = useRef(onDetected);
+  onDetectedRef.current = onDetected;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
@@ -45,9 +65,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     setManualCode('');
 
     let cancelled = false;
-    let instance: Html5Qrcode | null = null;
 
     const startCamera = async () => {
+      if (cancelled) return;
+      const mountEl = document.getElementById(containerId);
+      if (!mountEl) return;
+
+      let instance: Html5Qrcode | null = null;
       try {
         instance = new Html5Qrcode(containerId, {
           formatsToSupport: SUPPORTED_FORMATS,
@@ -67,19 +91,29 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             const cleaned = decodedText.trim();
             if (!cleaned) return;
             detectedOnceRef.current = true;
-            void instance?.stop().catch(() => {});
-            onDetected(cleaned);
-            onClose();
+            const toStop = scannerRef.current;
+            scannerRef.current = null;
+            void safeStopAndClear(toStop);
+            onDetectedRef.current(cleaned);
+            onCloseRef.current();
           },
           () => {
             // Ignore per-frame decode misses
           }
         );
 
-        if (!cancelled) {
-          setCameraActive(true);
+        if (cancelled) {
+          scannerRef.current = null;
+          await safeStopAndClear(instance);
+          return;
         }
+
+        setCameraActive(true);
       } catch (err) {
+        if (scannerRef.current === instance) {
+          scannerRef.current = null;
+        }
+        await safeStopAndClear(instance);
         if (!cancelled) {
           const msg =
             err instanceof Error ? err.message : 'Camera access unavailable on this device.';
@@ -102,20 +136,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       window.clearTimeout(timer);
       const active = scannerRef.current;
       scannerRef.current = null;
-      if (active) {
-        void active
-          .stop()
-          .then(() => active.clear())
-          .catch(() => {
-            try {
-              active.clear();
-            } catch {
-              // Ignore cleanup errors
-            }
-          });
-      }
+      void safeStopAndClear(active);
     };
-  }, [open, containerId, onDetected, onClose]);
+  }, [open, containerId]);
 
   if (!open) return null;
 
@@ -123,8 +146,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     e.preventDefault();
     const cleaned = manualCode.trim();
     if (!cleaned) return;
-    onDetected(cleaned);
-    onClose();
+    onDetectedRef.current(cleaned);
+    onCloseRef.current();
   };
 
   return (

@@ -193,9 +193,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       scannerInstanceRef.current = null;
       if (!existing) return;
       try {
-        await existing.stop();
+        if (existing.isScanning) {
+          await existing.stop();
+        }
       } catch {
-        // Ignore stop errors if already stopped
+        // Ignore stop errors if already stopped or never started
       }
       try {
         existing.clear();
@@ -207,6 +209,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     const startCamera = async () => {
       await stopExisting();
       if (cancelled) return;
+      if (!document.getElementById(viewfinderId)) return;
 
       try {
         const instance = new Html5Qrcode(viewfinderId, {
@@ -251,10 +254,14 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           }
         );
 
-        if (!cancelled) {
-          setCameraActive(true);
+        if (cancelled) {
+          await stopExisting();
+          return;
         }
+
+        setCameraActive(true);
       } catch (err) {
+        await stopExisting();
         if (!cancelled) {
           const msg = err instanceof Error ? err.message : '';
           setCameraError(
