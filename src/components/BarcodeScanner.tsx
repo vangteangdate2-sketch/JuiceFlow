@@ -41,6 +41,8 @@ export interface BarcodeScannerProps {
     | Promise<{ ok: boolean; message: string; suppressToast?: boolean }>;
   /** Optional quick check to know whether Enter in the search input matches a product barcode */
   hasBarcodeMatch?: (code: string) => boolean;
+  /** Optional left-aligned controls rendered in the quiet utility strip below the search bar */
+  secondaryLeftSlot?: React.ReactNode;
 }
 
 const SUPPORTED_FORMATS = [
@@ -85,6 +87,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   onSearchChange,
   onScan,
   hasBarcodeMatch,
+  secondaryLeftSlot,
 }) => {
   const reactId = useId().replace(/[^a-zA-Z0-9]/g, '');
   const viewfinderId = `jf_cam_scanner_${reactId}`;
@@ -327,11 +330,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   };
 
   return (
-    <div className="space-y-2.5">
-      {/* Primary Search + Scanner Action Row */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+    <div className="space-y-3">
+      {/* Primary Action Row: Spacious Search Input + Prominent Scan Barcode CTA */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
         <div className="relative flex-1 min-w-0">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchValue}
@@ -343,21 +346,51 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 ? 'Tìm tên sản phẩm hoặc quét / nhập mã vạch + Enter...'
                 : 'Search products or scan / type barcode + Enter...'
             }
-            className="w-full pl-9 pr-8 py-2.5 text-sm border border-stone-200 rounded-lg bg-white text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
+            className="w-full h-11 pl-10 pr-9 text-sm border border-stone-200 rounded-lg bg-stone-50/50 focus:bg-white text-stone-900 placeholder:text-stone-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]"
           />
           {searchValue && (
             <button
               type="button"
               onClick={() => onSearchChange('')}
               aria-label={isVi ? 'Xóa tìm kiếm' : 'Clear search'}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-stone-400 hover:text-stone-700"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 rounded-md"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Prominent Camera Barcode Scanner Launch Button */}
+        <button
+          type="button"
+          onClick={() => setCameraOpen((prev) => !prev)}
+          aria-expanded={cameraOpen}
+          className={`inline-flex items-center justify-center gap-2 h-11 px-5 text-sm font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[#0F5C43] ${
+            cameraOpen
+              ? 'bg-stone-900 text-white hover:bg-stone-800'
+              : 'bg-[#0F5C43] text-white hover:bg-[#0B4734]'
+          }`}
+        >
+          <ScanBarcode className="w-4 h-4 shrink-0" />
+          <span>
+            {cameraOpen
+              ? isVi
+                ? 'Đóng máy quét'
+                : 'Close Scanner'
+              : isVi
+                ? 'Quét mã vạch'
+                : 'Scan Barcode'}
+          </span>
+        </button>
+      </div>
+
+      {/* Quiet Utility Strip: Collapsible Filters Slot (Left) + Hardware Scanner & Audio (Right) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          {secondaryLeftSlot}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
           {/* USB / Bluetooth HID Scanner Toggle */}
           <button
             type="button"
@@ -367,13 +400,13 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 ? 'Bật/tắt nhận tín hiệu trực tiếp từ máy quét mã vạch USB hoặc Bluetooth'
                 : 'Toggle external USB / Bluetooth barcode scanner listening'
             }
-            className={`inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold border rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
               hardwareEnabled
-                ? 'border-[#0F5C43]/30 bg-emerald-50/70 text-[#0F5C43]'
-                : 'border-stone-200 bg-stone-50 text-stone-500 hover:text-stone-800'
+                ? 'text-[#0F5C43] bg-emerald-50/70 hover:bg-emerald-50'
+                : 'text-stone-500 hover:text-stone-800 hover:bg-stone-100'
             }`}
           >
-            <Usb className="w-4 h-4 shrink-0" />
+            <Usb className="w-3.5 h-3.5 shrink-0" />
             <span>
               {hardwareEnabled
                 ? isVi
@@ -399,31 +432,13 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                   ? 'Bật âm thanh báo quét'
                   : 'Enable scan beep'
             }
-            className="p-2.5 border border-stone-200 rounded-lg text-stone-600 hover:text-stone-900 hover:bg-stone-50 transition-colors shrink-0"
+            className="inline-flex items-center justify-center p-1.5 rounded-md text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors shrink-0"
           >
-            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-stone-400" />}
-          </button>
-
-          {/* Camera Scanner Launch Button */}
-          <button
-            type="button"
-            onClick={() => setCameraOpen((prev) => !prev)}
-            className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-              cameraOpen
-                ? 'bg-stone-900 text-white hover:bg-stone-800'
-                : 'bg-[#0F5C43] text-white hover:bg-[#0B4734]'
-            }`}
-          >
-            <ScanBarcode className="w-4 h-4 shrink-0" />
-            <span>
-              {cameraOpen
-                ? isVi
-                  ? 'Đóng Camera'
-                  : 'Close Camera'
-                : isVi
-                  ? 'Quét Camera'
-                  : 'Camera Scan'}
-            </span>
+            {soundEnabled ? (
+              <Volume2 className="w-3.5 h-3.5" />
+            ) : (
+              <VolumeX className="w-3.5 h-3.5 text-stone-400" />
+            )}
           </button>
         </div>
       </div>
