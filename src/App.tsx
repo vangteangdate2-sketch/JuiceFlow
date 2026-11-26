@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import {
   BarChart3,
   Check,
+  ChevronRight,
   Coffee,
   HelpCircle,
   LayoutDashboard,
   Lock,
-  Menu,
   Moon,
+  MoreHorizontal,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
@@ -17,14 +18,16 @@ import {
   Settings,
   ShoppingCart,
   Sun,
+  User,
   X,
 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { HintsProvider, useHints } from './context/HintsContext';
+import { UndoToastProvider } from './context/UndoToastContext';
 import { useTheme } from './hooks/useTheme';
 import { BiometricLockScreen } from './components/BiometricLockScreen';
-import { OfflineBanner } from './components/OfflineBanner';
+import { OfflineBanner, SyncStatusPill } from './components/OfflineBanner';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { DashboardView } from './views/DashboardView';
 import { SalesView } from './views/SalesView';
@@ -46,6 +49,44 @@ const NAV_ITEMS: { id: AppTab; icon: React.ComponentType<{ className?: string }>
   { id: 'settings', icon: Settings },
 ];
 
+const BOTTOM_NAV_PRIMARY: {
+  id: AppTab;
+  icon: React.ComponentType<{ className?: string }>;
+  shortEn: string;
+  shortVi: string;
+}[] = [
+  { id: 'sales', icon: ShoppingCart, shortEn: 'Sales & POS', shortVi: 'Bán hàng' },
+  { id: 'products', icon: Coffee, shortEn: 'Products', shortVi: 'Sản phẩm' },
+  { id: 'inventory', icon: Package, shortEn: 'Inventory', shortVi: 'Kho hàng' },
+  { id: 'reports', icon: BarChart3, shortEn: 'Reports', shortVi: 'Báo cáo' },
+];
+
+const MORE_SHEET_TABS: {
+  id: AppTab;
+  icon: React.ComponentType<{ className?: string }>;
+  descEn: string;
+  descVi: string;
+}[] = [
+  {
+    id: 'dashboard',
+    icon: LayoutDashboard,
+    descEn: 'Today’s overview & quick shortcuts',
+    descVi: 'Tổng quan hôm nay & lối tắt nhanh',
+  },
+  {
+    id: 'expenses',
+    icon: Receipt,
+    descEn: 'Log operating & daily shop costs',
+    descVi: 'Ghi chi phí vận hành hằng ngày',
+  },
+  {
+    id: 'settings',
+    icon: Settings,
+    descEn: 'Shop details, exchange rate & sync',
+    descVi: 'Cài đặt quán, tỷ giá & đồng bộ',
+  },
+];
+
 interface JuiceFlowShellProps {
   activeTab: AppTab;
   setActiveTab: React.Dispatch<React.SetStateAction<AppTab>>;
@@ -62,7 +103,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
       : [settings?.activeOperator || 'Family'];
   const activeOperator = settings?.activeOperator || familyMembers[0] || 'Family';
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -127,11 +168,30 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
     }
   }, []);
 
+  useEffect(() => {
+    if (!moreSheetOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreSheetOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [moreSheetOpen]);
+
   const navigate = (tab: AppTab, action?: 'add_expense' | 'add_product') => {
     setActiveTab(tab);
     setPendingAction(action ?? null);
-    setMobileMenuOpen(false);
+    setMoreSheetOpen(false);
   };
+
+  const goToCloudSync = () => {
+    navigate('settings');
+    window.setTimeout(() => {
+      document.getElementById('cloud-sync')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  };
+
+  const isMoreTabActive =
+    moreSheetOpen || activeTab === 'dashboard' || activeTab === 'expenses' || activeTab === 'settings';
 
   if (isLocked && security.enabled) {
     return <BiometricLockScreen config={security} onUnlock={() => setIsLocked(false)} />;
@@ -142,36 +202,28 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
       <OfflineBanner />
 
       <div className="flex-1 flex min-w-0">
-        {/* Mobile Sidebar Backdrop */}
-        {mobileMenuOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-        )}
-
-        {/* Sidebar Navigation (256px desktop or 76px icon-only rail when collapsed) */}
+        {/* Desktop / Landscape Collapsible Left Sidebar (lg and up) */}
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-[#131D18] border-r border-stone-200 dark:border-[#24352C] flex flex-col transition-[width,transform,background-color,border-color] duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
+          className={`hidden lg:flex lg:sticky lg:top-0 lg:h-screen lg:shrink-0 bg-white dark:bg-[#131D18] border-r border-stone-200 dark:border-[#24352C] flex-col transition-[width,background-color,border-color] duration-200 print:hidden ${
             sidebarCollapsed ? 'lg:w-[76px]' : 'lg:w-64'
-          } ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+          }`}
         >
           {/* Brand Lockup & Collapse Toggle */}
           <div
             className={`h-16 border-b border-stone-200 dark:border-[#24352C] flex items-center shrink-0 ${
-              sidebarCollapsed ? 'px-5 lg:px-0 lg:justify-center' : 'px-5 justify-between'
+              sidebarCollapsed ? 'px-0 justify-center' : 'px-5 justify-between'
             }`}
           >
-            <button
-              type="button"
-              onClick={() => navigate('dashboard')}
-              title={t.brand}
-              className={`font-display text-xl font-bold tracking-tight text-[#0F5C43] dark:text-[#10B981] whitespace-nowrap shrink-0 h-11 inline-flex items-center ${
-                sidebarCollapsed ? 'lg:hidden' : ''
-              }`}
-            >
-              {t.brand}
-            </button>
+            {!sidebarCollapsed && (
+              <button
+                type="button"
+                onClick={() => navigate('dashboard')}
+                title={t.brand}
+                className="font-display text-xl font-bold tracking-tight text-[#0F5C43] dark:text-[#10B981] whitespace-nowrap shrink-0 h-11 inline-flex items-center"
+              >
+                {t.brand}
+              </button>
+            )}
             <button
               type="button"
               onClick={toggleSidebarCollapsed}
@@ -193,7 +245,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                     ? 'Thu gọn thanh bên'
                     : 'Collapse sidebar'
               }
-              className="hidden lg:inline-flex items-center justify-center w-11 h-11 rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors shrink-0"
+              className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors shrink-0"
             >
               {sidebarCollapsed ? (
                 <PanelLeftOpen className="w-4 h-4" />
@@ -201,23 +253,10 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                 <PanelLeftClose className="w-4 h-4" />
               )}
             </button>
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(false)}
-              className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] lg:hidden"
-              aria-label={t.common.close}
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
 
           {/* Primary Navigation Links (minimum 44px touch height) */}
-          <nav
-            className={`flex-1 space-y-1.5 overflow-y-auto ${
-              sidebarCollapsed ? 'p-3 lg:px-3' : 'p-3'
-            }`}
-            aria-label="Main navigation"
-          >
+          <nav className="flex-1 space-y-1.5 overflow-y-auto p-3" aria-label="Main navigation">
             {NAV_ITEMS.map(({ id, icon: Icon }) => {
               const isCurrent = activeTab === id;
               return (
@@ -228,9 +267,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                   title={sidebarCollapsed ? t.nav[id] : undefined}
                   aria-label={t.nav[id]}
                   className={`w-full min-h-[44px] h-11 flex items-center gap-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    sidebarCollapsed
-                      ? 'px-3.5 lg:px-0 lg:justify-center'
-                      : 'px-3.5'
+                    sidebarCollapsed ? 'px-0 justify-center' : 'px-3.5'
                   } ${
                     isCurrent
                       ? 'bg-[#0D5C3E] text-white dark:bg-[#10B981] dark:text-[#042419] font-semibold'
@@ -244,22 +281,20 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                         : 'text-stone-500 dark:text-[#94A39B]'
                     }`}
                   />
-                  <span className={`truncate ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
-                    {t.nav[id]}
-                  </span>
+                  {!sidebarCollapsed && <span className="truncate">{t.nav[id]}</span>}
                 </button>
               );
             })}
           </nav>
 
-          {/* Family Operator Switcher & Lock Footer */}
+          {/* Operator Switcher, Reassuring Sync Status & Lock Footer */}
           <div
             className={`border-t border-solid border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] shrink-0 ${
-              sidebarCollapsed ? 'p-4 lg:p-3 lg:flex lg:flex-col lg:items-center lg:gap-2' : 'p-4 space-y-3'
+              sidebarCollapsed ? 'p-3 flex flex-col items-center gap-2' : 'p-4 space-y-3'
             }`}
           >
-            {sidebarCollapsed && (
-              <div className="hidden lg:flex flex-col items-center gap-2">
+            {sidebarCollapsed ? (
+              <>
                 <button
                   type="button"
                   onClick={toggleSidebarCollapsed}
@@ -279,81 +314,76 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                     <Lock className="w-4 h-4" />
                   </button>
                 )}
-              </div>
-            )}
-
-            <div className={sidebarCollapsed ? 'space-y-3 lg:hidden' : 'space-y-3'}>
-              <div>
-                <label
-                  htmlFor="operator-select"
-                  className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1.5"
-                >
-                  {t.common.activeOperator}
-                </label>
-                <select
-                  id="operator-select"
-                  value={activeOperator}
-                  onChange={(e) => setActiveOperator(e.target.value)}
-                  className="w-full h-11 px-3 text-xs font-medium bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-                >
-                  {familyMembers.map((member) => (
-                    <option key={member} value={member}>
-                      {member}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center justify-between gap-2 text-xs text-stone-500 dark:text-[#94A39B]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigate('settings');
-                    window.setTimeout(() => {
-                      document.getElementById('cloud-sync')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }, 100);
-                  }}
-                  className="min-h-[44px] truncate text-left hover:text-[#0F5C43] dark:hover:text-[#10B981] transition-colors"
-                >
-                  {syncing
-                    ? t.common.syncing
-                    : cloudSynced
-                      ? t.common.onlineSynced
-                      : t.common.localMode}
-                </button>
-                {security.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => setIsLocked(true)}
-                    className="min-h-[44px] inline-flex items-center gap-1 font-medium text-stone-700 dark:text-[#F1F5F3] hover:text-[#0F5C43] dark:hover:text-[#10B981] whitespace-nowrap shrink-0"
+              </>
+            ) : (
+              <>
+                <div>
+                  <label
+                    htmlFor="operator-select"
+                    className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1.5"
                   >
-                    <Lock className="w-3.5 h-3.5" />
-                    {t.common.lockApp}
-                  </button>
-                )}
-              </div>
-            </div>
+                    {t.common.activeOperator}
+                  </label>
+                  <select
+                    id="operator-select"
+                    value={activeOperator}
+                    onChange={(e) => setActiveOperator(e.target.value)}
+                    className="w-full h-11 px-3 text-xs font-medium bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                  >
+                    {familyMembers.map((member) => (
+                      <option key={member} value={member}>
+                        {member}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <SyncStatusPill compact onClick={goToCloudSync} />
+                  {security.enabled && (
+                    <button
+                      type="button"
+                      onClick={() => setIsLocked(true)}
+                      title={t.common.lockApp}
+                      aria-label={t.common.lockApp}
+                      className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#10B981] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors shrink-0"
+                    >
+                      <Lock className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </aside>
 
         {/* Main Workspace Viewport */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Top Bar (64px height so 44px touch targets have comfortable breathing room) */}
-          <header className="sticky top-0 z-30 h-16 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-xs border-b border-stone-200 dark:border-[#24352C] px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 shrink-0 transition-colors duration-150">
+          {/* Clean, Uncluttered Top Bar (64px height, comfortable touch spacing on narrow screens) */}
+          <header className="sticky top-0 z-30 h-16 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-xs border-b border-stone-200 dark:border-[#24352C] px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-3 shrink-0 transition-colors duration-150 print:hidden">
             <div className="flex items-center gap-2 min-w-0">
+              {/* Mobile/Tablet brand tap target -> Dashboard */}
               <button
                 type="button"
-                onClick={() => setMobileMenuOpen(true)}
-                className="w-11 h-11 -ml-1.5 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] lg:hidden shrink-0"
-                aria-label="Open menu"
+                onClick={() => navigate('dashboard')}
+                className="lg:hidden font-display text-base sm:text-lg font-bold tracking-tight text-[#0F5C43] dark:text-[#10B981] h-11 px-1.5 -ml-1.5 inline-flex items-center rounded-lg hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors whitespace-nowrap shrink-0"
               >
-                <Menu className="w-5 h-5" />
+                {t.brand}
               </button>
+              <span
+                className="lg:hidden text-stone-300 dark:text-[#24352C] shrink-0"
+                aria-hidden="true"
+              >
+                /
+              </span>
               <div className="flex items-center gap-2 text-sm min-w-0">
-                <span className="font-medium text-stone-500 dark:text-[#94A39B] truncate hidden sm:inline">
+                <span className="font-medium text-stone-500 dark:text-[#94A39B] truncate hidden lg:inline">
                   {settings.name}
                 </span>
-                <span className="text-stone-300 dark:text-[#24352C] hidden sm:inline" aria-hidden="true">
+                <span
+                  className="text-stone-300 dark:text-[#24352C] hidden lg:inline"
+                  aria-hidden="true"
+                >
                   /
                 </span>
                 <span className="font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
@@ -370,9 +400,13 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                   role="switch"
                   aria-checked={showHints}
                   onClick={toggleShowHints}
-                  aria-label={isVi ? 'Bật hoặc tắt gợi ý trên toàn ứng dụng' : 'Toggle helper hints across all pages'}
+                  aria-label={
+                    isVi
+                      ? 'Bật hoặc tắt gợi ý trên toàn ứng dụng'
+                      : 'Toggle helper hints across all pages'
+                  }
                   title={isVi ? 'Hiện / ẩn gợi ý giải thích' : 'Show or hide helper hints'}
-                  className="inline-flex items-center gap-1.5 sm:gap-2 h-11 min-h-[44px] px-2 sm:px-3 text-xs font-medium text-neutral-700 dark:text-neutral-200 bg-neutral-100/90 dark:bg-neutral-800/90 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200/70 dark:hover:bg-neutral-700/80 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                  className="inline-flex items-center gap-1.5 sm:gap-2 h-11 min-h-[44px] px-2.5 sm:px-3 text-xs font-medium text-neutral-700 dark:text-neutral-200 bg-neutral-100/90 dark:bg-neutral-800/90 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200/70 dark:hover:bg-neutral-700/80 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
                 >
                   <HelpCircle
                     className={`w-4 h-4 shrink-0 ${
@@ -381,9 +415,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                         : 'text-neutral-500 dark:text-neutral-400'
                     }`}
                   />
-                  <span className="hidden md:inline">
-                    {isVi ? 'Gợi ý' : 'Show Hints'}
-                  </span>
+                  <span className="hidden md:inline">{isVi ? 'Gợi ý' : 'Show Hints'}</span>
                   <span
                     aria-hidden="true"
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
@@ -401,7 +433,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                 </button>
               )}
 
-              {/* Light / Dark Mode Switcher (minimum 44x44px tap area) */}
+              {/* Light / Dark Mode Switcher (44x44px tap target) */}
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -432,6 +464,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                 )}
               </button>
 
+              {/* Refresh Button (44px tap target) */}
               <button
                 type="button"
                 onClick={handleManualRefresh}
@@ -446,7 +479,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                       : 'Refresh local data'
                 }
                 aria-label={isVi ? 'Làm mới dữ liệu' : 'Refresh data'}
-                className="inline-flex items-center justify-center gap-1.5 min-w-[44px] h-11 px-3.5 text-xs font-medium text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] hover:text-stone-900 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                className="inline-flex items-center justify-center gap-1.5 min-w-[44px] h-11 px-2.5 sm:px-3.5 text-xs font-medium text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] hover:text-stone-900 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shrink-0"
               >
                 {justRefreshed ? (
                   <Check className="w-4 h-4 text-[#0F5C43] dark:text-[#10B981]" />
@@ -473,28 +506,32 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                         : 'Refresh'}
                 </span>
               </button>
+
               <PWAInstallButton variant="compact" />
+
+              {/* Hide redundant + New Sale button when already on Sales & POS */}
               {activeTab !== 'sales' && (
                 <button
                   type="button"
                   onClick={() => navigate('sales')}
-                  className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  className="inline-flex items-center justify-center gap-1.5 h-11 px-3 sm:px-4 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
                 >
-                  <Plus className="w-4 h-4" />
-                  {t.dashboard.newSale}
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline">{t.dashboard.newSale}</span>
+                  <span className="sm:hidden">{isVi ? 'Bán' : 'POS'}</span>
                 </button>
               )}
             </div>
           </header>
 
-          {/* Main Content Container */}
+          {/* Main Content Container (extra bottom clearance on < lg for sticky bottom bar) */}
           <main
             className={`flex-1 w-full mx-auto px-4 sm:px-6 transition-[max-width] duration-200 ${
               activeTab === 'sales'
                 ? sidebarCollapsed
-                  ? 'max-w-[1520px] py-4 sm:py-5'
-                  : 'max-w-[1360px] py-4 sm:py-5'
-                : 'max-w-[1320px] lg:px-8 py-6 sm:py-8'
+                  ? 'max-w-[1520px] pt-4 sm:pt-5 pb-24 lg:pb-5'
+                  : 'max-w-[1360px] pt-4 sm:pt-5 pb-24 lg:pb-5'
+                : 'max-w-[1320px] lg:px-8 pt-6 sm:pt-8 pb-24 lg:pb-8'
             }`}
           >
             {activeTab === 'dashboard' && <DashboardView onNavigate={navigate} />}
@@ -523,6 +560,206 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
           </main>
         </div>
       </div>
+
+      {/* ================================================================== */}
+      {/* STICKY BOTTOM NAVIGATION BAR (Portrait Tablets & Phones, < lg)     */}
+      {/* 5 primary workflows with >=48px touch targets                      */}
+      {/* ================================================================== */}
+      <nav
+        aria-label={isVi ? 'Điều hướng chính' : 'Primary mobile navigation'}
+        className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-xs border-t border-stone-200 dark:border-[#24352C] pb-[env(safe-area-inset-bottom)] print:hidden"
+      >
+        <div className="grid grid-cols-5 gap-0.5 px-1.5 py-1.5 max-w-2xl mx-auto">
+          {BOTTOM_NAV_PRIMARY.map(({ id, icon: Icon, shortEn, shortVi }) => {
+            const isCurrent = activeTab === id && !moreSheetOpen;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => navigate(id)}
+                aria-current={isCurrent ? 'page' : undefined}
+                className={`min-h-[52px] flex flex-col items-center justify-center gap-1 rounded-xl px-1 transition-colors ${
+                  isCurrent
+                    ? 'bg-[#E6F2ED] text-[#0D5C3E] dark:bg-[#064E3B] dark:text-[#6EE7B7] font-semibold'
+                    : 'text-stone-600 dark:text-[#94A39B] hover:bg-stone-100/80 dark:hover:bg-[#1F3028]'
+                }`}
+              >
+                <Icon
+                  className={`w-5 h-5 shrink-0 ${
+                    isCurrent
+                      ? 'text-[#0D5C3E] dark:text-[#34D399]'
+                      : 'text-stone-500 dark:text-[#94A39B]'
+                  }`}
+                />
+                <span className="text-[11px] leading-tight truncate max-w-full">
+                  {isVi ? shortVi : shortEn}
+                </span>
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => setMoreSheetOpen((prev) => !prev)}
+            aria-expanded={moreSheetOpen}
+            aria-haspopup="dialog"
+            className={`min-h-[52px] flex flex-col items-center justify-center gap-1 rounded-xl px-1 transition-colors ${
+              isMoreTabActive
+                ? 'bg-[#E6F2ED] text-[#0D5C3E] dark:bg-[#064E3B] dark:text-[#6EE7B7] font-semibold'
+                : 'text-stone-600 dark:text-[#94A39B] hover:bg-stone-100/80 dark:hover:bg-[#1F3028]'
+            }`}
+          >
+            <MoreHorizontal
+              className={`w-5 h-5 shrink-0 ${
+                isMoreTabActive
+                  ? 'text-[#0D5C3E] dark:text-[#34D399]'
+                  : 'text-stone-500 dark:text-[#94A39B]'
+              }`}
+            />
+            <span className="text-[11px] leading-tight truncate max-w-full">
+              {isVi ? 'Thêm' : 'More'}
+            </span>
+          </button>
+        </div>
+      </nav>
+
+      {/* ================================================================== */}
+      {/* SLIDE-UP "MORE" SHEET (Dashboard, Expenses, Settings, Staff)       */}
+      {/* ================================================================== */}
+      {moreSheetOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden print:hidden"
+            onClick={() => setMoreSheetOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={isVi ? 'Menu mở rộng' : 'More navigation and staff options'}
+            className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-white dark:bg-[#131D18] rounded-t-2xl border-t border-stone-200 dark:border-[#24352C] shadow-2xl max-h-[85vh] overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)] print:hidden"
+          >
+            {/* Drag Handle */}
+            <div className="flex justify-center pt-2.5 pb-1">
+              <span
+                aria-hidden="true"
+                className="w-10 h-1 rounded-full bg-stone-300 dark:bg-[#2F463A]"
+              />
+            </div>
+
+            {/* Sheet Header */}
+            <div className="px-4 py-2.5 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3]">
+                  {isVi ? 'Thêm' : 'More'}
+                </h2>
+                <SyncStatusPill compact onClick={goToCloudSync} />
+              </div>
+              <button
+                type="button"
+                onClick={() => setMoreSheetOpen(false)}
+                aria-label={t.common.close}
+                className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-5">
+              {/* Secondary Navigation Rows (h-14 / 56px generous touch targets) */}
+              <div className="space-y-2">
+                {MORE_SHEET_TABS.map(({ id, icon: Icon, descEn, descVi }) => {
+                  const isCurrent = activeTab === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => navigate(id)}
+                      className={`w-full min-h-[56px] px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-3 text-left transition-colors ${
+                        isCurrent
+                          ? 'bg-[#E6F2ED] dark:bg-[#064E3B] border-[#0D5C3E]/30 dark:border-[#10B981]/40 text-[#0D5C3E] dark:text-[#D1FAE5]'
+                          : 'bg-stone-50/70 dark:bg-[#0F1814] border-stone-200 dark:border-[#24352C] text-stone-900 dark:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                            isCurrent
+                              ? 'bg-[#0D5C3E] text-white dark:bg-[#10B981] dark:text-[#042419]'
+                              : 'bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] text-stone-600 dark:text-[#94A39B]'
+                          }`}
+                        >
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate">{t.nav[id]}</p>
+                          <p
+                            className={`text-xs truncate ${
+                              isCurrent
+                                ? 'text-[#0D5C3E]/80 dark:text-[#A7F3D0]/90'
+                                : 'text-stone-500 dark:text-[#94A39B]'
+                            }`}
+                          >
+                            {isVi ? descVi : descEn}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 shrink-0 opacity-60" />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Active Staff Member Quick Switcher */}
+              <div className="space-y-2.5 pt-3 border-t border-stone-200 dark:border-[#24352C]">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-600 dark:text-[#94A39B]">
+                  <User className="w-3.5 h-3.5" />
+                  <span>{t.common.activeOperator}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {familyMembers.map((member) => {
+                    const selected = member === activeOperator;
+                    return (
+                      <button
+                        key={member}
+                        type="button"
+                        onClick={() => {
+                          setActiveOperator(member);
+                          setMoreSheetOpen(false);
+                        }}
+                        className={`h-11 px-4 rounded-xl text-sm font-semibold border inline-flex items-center gap-2 transition-colors ${
+                          selected
+                            ? 'bg-[#0D5C3E] text-white border-[#0D5C3E] dark:bg-[#10B981] dark:text-[#042419] dark:border-[#10B981]'
+                            : 'bg-white dark:bg-[#0F1814] text-stone-700 dark:text-[#D5DFDA] border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#18251F]'
+                        }`}
+                      >
+                        {selected && <Check className="w-4 h-4 shrink-0" />}
+                        <span>{member}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Optional App Lock Action */}
+              {security.enabled && (
+                <div className="pt-2 border-t border-stone-200 dark:border-[#24352C]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoreSheetOpen(false);
+                      setIsLocked(true);
+                    }}
+                    className="w-full h-12 px-4 rounded-xl border border-stone-200 dark:border-[#24352C] bg-stone-50 dark:bg-[#0F1814] hover:bg-stone-100 dark:hover:bg-[#18251F] text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] inline-flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>{t.common.lockApp}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -539,7 +776,9 @@ export default function App() {
     <ErrorBoundary>
       <StoreProvider>
         <HintsProvider activeView={activeTab}>
-          <JuiceFlowShell activeTab={activeTab} setActiveTab={setActiveTab} />
+          <UndoToastProvider>
+            <JuiceFlowShell activeTab={activeTab} setActiveTab={setActiveTab} />
+          </UndoToastProvider>
         </HintsProvider>
       </StoreProvider>
     </ErrorBoundary>

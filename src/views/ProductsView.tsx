@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { useUndoToast } from '../context/UndoToastContext';
 import type {
   ExternalBarcodePrefill,
   Product,
@@ -107,6 +108,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [photoTargetProduct, setPhotoTargetProduct] = useState<Product | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const inlinePhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const { showUndoToast } = useUndoToast();
 
   // Barcode Scan / Lookup & Label Studio state
   const [scanLookupOpen, setScanLookupOpen] = useState(false);
@@ -397,13 +399,31 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     if (togglingActiveIds[product.id]) return;
     setActionError(null);
     setTogglingActiveIds((prev) => ({ ...prev, [product.id]: true }));
+    const nextActive = !product.active;
+    const displayName = isVi ? product.nameVi || product.name : product.name;
     try {
       const res = await saveProduct({
         ...product,
-        active: !product.active,
+        active: nextActive,
       });
       if (res && !res.ok && res.error) {
         setActionError(res.error);
+      } else {
+        showUndoToast({
+          message: nextActive
+            ? isVi
+              ? `Đã hiện "${displayName}" trên POS`
+              : `Shown "${displayName}" on POS`
+            : isVi
+              ? `Đã ẩn "${displayName}" khỏi POS`
+              : `Hidden "${displayName}" from POS`,
+          onUndo: async () => {
+            await saveProduct({
+              ...product,
+              active: product.active,
+            });
+          },
+        });
       }
     } catch (err) {
       setActionError(

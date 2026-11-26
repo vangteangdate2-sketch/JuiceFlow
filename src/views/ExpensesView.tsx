@@ -4,13 +4,13 @@ import {
   ChevronUp,
   Edit2,
   Plus,
-  RotateCcw,
   Search,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { useUndoToast } from '../context/UndoToastContext';
 import type { Expense, ExpenseCategory, ExpenseScope, PaymentMethod } from '../types';
 import { formatKhr, formatUsdRef, todayIso } from '../utils/format';
 import { isLegacyInventoryPurchaseExpense } from '../utils/inventoryEngine';
@@ -172,27 +172,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Immediate Delete + 5-second Undo toast state
-  const [undoToast, setUndoToast] = useState<{ expense: Expense; expiresAt: number } | null>(null);
-  const [undoRemainingSec, setUndoRemainingSec] = useState(5);
-  const undoTimeoutRef = useRef<number | null>(null);
-  const undoIntervalRef = useRef<number | null>(null);
+  const { showUndoToast } = useUndoToast();
   const titleInputRef = useRef<HTMLInputElement | null>(null);
-
-  const clearUndoTimers = () => {
-    if (undoTimeoutRef.current !== null) {
-      window.clearTimeout(undoTimeoutRef.current);
-      undoTimeoutRef.current = null;
-    }
-    if (undoIntervalRef.current !== null) {
-      window.clearInterval(undoIntervalRef.current);
-      undoIntervalRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    return () => clearUndoTimers();
-  }, []);
 
   const totals = useMemo(() => {
     const operating = expenses
@@ -439,47 +420,31 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   };
 
   const handleDeleteWithUndo = async (exp: Expense) => {
-    clearUndoTimers();
     if (editing?.id === exp.id) {
       setEditing(null);
       setFormOpen(false);
     }
     await deleteExpense(exp.id);
 
-    const expiresAt = Date.now() + 5000;
-    setUndoToast({ expense: exp, expiresAt });
-    setUndoRemainingSec(5);
-
-    undoIntervalRef.current = window.setInterval(() => {
-      const rem = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
-      setUndoRemainingSec(rem);
-    }, 250);
-
-    undoTimeoutRef.current = window.setTimeout(() => {
-      clearUndoTimers();
-      setUndoToast(null);
-    }, 5000);
-  };
-
-  const handleUndoDelete = async () => {
-    if (!undoToast) return;
-    const restored = undoToast.expense;
-    clearUndoTimers();
-    setUndoToast(null);
-
-    await saveExpense({
-      id: restored.id,
-      title: restored.title,
-      scope: restored.scope,
-      category: restored.category,
-      isInventoryPurchase: restored.isInventoryPurchase,
-      amountKhr: restored.amountKhr,
-      expenseDate: restored.expenseDate,
-      paymentMethod: restored.paymentMethod,
-      vendor: restored.vendor,
-      note: restored.note,
-      linkedIngredientId: restored.linkedIngredientId,
-      recordedBy: restored.recordedBy,
+    showUndoToast({
+      message: isVi ? `Đã xóa "${exp.title}"` : `Deleted "${exp.title}"`,
+      detail: formatKhr(exp.amountKhr),
+      onUndo: async () => {
+        await saveExpense({
+          id: exp.id,
+          title: exp.title,
+          scope: exp.scope,
+          category: exp.category,
+          isInventoryPurchase: exp.isInventoryPurchase,
+          amountKhr: exp.amountKhr,
+          expenseDate: exp.expenseDate,
+          paymentMethod: exp.paymentMethod,
+          vendor: exp.vendor,
+          note: exp.note,
+          linkedIngredientId: exp.linkedIngredientId,
+          recordedBy: exp.recordedBy,
+        });
+      },
     });
   };
 
@@ -1104,48 +1069,6 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           </div>
         )}
       </div>
-
-      {/* ================================================================== */}
-      {/* 5-SECOND UNDO TOAST NOTIFICATION ON EXPENSE DELETION               */}
-      {/* ================================================================== */}
-      {undoToast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-5 right-5 left-5 sm:left-auto sm:min-w-[360px] z-50 bg-stone-900 dark:bg-[#18251F] text-white dark:text-[#F1F5F3] border border-stone-700 dark:border-[#344B3F] rounded-xl px-4 py-3 shadow-lg flex items-center justify-between gap-4"
-        >
-          <div className="min-w-0">
-            <p className="text-sm font-medium truncate">
-              {isVi ? `Đã xóa "${undoToast.expense.title}"` : `Deleted "${undoToast.expense.title}"`}
-            </p>
-            <p className="text-xs text-stone-400 dark:text-[#94A39B] font-mono-num">
-              {formatKhr(undoToast.expense.amountKhr)} ·{' '}
-              {isVi ? `Hoàn tác trong ${undoRemainingSec}s` : `Undo available (${undoRemainingSec}s)`}
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => void handleUndoDelete()}
-              className="h-10 px-3.5 inline-flex items-center gap-1.5 rounded-lg bg-[#10B981] hover:bg-[#34D399] text-[#042419] text-xs font-bold transition-colors whitespace-nowrap"
-            >
-              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-              <span>{isVi ? 'Hoàn tác' : 'Undo'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                clearUndoTimers();
-                setUndoToast(null);
-              }}
-              aria-label={t.common.close}
-              className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-stone-400 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

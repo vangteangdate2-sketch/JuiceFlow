@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { useUndoToast } from '../context/UndoToastContext';
 import type {
   BarcodeFormat,
   ExternalBarcodePrefill,
@@ -99,6 +100,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
   const barcodeRegistry = Array.isArray(rawBarcodeRegistry) ? rawBarcodeRegistry : [];
   const sales = Array.isArray(rawSales) ? rawSales : [];
   const isVi = settings?.language === 'vi';
+  const { showUndoToast } = useUndoToast();
 
   const [subTab, setSubTab] = useState<'pos' | 'ledger'>('pos');
   const [posSearch, setPosSearch] = useState('');
@@ -1070,11 +1072,31 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 <button
                   type="button"
                   onClick={() => {
+                    const prevCart = { ...cart };
+                    const prevCashUsd = cashUsdInput;
+                    const prevCashKhr = cashKhrInput;
+                    const itemCount = cartLines.reduce((s, l) => s + l.quantity, 0);
+                    const totalSnapshot = cartTotal;
+
                     setCart({});
                     setCashUsdInput('');
                     setCashKhrInput('');
                     setCheckoutError(null);
                     setCheckoutShortages([]);
+
+                    showUndoToast({
+                      message: isVi
+                        ? `Đã xóa giỏ hàng (${itemCount} món)`
+                        : `Cleared cart (${itemCount} ${itemCount === 1 ? 'item' : 'items'})`,
+                      detail: formatKhr(totalSnapshot),
+                      onUndo: () => {
+                        setCart(prevCart);
+                        setCashUsdInput(prevCashUsd);
+                        setCashKhrInput(prevCashKhr);
+                        setCheckoutError(null);
+                        setCheckoutShortages([]);
+                      },
+                    });
                   }}
                   className="h-11 px-2.5 -mr-2 text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] rounded-lg transition-colors shrink-0"
                 >
