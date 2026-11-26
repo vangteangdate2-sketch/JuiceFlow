@@ -54,7 +54,7 @@ interface JuiceFlowShellProps {
 const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab }) => {
   const { settings, cloudSynced, syncing, refreshing, refreshData, t, setActiveOperator } = useStore();
   const { isDark, toggleTheme } = useTheme();
-  const { showHints, toggleShowHints } = useHints();
+  const { showHints, toggleShowHints, areQuestionHintsVisible } = useHints();
   const isVi = settings?.language === 'vi';
   const familyMembers =
     Array.isArray(settings?.familyMembers) && settings.familyMembers.length > 0
@@ -361,41 +361,43 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Global Show Hints Switch (minimum 44px touch height) */}
-              <button
-                type="button"
-                role="switch"
-                aria-checked={showHints}
-                onClick={toggleShowHints}
-                aria-label={isVi ? 'Bật hoặc tắt gợi ý trên toàn ứng dụng' : 'Toggle helper hints across all pages'}
-                title={isVi ? 'Hiện / ẩn gợi ý giải thích' : 'Show or hide helper hints'}
-                className="inline-flex items-center gap-1.5 sm:gap-2 h-11 min-h-[44px] px-2 sm:px-3 text-xs font-medium text-neutral-700 dark:text-neutral-200 bg-neutral-100/90 dark:bg-neutral-800/90 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200/70 dark:hover:bg-neutral-700/80 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
-              >
-                <HelpCircle
-                  className={`w-4 h-4 shrink-0 ${
-                    showHints
-                      ? 'text-[#0D5C3E] dark:text-[#34D399]'
-                      : 'text-neutral-500 dark:text-neutral-400'
-                  }`}
-                />
-                <span className="hidden md:inline">
-                  {isVi ? 'Gợi ý' : 'Show Hints'}
-                </span>
-                <span
-                  aria-hidden="true"
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
-                    showHints
-                      ? 'bg-[#0D5C3E] dark:bg-[#10B981]'
-                      : 'bg-neutral-300 dark:bg-neutral-600'
-                  }`}
+              {/* Global Show Hints Switch (hidden on non-Settings pages when ? hints are turned off) */}
+              {areQuestionHintsVisible && (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showHints}
+                  onClick={toggleShowHints}
+                  aria-label={isVi ? 'Bật hoặc tắt gợi ý trên toàn ứng dụng' : 'Toggle helper hints across all pages'}
+                  title={isVi ? 'Hiện / ẩn gợi ý giải thích' : 'Show or hide helper hints'}
+                  className="inline-flex items-center gap-1.5 sm:gap-2 h-11 min-h-[44px] px-2 sm:px-3 text-xs font-medium text-neutral-700 dark:text-neutral-200 bg-neutral-100/90 dark:bg-neutral-800/90 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200/70 dark:hover:bg-neutral-700/80 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
                 >
-                  <span
-                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white dark:bg-[#0B110E] shadow-xs transition-transform ${
-                      showHints ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                  <HelpCircle
+                    className={`w-4 h-4 shrink-0 ${
+                      showHints
+                        ? 'text-[#0D5C3E] dark:text-[#34D399]'
+                        : 'text-neutral-500 dark:text-neutral-400'
                     }`}
                   />
-                </span>
-              </button>
+                  <span className="hidden md:inline">
+                    {isVi ? 'Gợi ý' : 'Show Hints'}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
+                      showHints
+                        ? 'bg-[#0D5C3E] dark:bg-[#10B981]'
+                        : 'bg-neutral-300 dark:bg-neutral-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white dark:bg-[#0B110E] shadow-xs transition-transform ${
+                        showHints ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                      }`}
+                    />
+                  </span>
+                </button>
+              )}
 
               {/* Light / Dark Mode Switcher (minimum 44x44px tap area) */}
               <button
