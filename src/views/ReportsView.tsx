@@ -10,7 +10,16 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Download } from 'lucide-react';
+import {
+  Banknote,
+  Building2,
+  Calendar,
+  Download,
+  QrCode,
+  Smartphone,
+  Sparkles,
+  Wallet,
+} from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import type { ExpenseCategory, PaymentMethod } from '../types';
 import {
@@ -20,7 +29,6 @@ import {
   formatKhr,
   formatUsdRef,
   getPhnomPenhMonthBounds,
-  getPhnomPenhYearBounds,
   todayIso,
 } from '../utils/format';
 import {
@@ -31,12 +39,25 @@ import {
 import { useTheme } from '../hooks/useTheme';
 import { InfoHint } from '../components/InfoHint';
 
-type PeriodPreset = 'today' | '7d' | 'month' | 'lastMonth' | 'year' | 'all' | 'custom';
+type PeriodPreset = 'today' | 'week' | 'month' | 'custom';
+
+function getStartOfWeekIso(referenceIso: string): string {
+  const [y, m, d] = referenceIso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  const day = dt.getUTCDay(); // 0 = Sun, 1 = Mon, ...
+  const diffToMonday = day === 0 ? 6 : day - 1;
+  dt.setUTCDate(dt.getUTCDate() - diffToMonday);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
 
 export const ReportsView: React.FC = () => {
   const { settings, sales, expenses, purchases, products, ingredients, t } = useStore();
   const { isDark } = useTheme();
   const isVi = settings.language === 'vi';
+  const usdRate = settings.usdRate > 0 ? settings.usdRate : 4000;
 
   const chartColors = useMemo(
     () => ({
@@ -64,28 +85,25 @@ export const ReportsView: React.FC = () => {
     switch (preset) {
       case 'today':
         return { start: today, end: today };
-      case '7d':
-        return { start: daysAgoIso(6), end: today };
+      case 'week':
+        return { start: getStartOfWeekIso(today), end: today };
       case 'month':
         return getPhnomPenhMonthBounds(0);
-      case 'lastMonth':
-        return getPhnomPenhMonthBounds(-1);
-      case 'year':
-        return getPhnomPenhYearBounds(0);
-      case 'all':
-        return { start: '2000-01-01', end: '2099-12-31' };
       case 'custom':
         return { start: customStart || '2000-01-01', end: customEnd || today };
     }
   }, [preset, customStart, customEnd]);
 
+  const periodLabel = useMemo(() => {
+    if (preset === 'today') return isVi ? 'Hôm nay' : 'Today';
+    if (preset === 'week') return isVi ? 'Tuần này' : 'This Week';
+    if (preset === 'month') return isVi ? 'Tháng này' : 'This Month';
+    return `${dateRange.start} – ${dateRange.end}`;
+  }, [preset, dateRange, isVi]);
+
   const handlePresetChange = (next: PeriodPreset) => {
     setPreset(next);
-    if (next === 'year') {
-      setGrouping('monthly');
-    } else if (next === 'all') {
-      setGrouping('monthly');
-    } else if (grouping === 'yearly') {
+    if (grouping === 'yearly') {
       setGrouping('daily');
     }
   };
@@ -104,6 +122,109 @@ export const ReportsView: React.FC = () => {
       }),
     [sales, expenses, purchases, products, ingredients, dateRange, grouping]
   );
+
+  // Payment Method Breakdown with transaction counts & exact reconciliation totals
+  const paymentReconciliation = useMemo(() => {
+    const methods: PaymentMethod[] = ['cash', 'khqr', 'aba', 'wing'];
+    const txCounts: Record<PaymentMethod, number> = { cash: 0, khqr: 0, aba: 0, wing: 0 };
+    const cashOutByMethod: Record<PaymentMethod, number> = { cash: 0, khqr: 0, aba: 0, wing: 0 };
+
+    for (const s of sales) {
+      if (s.saleDate < dateRange.start || s.saleDate > dateRange.end) continue;
+      if (s.status === 'voided' || s.status === 'refunded') continue;
+      const pm = methods.includes(s.paymentMethod) ? s.paymentMethod : 'cash';
+      txCounts[pm] += 1;
+    }
+
+    for (const p of purchases) {
+      if (p.purchaseDate < dateRange.start || p.purchaseDate > dateRange.end) continue;
+      const pm = methods.includes(p.paymentMethod) ? p.paymentMethod : 'cash';
+      cashOutByMethod[pm] += p.totalCostKhr;
+    }
+
+    for (const e of expenses) {
+      if (e.expenseDate < dateRange.start || e.expenseDate > dateRange.end) continue;
+      if (e.scope !== 'business') continue;
+      const pm = methods.includes(e.paymentMethod) ? e.paymentMethod : 'cash';
+      cashOutByMethod[pm] += e.amountKhr;
+    }
+
+    const totalInflows = Math.max(report.cashInflowsKhr, 0);
+    const rows = methods.map((pm) => {
+      const totalKhr = report.cashInflowsByMethod[pm] || 0;
+      const sharePct = totalInflows > 0 ? Math.round((totalKhr / totalInflows) * 100) : 0;
+      return {
+        method: pm,
+        txCount: txCounts[pm],
+        totalKhr,
+        outflowKhr: cashOutByMethod[pm],
+        sharePct,
+      };
+    });
+
+    const cashRow = rows.find((r) => r.method === 'cash')!;
+    const digitalRows = rows.filter((r) => r.method !== 'cash');
+    const digitalTotalKhr = digitalRows.reduce((sum, r) => sum + r.totalKhr, 0);
+    const digitalTxCount = digitalRows.reduce((sum, r) => sum + r.txCount, 0);
+
+    return {
+      rows,
+      cashInKhr: cashRow.totalKhr,
+      cashOutKhr: cashRow.outflowKhr,
+      cashNetDrawerKhr: cashRow.totalKhr - cashRow.outflowKhr,
+      cashTxCount: cashRow.txCount,
+      digitalTotalKhr,
+      digitalTxCount,
+      totalTxCount: cashRow.txCount + digitalTxCount,
+    };
+  }, [sales, purchases, expenses, dateRange, report.cashInflowsByMethod, report.cashInflowsKhr]);
+
+  // Plain-English Financial Takeaway Banner
+  const financialTakeaway = useMemo(() => {
+    const revKhr = formatKhr(report.netRevenueKhr);
+    const revUsd = formatUsdRef(report.netRevenueKhr, usdRate);
+    const cogsKhr = formatKhr(report.netCogsKhr);
+    const opExKhr = formatKhr(report.operatingExpensesKhr);
+    const netKhr = formatKhr(report.netProfitKhr);
+    const netUsd = formatUsdRef(report.netProfitKhr, usdRate);
+
+    if (isVi) {
+      if (report.completedOrderCount === 0 && report.operatingExpensesKhr === 0) {
+        return {
+          headline: `Chưa có dữ liệu bán hàng hoặc chi phí vận hành trong giai đoạn ${periodLabel}.`,
+          detail: 'Hãy chọn khoảng thời gian khác hoặc ghi nhận đơn hàng mới để xem phân tích lãi/lỗ chi tiết.',
+        };
+      }
+      return {
+        headline: `Trong ${periodLabel}, quán đạt ${revKhr} (${revUsd}) doanh thu thuần từ ${report.completedOrderCount} đơn hàng.`,
+        detail: `Sau khi trừ ${cogsKhr} giá vốn nguyên liệu/sản phẩm (COGS) và ${opExKhr} chi phí vận hành, thu nhập ròng là ${netKhr} (${netUsd}, biên ròng ${report.netMarginPct}%).`,
+      };
+    }
+
+    if (report.completedOrderCount === 0 && report.operatingExpensesKhr === 0) {
+      return {
+        headline: `No sales or operating expenses recorded for ${periodLabel}.`,
+        detail: 'Switch periods above or log new POS sales to see your live revenue, COGS, and net income takeaway.',
+      };
+    }
+
+    return {
+      headline: `For ${periodLabel}, your shop earned ${revKhr} (${revUsd}) across ${report.completedOrderCount} ${
+        report.completedOrderCount === 1 ? 'order' : 'orders'
+      }.`,
+      detail: `After ${cogsKhr} in ingredient & unit COGS and ${opExKhr} in operating expenses, net income is ${netKhr} (${netUsd}, ${report.netMarginPct}% net margin).`,
+    };
+  }, [
+    report.netRevenueKhr,
+    report.netCogsKhr,
+    report.operatingExpensesKhr,
+    report.netProfitKhr,
+    report.netMarginPct,
+    report.completedOrderCount,
+    usdRate,
+    periodLabel,
+    isVi,
+  ]);
 
   const operatingCategorySeries = useMemo(() => {
     const catMap = new Map<ExpenseCategory, number>();
@@ -124,10 +245,7 @@ export const ReportsView: React.FC = () => {
     () =>
       report.series.map((bucket) => ({
         ...bucket,
-        label:
-          grouping === 'daily'
-            ? bucket.periodKey.slice(5)
-            : bucket.periodKey,
+        label: grouping === 'daily' ? bucket.periodKey.slice(5) : bucket.periodKey,
         cashOutflowsKhr: bucket.inventoryPurchasesKhr + bucket.operatingExpensesKhr,
         totalPnlCostKhr: bucket.cogsKhr + bucket.operatingExpensesKhr,
       })),
@@ -155,20 +273,32 @@ export const ReportsView: React.FC = () => {
       ['Gross Profit', report.grossProfitKhr],
       ['Gross Margin %', `${report.grossMarginPct}%`],
       ['Operating Expenses (Excl. Inventory Purchases)', -report.operatingExpensesKhr],
-      ['Net Profit (Accrual)', report.netProfitKhr],
+      ['Net Income (Accrual)', report.netProfitKhr],
       ['Net Margin %', `${report.netMarginPct}%`],
       ['Voided Orders (Excluded)', report.voidedOrdersCount],
       [],
-      ['CASH FLOW STATEMENT', 'Amount (KHR)'],
-      ['Sales Cash Inflows (Net)', report.cashInflowsKhr],
-      ['  Cash', report.cashInflowsByMethod.cash],
-      ['  KHQR', report.cashInflowsByMethod.khqr],
-      ['  ABA', report.cashInflowsByMethod.aba],
-      ['  Wing', report.cashInflowsByMethod.wing],
-      ['Inventory Purchases Cash Outflow', -report.inventoryPurchasesCashOutKhr],
-      ['Operating Expenses Cash Outflow', -report.operatingExpensesCashOutKhr],
-      ['Business Net Cash Flow', report.businessNetCashFlowKhr],
-      ['Household / Personal Outflows (Tracked Separately)', -report.householdExpensesCashOutKhr],
+      ['CASH FLOW & PAYMENT RECONCILIATION', 'Amount (KHR)', 'Transactions'],
+      ['Sales Cash Inflows (Net)', report.cashInflowsKhr, paymentReconciliation.totalTxCount],
+      ['  Cash', report.cashInflowsByMethod.cash, paymentReconciliation.cashTxCount],
+      [
+        '  KHQR',
+        report.cashInflowsByMethod.khqr,
+        paymentReconciliation.rows.find((r) => r.method === 'khqr')?.txCount ?? 0,
+      ],
+      [
+        '  ABA Pay',
+        report.cashInflowsByMethod.aba,
+        paymentReconciliation.rows.find((r) => r.method === 'aba')?.txCount ?? 0,
+      ],
+      [
+        '  Wing',
+        report.cashInflowsByMethod.wing,
+        paymentReconciliation.rows.find((r) => r.method === 'wing')?.txCount ?? 0,
+      ],
+      ['Inventory Purchases Cash Outflow', -report.inventoryPurchasesCashOutKhr, ''],
+      ['Operating Expenses Cash Outflow', -report.operatingExpensesCashOutKhr, ''],
+      ['Business Net Cash Flow', report.businessNetCashFlowKhr, ''],
+      ['Household / Personal Outflows (Tracked Separately)', -report.householdExpensesCashOutKhr, ''],
       [],
       ['CURRENT INVENTORY VALUATION (ASSET BALANCE)', 'Amount (KHR)'],
       ['Packaged Products Valuation', report.inventoryValuation.packagedValueKhr],
@@ -176,7 +306,17 @@ export const ReportsView: React.FC = () => {
       ['Prepared Stock Valuation', report.inventoryValuation.preparedStockValueKhr],
       ['Total Inventory Valuation', report.inventoryValuation.totalInventoryValueKhr],
       [],
-      ['SALES LEDGER', 'Date', 'Order #', 'Status', 'Payment', 'Gross (KHR)', 'Refunded (KHR)', 'Net (KHR)', 'Net COGS (KHR)'],
+      [
+        'SALES LEDGER',
+        'Date',
+        'Order #',
+        'Status',
+        'Payment',
+        'Gross (KHR)',
+        'Refunded (KHR)',
+        'Net (KHR)',
+        'Net COGS (KHR)',
+      ],
       ...periodSales.map((s) => [
         'SALE',
         s.saleDate,
@@ -189,7 +329,17 @@ export const ReportsView: React.FC = () => {
         Math.max(0, s.cogsKhr - (s.refundedCogsKhr ?? 0)),
       ]),
       [],
-      ['INVENTORY PURCHASES', 'Date', 'Item', 'Classification', 'Qty', 'Unit', 'Supplier', 'Payment', 'Total Cost (KHR)'],
+      [
+        'INVENTORY PURCHASES',
+        'Date',
+        'Item',
+        'Classification',
+        'Qty',
+        'Unit',
+        'Supplier',
+        'Payment',
+        'Total Cost (KHR)',
+      ],
       ...periodPurchases.map((p) => [
         'PURCHASE',
         p.purchaseDate,
@@ -217,23 +367,69 @@ export const ReportsView: React.FC = () => {
     downloadCsv(`juiceflow-financials-${dateRange.start}-to-${dateRange.end}.csv`, rows);
   };
 
+  const getPaymentMeta = (pm: PaymentMethod) => {
+    if (pm === 'cash') {
+      return {
+        label: isVi ? 'Tiền mặt' : 'Cash',
+        sub: isVi ? 'Ngăn kéo tiền mặt' : 'Physical cash drawer',
+        icon: Banknote,
+        accent:
+          'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-[#064E3B]/70 dark:text-[#6EE7B7] dark:border-[#10B981]/35',
+        barColor: 'bg-[#0F5C43] dark:bg-[#10B981]',
+      };
+    }
+    if (pm === 'khqr') {
+      return {
+        label: 'KHQR',
+        sub: isVi ? 'Quét mã chuyển khoản' : 'Bakong QR transfer',
+        icon: QrCode,
+        accent:
+          'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-500/35',
+        barColor: 'bg-sky-600 dark:bg-sky-400',
+      };
+    }
+    if (pm === 'aba') {
+      return {
+        label: 'ABA Pay',
+        sub: isVi ? 'Chuyển khoản ABA' : 'ABA digital transfer',
+        icon: Building2,
+        accent:
+          'bg-indigo-50 text-indigo-800 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-200 dark:border-indigo-500/35',
+        barColor: 'bg-indigo-600 dark:bg-indigo-400',
+      };
+    }
+    return {
+      label: 'Wing',
+      sub: isVi ? 'Ví điện tử Wing' : 'Wing mobile wallet',
+      icon: Smartphone,
+      accent:
+        'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-500/35',
+      barColor: 'bg-amber-500 dark:bg-amber-400',
+    };
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-x-1 min-w-0">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
-            {t.reports.title}
-          </h1>
-          <InfoHint
-            text={
-              isVi
-                ? `Báo cáo Lãi/Lỗ dồn tích, Dòng tiền & Giá trị tồn kho · Múi giờ ${BUSINESS_TIMEZONE}`
-                : `Accrual P&L, Cash Flow & 3-Tier Inventory Valuation · ${BUSINESS_TIMEZONE}`
-            }
-            label={t.reports.title}
-            textClassName="text-sm"
-          />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-1">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
+              {t.reports.title}
+            </h1>
+            <InfoHint
+              text={
+                isVi
+                  ? `Báo cáo Lãi/Lỗ dồn tích, đối soát thanh toán & giá trị tồn kho theo múi giờ ${BUSINESS_TIMEZONE}.`
+                  : `Plain-English P&L statements, payment reconciliation, and 3-tier inventory valuation (${BUSINESS_TIMEZONE}).`
+              }
+              label={t.reports.title}
+              textClassName="text-sm"
+            />
+          </div>
+          <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
+            {dateRange.start} – {dateRange.end}
+          </p>
         </div>
 
         <button
@@ -242,45 +438,56 @@ export const ReportsView: React.FC = () => {
           className="inline-flex items-center gap-2 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
         >
           <Download className="w-4 h-4" />
-          {t.reports.exportCsv}
+          <span>{t.reports.exportCsv}</span>
         </button>
       </div>
 
-      {/* Period & Grouping Filter Bar */}
+      {/* ================================================================== */}
+      {/* 1. CLEAN PERIOD SELECTOR (TODAY / THIS WEEK / THIS MONTH / CUSTOM) */}
+      {/* ================================================================== */}
       <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-4 space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {(
-              [
-                ['today', t.common.today],
-                ['7d', t.common.last7Days],
-                ['month', t.common.thisMonth],
-                ['lastMonth', t.common.lastMonth],
-                ['year', isVi ? 'Năm nay' : 'This Year'],
-                ['all', t.common.allTime],
-                ['custom', t.common.customRange],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handlePresetChange(key)}
-                className={`h-11 px-3.5 text-xs font-semibold rounded-full transition-colors whitespace-nowrap shrink-0 ${
-                  preset === key
-                    ? 'bg-[#0F5C43] text-white dark:bg-[#10B981] dark:text-[#042419]'
-                    : 'bg-stone-100 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-200 dark:hover:bg-[#1F3028] border border-transparent dark:border-[#24352C]'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="overflow-x-auto pb-0.5 -mx-1 px-1">
+            <div
+              role="tablist"
+              aria-label={isVi ? 'Chọn kỳ báo cáo' : 'Report period'}
+              className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl"
+            >
+              {(
+                [
+                  ['today', isVi ? 'Hôm nay' : 'Today'],
+                  ['week', isVi ? 'Tuần này' : 'This Week'],
+                  ['month', isVi ? 'Tháng này' : 'This Month'],
+                  ['custom', isVi ? 'Tùy chỉnh' : 'Custom Range'],
+                ] as const
+              ).map(([key, label]) => {
+                const active = preset === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => handlePresetChange(key)}
+                    className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                      active
+                        ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
+                        : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                    }`}
+                  >
+                    {key === 'custom' && <Calendar className="w-3.5 h-3.5 shrink-0" />}
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start lg:self-auto">
-            <span className="text-xs text-stone-500 dark:text-[#94A39B] whitespace-nowrap">
+          <div className="flex items-center gap-2 self-start lg:self-auto shrink-0">
+            <span className="text-xs font-medium text-stone-500 dark:text-[#94A39B] whitespace-nowrap">
               {isVi ? 'Nhóm theo:' : 'Group by:'}
             </span>
-            <div className="inline-flex items-center p-1 bg-stone-100 dark:bg-[#18251F] border border-transparent dark:border-[#24352C] rounded-lg">
+            <div className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl">
               {(
                 [
                   ['daily', isVi ? 'Ngày' : 'Daily'],
@@ -292,9 +499,9 @@ export const ReportsView: React.FC = () => {
                   key={grp}
                   type="button"
                   onClick={() => setGrouping(grp)}
-                  className={`h-9 px-3 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+                  className={`h-9 px-3 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
                     grouping === grp
-                      ? 'bg-white dark:bg-[#064E3B] text-stone-900 dark:text-[#D1FAE5] shadow-xs'
+                      ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                       : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
                   }`}
                 >
@@ -306,16 +513,25 @@ export const ReportsView: React.FC = () => {
         </div>
 
         {preset === 'custom' && (
-          <div className="flex flex-wrap items-center gap-2 text-xs pt-2 border-t border-stone-100 dark:border-[#1F3028]">
-            <label className="text-stone-500 dark:text-[#94A39B]">{t.reports.from}</label>
+          <div className="flex flex-wrap items-center gap-2.5 text-xs pt-3 border-t border-stone-100 dark:border-[#1F3028]">
+            <label
+              htmlFor="report-from"
+              className="font-medium text-stone-500 dark:text-[#94A39B]"
+            >
+              {t.reports.from}
+            </label>
             <input
+              id="report-from"
               type="date"
               value={customStart}
               onChange={(e) => setCustomStart(e.target.value)}
               className="h-11 px-3 font-mono-num bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg"
             />
-            <label className="text-stone-500 dark:text-[#94A39B]">{t.reports.to}</label>
+            <label htmlFor="report-to" className="font-medium text-stone-500 dark:text-[#94A39B]">
+              {t.reports.to}
+            </label>
             <input
+              id="report-to"
               type="date"
               value={customEnd}
               onChange={(e) => setCustomEnd(e.target.value)}
@@ -325,7 +541,32 @@ export const ReportsView: React.FC = () => {
         )}
       </div>
 
-      {/* 4-Column Executive Reconciliation Strip */}
+      {/* ================================================================== */}
+      {/* 2. PLAIN-ENGLISH FINANCIAL TAKEAWAY BANNER                         */}
+      {/* ================================================================== */}
+      <section
+        aria-label={isVi ? 'Tóm tắt tài chính' : 'Financial Takeaway'}
+        className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl px-4 sm:px-5 py-4 flex items-start gap-3.5"
+      >
+        <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-[#064E3B]/70 border border-emerald-200/80 dark:border-[#10B981]/30 flex items-center justify-center shrink-0 mt-0.5">
+          <Sparkles className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
+        </div>
+        <div className="min-w-0 space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#0F5C43] dark:text-[#34D399]">
+            {isVi ? 'Tóm tắt tài chính' : 'Financial Takeaway'}
+          </p>
+          <p className="text-sm sm:text-[15px] leading-relaxed text-stone-900 dark:text-[#F1F5F3] font-medium">
+            {financialTakeaway.headline}{' '}
+            <span className="text-stone-600 dark:text-[#94A39B] font-normal">
+              {financialTakeaway.detail}
+            </span>
+          </p>
+        </div>
+      </section>
+
+      {/* ================================================================== */}
+      {/* 3. 4-COLUMN EXECUTIVE KPI STRIP (WITH <InfoHint> TRIGGERS)         */}
+      {/* ================================================================== */}
       <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-stone-200 dark:divide-[#24352C]">
         <div className="p-5">
           <div className="flex flex-wrap items-center gap-x-1">
@@ -346,24 +587,74 @@ export const ReportsView: React.FC = () => {
             {formatKhr(report.netRevenueKhr)}
           </p>
           <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
-            {report.completedOrderCount} {t.dashboard.ordersCount} · {report.unitsSoldNet}{' '}
-            {isVi ? 'SP thuần' : 'net units'}
+            {formatUsdRef(report.netRevenueKhr, usdRate)} · {report.completedOrderCount}{' '}
+            {t.dashboard.ordersCount}
           </p>
         </div>
 
         <div className="p-5">
           <div className="flex flex-wrap items-center gap-x-1">
             <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'Lãi ròng (Dồn tích P&L)' : 'Accrual Net Profit'}
+              {isVi ? 'Giá vốn (COGS) & Biên gộp' : 'COGS & Gross Margin %'}
             </p>
             <InfoHint
               compact
               text={
                 isVi
-                  ? 'Doanh thu thuần − Giá vốn hàng đã bán (COGS) − Chi phí vận hành kinh doanh (không tính trùng nhập kho).'
-                  : 'Net Revenue − Cost of Goods Sold (Net COGS) − Operating Expenses. Excludes unsold stock purchases.'
+                  ? 'COGS là chi phí nguyên liệu / giá vốn đơn vị của đúng lượng hàng đã bán. Biên gộp % = (Doanh thu − COGS) ÷ Doanh thu.'
+                  : 'COGS is the exact ingredient and unit cost of items sold. Gross Margin % = (Net Revenue − COGS) ÷ Net Revenue.'
               }
-              label={isVi ? 'Giải thích lãi ròng P&L' : 'About Accrual Net Profit'}
+              label={isVi ? 'Giải thích COGS & Biên gộp' : 'About COGS & Gross Margin %'}
+            />
+          </div>
+          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
+            {formatKhr(report.netCogsKhr)}
+          </p>
+          <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
+            {isVi ? 'Biên gộp' : 'Gross Margin'}:{' '}
+            <strong className="text-emerald-700 dark:text-[#34D399]">
+              {report.grossMarginPct}%
+            </strong>{' '}
+            · {formatUsdRef(report.netCogsKhr, usdRate)}
+          </p>
+        </div>
+
+        <div className="p-5">
+          <div className="flex flex-wrap items-center gap-x-1">
+            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+              {isVi ? 'Chi phí vận hành' : 'Operating Expenses'}
+            </p>
+            <InfoHint
+              compact
+              text={
+                isVi
+                  ? 'Chi phí duy trì quán như mặt bằng, điện nước, bao bì — không cộng trùng tiền nhập kho (đã tính qua COGS).'
+                  : 'Day-to-day shop overheads (rent, utilities, packaging, equipment) — excludes stock restocks so COGS is never double-counted.'
+              }
+              label={isVi ? 'Giải thích chi phí vận hành' : 'About Operating Expenses'}
+            />
+          </div>
+          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
+            {formatKhr(report.operatingExpensesKhr)}
+          </p>
+          <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
+            {formatUsdRef(report.operatingExpensesKhr, usdRate)}
+          </p>
+        </div>
+
+        <div className="p-5">
+          <div className="flex flex-wrap items-center gap-x-1">
+            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
+              {isVi ? 'Thu nhập ròng (Net Income)' : 'Net Income'}
+            </p>
+            <InfoHint
+              compact
+              text={
+                isVi
+                  ? 'Thu nhập ròng = Doanh thu thuần − Giá vốn (COGS) − Chi phí vận hành. Phản ánh lợi nhuận thật của quán.'
+                  : 'Net Income = Net Revenue − COGS − Operating Expenses. Shows your true shop profitability before personal drawings.'
+              }
+              label={isVi ? 'Giải thích thu nhập ròng' : 'About Net Income'}
             />
           </div>
           <p
@@ -376,65 +667,137 @@ export const ReportsView: React.FC = () => {
             {formatKhr(report.netProfitKhr)}
           </p>
           <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
-            {t.reports.netMargin}: {report.netMarginPct}% ·{' '}
-            {formatUsdRef(report.netProfitKhr, settings.usdRate)}
-          </p>
-        </div>
-
-        <div className="p-5">
-          <div className="flex flex-wrap items-center gap-x-1">
-            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'Dòng tiền thuần kinh doanh' : 'Business Net Cash Flow'}
-            </p>
-            <InfoHint
-              compact
-              text={
-                isVi
-                  ? 'Tiền bán hàng thực thu trừ đi tiền chi nhập kho và tiền chi vận hành trong kỳ.'
-                  : 'Actual cash collected from sales minus cash paid out for inventory restocks and operating expenses.'
-              }
-              label={isVi ? 'Giải thích dòng tiền thuần' : 'About Business Net Cash Flow'}
-            />
-          </div>
-          <p
-            className={`mt-1.5 font-mono-num text-2xl font-semibold ${
-              report.businessNetCashFlowKhr >= 0
-                ? 'text-stone-900 dark:text-[#F1F5F3]'
-                : 'text-amber-700 dark:text-amber-300'
-            }`}
-          >
-            {formatKhr(report.businessNetCashFlowKhr)}
-          </p>
-          <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
-            {isVi ? 'Nhập kho:' : 'Stock-in:'} -{formatKhr(report.inventoryPurchasesCashOutKhr)}
-          </p>
-        </div>
-
-        <div className="p-5">
-          <div className="flex flex-wrap items-center gap-x-1">
-            <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'Giá trị tồn kho hiện tại' : 'Current Inventory Valuation'}
-            </p>
-            <InfoHint
-              compact
-              text={
-                isVi
-                  ? 'Giá trị tài sản tồn kho hiện có trên cả 3 nhóm (không tính là chi phí cho tới khi bán).'
-                  : 'Current asset balance of unsold stock across all 3 tiers — held as an asset until sold as COGS.'
-              }
-              label={isVi ? 'Giải thích giá trị tồn kho' : 'About Inventory Valuation'}
-            />
-          </div>
-          <p className="mt-1.5 font-mono-num text-2xl font-semibold text-[#0F5C43] dark:text-[#34D399]">
-            {formatKhr(report.inventoryValuation.totalInventoryValueKhr)}
-          </p>
-          <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
-            {formatUsdRef(report.inventoryValuation.totalInventoryValueKhr, settings.usdRate)}
+            {t.reports.netMargin}: {report.netMarginPct}% · {formatUsdRef(report.netProfitKhr, usdRate)}
           </p>
         </div>
       </div>
 
-      {/* Section 1 & 2: Accrual P&L Statement + Cash Flow Statement Side-by-Side */}
+      {/* ================================================================== */}
+      {/* 4. DEDICATED PAYMENT METHOD BREAKDOWN (CASH vs DIGITAL RECONCILE)  */}
+      {/* ================================================================== */}
+      <section className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Wallet className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+            <h2 className="font-display text-base sm:text-lg font-bold text-stone-900 dark:text-[#F1F5F3]">
+              {isVi ? 'Đối soát Phương thức Thanh toán' : 'Payment Method Breakdown'}
+            </h2>
+            <InfoHint
+              compact
+              label={isVi ? 'Đối soát thanh toán' : 'About Payment Method Breakdown'}
+              text={
+                isVi
+                  ? 'Tách bạch tiền mặt tại két với chuyển khoản ngân hàng (KHQR, ABA Pay, Wing) kèm số lượng giao dịch để chốt ca trong vài giây.'
+                  : 'Reconcile your physical cash drawer against digital bank transfers (KHQR, ABA Pay, Wing) with exact transaction counts and net totals.'
+              }
+            />
+          </div>
+
+          {/* Drawer vs Digital Summary Pill */}
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono-num">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-[#064E3B]/60 border border-emerald-200 dark:border-[#10B981]/35 text-emerald-900 dark:text-[#A7F3D0] font-semibold">
+              <Banknote className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                {isVi ? 'Tiền mặt' : 'Cash Drawer'}: {formatKhr(paymentReconciliation.cashInKhr)}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] text-stone-800 dark:text-[#D5DFDA] font-semibold">
+              <Building2 className="w-3.5 h-3.5 shrink-0 text-stone-500 dark:text-[#94A39B]" />
+              <span>
+                {isVi ? 'Chuyển khoản' : 'Digital Bank'}:{' '}
+                {formatKhr(paymentReconciliation.digitalTotalKhr)} (
+                {paymentReconciliation.digitalTxCount}{' '}
+                {isVi ? 'GD' : 'tx'})
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {paymentReconciliation.rows.map((row) => {
+              const meta = getPaymentMeta(row.method);
+              const Icon = meta.icon;
+              return (
+                <div
+                  key={row.method}
+                  className="p-4 rounded-xl border border-stone-200 dark:border-[#24352C] bg-stone-50/50 dark:bg-[#0F1814] flex flex-col justify-between gap-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span
+                        className={`w-9 h-9 rounded-lg border inline-flex items-center justify-center shrink-0 ${meta.accent}`}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
+                          {meta.label}
+                        </p>
+                        <p className="text-[11px] text-stone-500 dark:text-[#94A39B] truncate">
+                          {meta.sub}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="font-mono-num text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] text-stone-700 dark:text-[#D5DFDA] whitespace-nowrap">
+                      {row.txCount} {isVi ? 'GD' : 'tx'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <p className="font-mono-num text-xl font-bold text-stone-900 dark:text-[#F1F5F3]">
+                      {formatKhr(row.totalKhr)}
+                    </p>
+                    <div className="mt-0.5 flex items-center justify-between text-[11px] font-mono-num text-stone-500 dark:text-[#94A39B]">
+                      <span>{formatUsdRef(row.totalKhr, usdRate)}</span>
+                      <span>{row.sharePct}%</span>
+                    </div>
+                    <div className="mt-2 w-full h-1.5 rounded-full bg-stone-200/70 dark:bg-[#1F3028] overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${meta.barColor}`}
+                        style={{ width: `${row.totalKhr > 0 ? Math.max(row.sharePct, 4) : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Physical Cash Drawer Check Bar */}
+          <div className="px-4 py-3 rounded-xl bg-stone-50 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] flex flex-wrap items-center justify-between gap-2 text-xs font-mono-num">
+            <span className="font-sans font-medium text-stone-600 dark:text-[#94A39B]">
+              {isVi
+                ? 'Kiểm tra ngăn kéo tiền mặt (Thu tiền mặt − Chi tiền mặt):'
+                : 'Cash Drawer Check (Cash Sales − Cash Paid Out):'}
+            </span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-emerald-700 dark:text-[#34D399]">
+                +{formatKhr(paymentReconciliation.cashInKhr)}
+              </span>
+              <span className="text-stone-400">−</span>
+              <span className="text-stone-700 dark:text-[#D5DFDA]">
+                {formatKhr(paymentReconciliation.cashOutKhr)}
+              </span>
+              <span className="text-stone-400">=</span>
+              <strong
+                className={
+                  paymentReconciliation.cashNetDrawerKhr >= 0
+                    ? 'text-stone-900 dark:text-[#F1F5F3]'
+                    : 'text-amber-700 dark:text-amber-300'
+                }
+              >
+                {formatKhr(paymentReconciliation.cashNetDrawerKhr)} (
+                {formatUsdRef(paymentReconciliation.cashNetDrawerKhr, usdRate)})
+              </strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ================================================================== */}
+      {/* 5. ACCRUAL P&L STATEMENT + CASH FLOW STATEMENT SIDE-BY-SIDE        */}
+      {/* ================================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Accrual P&L Ledger */}
         <div className="lg:col-span-6 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-6 flex flex-col justify-between">
@@ -442,15 +805,15 @@ export const ReportsView: React.FC = () => {
             <div className="flex items-baseline justify-between gap-2 pb-4 border-b border-stone-200 dark:border-[#24352C]">
               <div className="flex flex-wrap items-center gap-x-1 min-w-0">
                 <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                  {isVi ? '1. Báo cáo Lãi / Lỗ (Cơ sở dồn tích)' : '1. Accrual Profit & Loss Statement'}
+                  {isVi ? '1. Báo cáo Lãi / Lỗ (P&L)' : '1. Profit & Loss Statement'}
                 </h2>
                 <InfoHint
                   text={
                     isVi
-                      ? 'Chỉ tính Giá vốn hàng đã bán (COGS) & Chi phí vận hành — không tính trùng tiền nhập kho'
-                      : 'Matches COGS of sold items against operating expenses — zero double-counting of stock purchases'
+                      ? 'Chỉ tính Giá vốn hàng đã bán (COGS) & Chi phí vận hành — không tính trùng tiền nhập kho.'
+                      : 'Matches COGS of sold items against operating expenses — zero double-counting of stock purchases.'
                   }
-                  label={isVi ? 'Giải thích báo cáo Lãi/Lỗ' : 'About Accrual P&L Statement'}
+                  label={isVi ? 'Giải thích báo cáo Lãi/Lỗ' : 'About Profit & Loss Statement'}
                 />
               </div>
             </div>
@@ -482,17 +845,15 @@ export const ReportsView: React.FC = () => {
               </div>
               <div className="py-2.5 flex justify-between items-start gap-4 text-xs">
                 <dt className="text-stone-500 dark:text-[#94A39B] pl-3 flex flex-wrap items-center gap-x-1 min-w-0">
-                  <span>
-                    {isVi ? 'Giá vốn hàng bán thuần (COGS)' : 'Less: Cost of Goods Sold (Net COGS)'}
-                  </span>
+                  <span>{isVi ? 'Giá vốn hàng bán (COGS)' : 'Less: COGS'}</span>
                   <InfoHint
                     compact
                     text={
                       isVi
                         ? 'Chi phí nguyên liệu / giá vốn đơn vị thực tế của đúng số lượng sản phẩm đã bán (đã hoàn lại COGS cho hàng trả).'
-                        : 'Actual recipe ingredient cost or weighted-average unit cost for items sold in this period, minus COGS restored from returns.'
+                        : 'Cost of Goods Sold — actual recipe ingredient cost or weighted-average unit cost for items sold in this period, minus COGS restored from returns.'
                     }
-                    label="About Cost of Goods Sold (COGS)"
+                    label="About COGS"
                   />
                 </dt>
                 <dd className="font-mono-num text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
@@ -507,14 +868,14 @@ export const ReportsView: React.FC = () => {
                       compact
                       text={
                         isVi
-                          ? 'Lợi nhuận gộp = Doanh thu thuần − Giá vốn (COGS). Biên gộp = Lợi nhuận gộp ÷ Doanh thu thuần.'
-                          : 'Gross Profit = Net Revenue − Net COGS. Gross Margin % = Gross Profit ÷ Net Revenue.'
+                          ? 'Lợi nhuận gộp = Doanh thu thuần − COGS. Biên gộp % = Lợi nhuận gộp ÷ Doanh thu thuần.'
+                          : 'Gross Profit = Net Revenue − COGS. Gross Margin % = Gross Profit ÷ Net Revenue.'
                       }
-                      label={t.reports.grossProfit}
+                      label="About Gross Margin %"
                     />
                   </dt>
                   <span className="text-[11px] font-mono-num text-stone-400 dark:text-[#94A39B]">
-                    {isVi ? 'Biên gộp' : 'Gross margin'}: {report.grossMarginPct}%
+                    {isVi ? 'Biên gộp %' : 'Gross Margin %'}: {report.grossMarginPct}%
                   </span>
                 </div>
                 <dd className="font-mono-num font-semibold text-emerald-700 dark:text-[#34D399] whitespace-nowrap">
@@ -529,9 +890,9 @@ export const ReportsView: React.FC = () => {
                     text={
                       isVi
                         ? 'Chi phí kinh doanh như điện, nước, thuê mặt bằng, bao bì — không bao gồm tiền nhập hàng tồn kho (đã tính qua COGS).'
-                        : 'Business overheads (rent, utilities, packaging, transport) — excludes inventory purchases so stock is never double-counted with COGS.'
+                        : 'Business overheads (rent, utilities, packaging, equipment) — excludes inventory purchases so stock is never double-counted with COGS.'
                     }
-                    label={isVi ? 'Giải thích chi phí vận hành' : 'About Operating Expenses'}
+                    label="About Operating Expenses"
                   />
                 </dt>
                 <dd className="font-mono-num text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
@@ -541,15 +902,15 @@ export const ReportsView: React.FC = () => {
               <div className="py-4 flex justify-between items-baseline gap-4 border-t-2 border-stone-200 dark:border-[#24352C]">
                 <div className="min-w-0">
                   <dt className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] flex flex-wrap items-center gap-x-1">
-                    <span>{isVi ? 'Lợi nhuận ròng (P&L)' : 'Net Profit (Accrual)'}</span>
+                    <span>{isVi ? 'Thu nhập ròng (Net Income)' : 'Net Income'}</span>
                     <InfoHint
                       compact
                       text={
                         isVi
                           ? 'Thu nhập ròng kinh doanh = Lợi nhuận gộp − Chi phí vận hành (không gồm chi tiêu cá nhân/gia đình).'
-                          : 'Net Income = Gross Profit − Operating Expenses (household/personal spending is tracked separately below).'
+                          : 'Net Income = Gross Profit − Operating Expenses (household/personal spending is tracked separately).'
                       }
-                      label={isVi ? 'Giải thích lợi nhuận ròng' : 'About Net Income'}
+                      label="About Net Income"
                     />
                   </dt>
                   <span className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
@@ -567,7 +928,7 @@ export const ReportsView: React.FC = () => {
                     {formatKhr(report.netProfitKhr)}
                   </dd>
                   <span className="text-xs font-mono-num text-stone-400 dark:text-[#94A39B]">
-                    {formatUsdRef(report.netProfitKhr, settings.usdRate)}
+                    {formatUsdRef(report.netProfitKhr, usdRate)}
                   </span>
                 </div>
               </div>
@@ -583,19 +944,19 @@ export const ReportsView: React.FC = () => {
           )}
         </div>
 
-        {/* Cash Flow Statement + Payment Method Breakdown */}
+        {/* Cash Flow Statement */}
         <div className="lg:col-span-6 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-6 flex flex-col justify-between">
           <div>
             <div className="pb-4 border-b border-stone-200 dark:border-[#24352C]">
               <div className="flex flex-wrap items-center gap-x-1">
                 <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                  {isVi ? '2. Báo cáo Dòng tiền (Tiền thực thu / thực chi)' : '2. Cash Flow Statement'}
+                  {isVi ? '2. Báo cáo Dòng tiền (Thực thu / Thực chi)' : '2. Cash Flow Statement'}
                 </h2>
                 <InfoHint
                   text={
                     isVi
-                      ? 'Theo dõi tiền vào từ bán hàng và tiền ra cho nhập hàng + vận hành trong kỳ'
-                      : 'Tracks actual cash collected from sales minus cash paid for stock restocks and operating expenses'
+                      ? 'Theo dõi tiền vào từ bán hàng và tiền ra cho nhập hàng + vận hành trong kỳ.'
+                      : 'Tracks actual cash collected from sales minus cash paid for stock restocks and operating expenses.'
                   }
                   label={isVi ? 'Giải thích báo cáo dòng tiền' : 'About Cash Flow Statement'}
                 />
@@ -610,22 +971,6 @@ export const ReportsView: React.FC = () => {
                 <dd className="font-mono-num font-semibold text-emerald-700 dark:text-[#34D399] whitespace-nowrap">
                   +{formatKhr(report.cashInflowsKhr)}
                 </dd>
-              </div>
-
-              <div className="py-2.5 pl-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                {(['cash', 'khqr', 'aba', 'wing'] as PaymentMethod[]).map((pm) => (
-                  <div
-                    key={pm}
-                    className="bg-stone-50 dark:bg-[#18251F] border border-stone-200/70 dark:border-[#24352C] rounded-lg px-2.5 py-1.5"
-                  >
-                    <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                      {t.paymentMethods[pm]}
-                    </span>
-                    <span className="font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                      {formatKhr(report.cashInflowsByMethod[pm])}
-                    </span>
-                  </div>
-                ))}
               </div>
 
               <div className="py-3 flex justify-between gap-4">
@@ -672,7 +1017,7 @@ export const ReportsView: React.FC = () => {
                     {formatKhr(report.businessNetCashFlowKhr)}
                   </dd>
                   <span className="text-xs font-mono-num text-stone-400 dark:text-[#94A39B]">
-                    {formatUsdRef(report.businessNetCashFlowKhr, settings.usdRate)}
+                    {formatUsdRef(report.businessNetCashFlowKhr, usdRate)}
                   </span>
                 </div>
               </div>
@@ -695,7 +1040,9 @@ export const ReportsView: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 pb-4 border-b border-stone-200 dark:border-[#24352C]">
           <div className="flex flex-wrap items-center gap-x-1 min-w-0">
             <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
-              {isVi ? '3. Định giá Tồn kho hiện tại (3 nhóm hàng)' : '3. Current Inventory Valuation (3 Tiers)'}
+              {isVi
+                ? '3. Định giá Tồn kho hiện tại (3 nhóm hàng)'
+                : '3. Current Inventory Valuation (3 Tiers)'}
             </h2>
             <InfoHint
               text={
@@ -720,7 +1067,7 @@ export const ReportsView: React.FC = () => {
               {formatKhr(report.inventoryValuation.packagedValueKhr)}
             </p>
             <p className="text-[11px] font-mono-num text-stone-400 dark:text-[#94A39B] mt-0.5">
-              {formatUsdRef(report.inventoryValuation.packagedValueKhr, settings.usdRate)}
+              {formatUsdRef(report.inventoryValuation.packagedValueKhr, usdRate)}
             </p>
           </div>
 
@@ -732,7 +1079,7 @@ export const ReportsView: React.FC = () => {
               {formatKhr(report.inventoryValuation.ingredientsValueKhr)}
             </p>
             <p className="text-[11px] font-mono-num text-stone-400 dark:text-[#94A39B] mt-0.5">
-              {formatUsdRef(report.inventoryValuation.ingredientsValueKhr, settings.usdRate)}
+              {formatUsdRef(report.inventoryValuation.ingredientsValueKhr, usdRate)}
             </p>
           </div>
 
@@ -744,7 +1091,7 @@ export const ReportsView: React.FC = () => {
               {formatKhr(report.inventoryValuation.preparedStockValueKhr)}
             </p>
             <p className="text-[11px] font-mono-num text-stone-400 dark:text-[#94A39B] mt-0.5">
-              {formatUsdRef(report.inventoryValuation.preparedStockValueKhr, settings.usdRate)}
+              {formatUsdRef(report.inventoryValuation.preparedStockValueKhr, usdRate)}
             </p>
           </div>
         </div>
@@ -757,19 +1104,19 @@ export const ReportsView: React.FC = () => {
             <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
               {chartView === 'pnl'
                 ? isVi
-                  ? 'Xu hướng Doanh thu, Chi phí & Lãi ròng (P&L)'
-                  : 'Accrual Revenue, Costs & Net Profit Trend'
+                  ? 'Xu hướng Doanh thu, Chi phí & Thu nhập ròng'
+                  : 'Revenue, Costs & Net Income Trend'
                 : isVi
                   ? 'Xu hướng Dòng tiền vào & ra'
                   : 'Cash Inflows vs Cash Outflows Trend'}
             </h2>
           </div>
 
-          <div className="inline-flex items-center p-1 bg-stone-100 dark:bg-[#18251F] border border-transparent dark:border-[#24352C] rounded-lg self-start sm:self-auto">
+          <div className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl self-start sm:self-auto">
             <button
               type="button"
               onClick={() => setChartView('pnl')}
-              className={`h-9 px-3.5 text-xs font-semibold rounded-md transition-colors ${
+              className={`h-9 px-3.5 text-xs font-semibold rounded-lg transition-colors ${
                 chartView === 'pnl'
                   ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                   : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -780,7 +1127,7 @@ export const ReportsView: React.FC = () => {
             <button
               type="button"
               onClick={() => setChartView('cashflow')}
-              className={`h-9 px-3.5 text-xs font-semibold rounded-md transition-colors ${
+              className={`h-9 px-3.5 text-xs font-semibold rounded-lg transition-colors ${
                 chartView === 'cashflow'
                   ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                   : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -805,6 +1152,7 @@ export const ReportsView: React.FC = () => {
                   tick={{ fontSize: 12, fill: chartColors.tick }}
                   axisLine={{ stroke: chartColors.grid }}
                   tickLine={false}
+                  minTickGap={24}
                 />
                 <YAxis
                   tick={{ fontSize: 11, fill: chartColors.tick }}
@@ -815,7 +1163,7 @@ export const ReportsView: React.FC = () => {
                 <Tooltip
                   formatter={(val) => formatKhr(Number(val ?? 0))}
                   contentStyle={{
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     border: `1px solid ${chartColors.tooltipBorder}`,
                     backgroundColor: chartColors.tooltipBg,
                     color: chartColors.tooltipText,
@@ -853,8 +1201,8 @@ export const ReportsView: React.FC = () => {
                   name={
                     chartView === 'pnl'
                       ? isVi
-                        ? 'Lãi ròng P&L'
-                        : 'Net Profit'
+                        ? 'Thu nhập ròng'
+                        : 'Net Income'
                       : isVi
                         ? 'Dòng tiền thuần'
                         : 'Net Cash Flow'
@@ -946,7 +1294,9 @@ export const ReportsView: React.FC = () => {
                   ? 'Không bao gồm nhập hàng tồn kho (được theo dõi ở Dòng tiền)'
                   : 'Excludes inventory purchases (tracked in Cash Flow)'
               }
-              label={isVi ? 'Giải thích phân bổ chi phí vận hành' : 'About Operating Expense Breakdown'}
+              label={
+                isVi ? 'Giải thích phân bổ chi phí vận hành' : 'About Operating Expense Breakdown'
+              }
             />
           </div>
           {operatingCategorySeries.length === 0 ? (
@@ -980,7 +1330,7 @@ export const ReportsView: React.FC = () => {
                   <Tooltip
                     formatter={(val) => formatKhr(Number(val ?? 0))}
                     contentStyle={{
-                      borderRadius: '8px',
+                      borderRadius: '10px',
                       border: `1px solid ${chartColors.tooltipBorder}`,
                       backgroundColor: chartColors.tooltipBg,
                       color: chartColors.tooltipText,
