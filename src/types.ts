@@ -17,7 +17,7 @@ export type ProductType = 'PACKAGED' | 'PREPARED_TO_ORDER' | 'PREPARED_STOCK';
 
 export type StockClassification = 'packaged' | 'ingredient' | 'prepared_stock';
 
-export type ProductCategory =
+export type DefaultProductCategory =
   | 'juice'
   | 'smoothie'
   | 'tea'
@@ -25,6 +25,21 @@ export type ProductCategory =
   | 'specialty'
   | 'packaged'
   | 'snack';
+
+export type ProductCategory = string;
+
+export type CategoryScope = 'product' | 'inventory' | 'both';
+
+export interface CategoryItem {
+  id: string;
+  name: string;
+  nameVi?: string;
+  scope: CategoryScope;
+  sortOrder: number;
+  isSystem?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export type ExpenseCategory =
   | 'ingredients'
@@ -81,6 +96,7 @@ export interface Product {
   nameVi: string;
   brand?: string;
   category: ProductCategory;
+  categoryId?: string;
   productType: ProductType;
   priceKhr: number;
   costPriceKhr: number;
@@ -109,6 +125,7 @@ export interface Ingredient {
   id: string;
   name: string;
   nameVi: string;
+  categoryId?: string;
   unit: IngredientUnit;
   stockQty: number;
   reorderLevel: number;
@@ -131,6 +148,7 @@ export interface SaleDeductionSnapshot {
 export interface SaleItem {
   lineId?: string;
   productId: string;
+  categoryId?: string;
   variantId?: string;
   variantName?: string;
   variantNameVi?: string;

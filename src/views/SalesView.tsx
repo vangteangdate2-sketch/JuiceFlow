@@ -57,6 +57,8 @@ import { ProductPhoto } from '../components/ProductPhoto';
 import { BarcodeScanner, type BarcodeScanSource } from '../components/BarcodeScanner';
 import { ReceiptModal } from '../components/ReceiptModal';
 import { ProductFormModal } from '../components/ProductFormModal';
+import { CategoryFilterPills } from '../components/CategoryFilterPills';
+import { getCategoriesForScope, resolveProductCategoryId } from '../utils/categories';
 
 interface CartEntry {
   key: string; // `${productId}::${variantId || ''}`
@@ -65,17 +67,6 @@ interface CartEntry {
   quantity: number;
 }
 
-const POS_CATEGORIES: Array<'all' | ProductCategory> = [
-  'all',
-  'juice',
-  'smoothie',
-  'coffee',
-  'tea',
-  'packaged',
-  'snack',
-  'specialty',
-];
-
 interface SalesViewProps {
   sidebarCollapsed?: boolean;
 }
@@ -83,6 +74,7 @@ interface SalesViewProps {
 export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }) => {
   const {
     settings,
+    categories: rawCategories,
     cashPresets,
     products: rawProducts,
     ingredients: rawIngredients,
@@ -95,6 +87,11 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
     returnSaleItems,
     t,
   } = useStore();
+  const categories = Array.isArray(rawCategories) ? rawCategories : [];
+  const posCategories = useMemo(
+    () => getCategoriesForScope(categories, 'product'),
+    [categories]
+  );
   const products = Array.isArray(rawProducts) ? rawProducts : [];
   const ingredients = Array.isArray(rawIngredients) ? rawIngredients : [];
   const barcodeRegistry = Array.isArray(rawBarcodeRegistry) ? rawBarcodeRegistry : [];
@@ -158,12 +155,20 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
   const prodMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
+  useEffect(() => {
+    if (categoryFilter !== 'all' && !posCategories.some((c) => c.id === categoryFilter)) {
+      setCategoryFilter('all');
+    }
+  }, [categoryFilter, posCategories]);
+
   const activeProducts = useMemo(() => {
     const q = posSearch.trim().toLowerCase();
     return products.filter((p) => {
       if (!p || !p.active) return false;
       if (typeFilter !== 'ALL' && p.productType !== typeFilter) return false;
-      if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
+      if (categoryFilter !== 'all' && resolveProductCategoryId(p, categories) !== categoryFilter) {
+        return false;
+      }
       if (!q) return true;
       const varMatch = (p.variants || []).some(
         (v) =>
@@ -184,7 +189,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
         packMatch
       );
     });
-  }, [products, typeFilter, categoryFilter, posSearch]);
+  }, [products, typeFilter, categoryFilter, categories, posSearch]);
 
   const cartLines = useMemo(() => {
     return Object.values(cart)
@@ -862,27 +867,13 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 <div className="overflow-hidden">
                   <div className="space-y-2.5">
                     {/* Row 1: Single-Line Horizontal Category Pills (h-11 = 44px) */}
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-[11px] font-semibold text-stone-500 dark:text-[#94A39B] w-16 shrink-0">
-                        {isVi ? 'Danh mục' : 'Category'}
-                      </span>
-                      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        {POS_CATEGORIES.map((cat) => (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() => setCategoryFilter(cat)}
-                            className={`h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${
-                              categoryFilter === cat
-                                ? 'bg-[#0D5C3E] text-white border-[#0D5C3E] dark:bg-[#10B981] dark:text-[#042419] dark:border-[#10B981] font-semibold'
-                                : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
-                            }`}
-                          >
-                            {cat === 'all' ? t.common.all : t.productCategories[cat]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <CategoryFilterPills
+                      categories={posCategories}
+                      selectedCategoryId={categoryFilter}
+                      onSelect={setCategoryFilter}
+                      isVi={isVi}
+                      allLabel={t.common.all}
+                    />
 
                     {/* Row 2: Unified Soft-Green Item Type Pills (h-11 = 44px) */}
                     <div className="flex items-center gap-2.5 min-w-0">

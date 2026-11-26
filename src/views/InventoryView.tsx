@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -35,10 +35,21 @@ import type {
 import { calculateRecipeCogs, formatKhr, formatQty, todayIso } from '../utils/format';
 import { type BatchPrepMode, type StockShortage } from '../utils/inventoryEngine';
 import { formatBarcodeTypeLabel } from '../utils/barcodeRegistry';
+import {
+  getCategoriesForScope,
+  getCategoryById,
+  getCategoryDisplayName,
+  resolveIngredientCategoryId,
+  resolveProductCategoryId,
+  UNCATEGORIZED_ID,
+} from '../utils/categories';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { ProductFormModal } from '../components/ProductFormModal';
+import { CategoryFilterPills } from '../components/CategoryFilterPills';
 import { InfoHint } from '../components/InfoHint';
+
+const NEW_CATEGORY_OPTION_VALUE = '__new_category__';
 
 type InventoryTab = 'all' | 'ingredients' | 'prepared_stock' | 'packaged' | 'movements';
 type StockStatusFilter = 'all' | 'healthy' | 'low' | 'out';
@@ -65,6 +76,7 @@ interface UnifiedStockItem {
   name: string;
   nameVi: string;
   tier: StockClassification;
+  categoryId: string;
   unit: IngredientUnit;
   stockQty: number;
   reorderLevel: number;
@@ -101,11 +113,13 @@ export const InventoryView: React.FC = () => {
     settings,
     products,
     ingredients,
+    categories,
     barcodeRegistry,
     stockMovements,
     saveProduct,
     lookupBarcode,
     saveIngredient,
+    addCategory,
     recordStockPurchase,
     recordOpeningStock,
     prepareBatchStock,
@@ -116,12 +130,31 @@ export const InventoryView: React.FC = () => {
   const isVi = settings.language === 'vi';
   const today = todayIso();
 
+  const inventoryCategories = useMemo(
+    () => getCategoriesForScope(categories, 'inventory'),
+    [categories]
+  );
+
   // Main navigation & filtering
   const [activeTab, setActiveTab] = useState<InventoryTab>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<StockStatusFilter>('all');
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [search, setSearch] = useState('');
   const [movementTypeFilter, setMovementTypeFilter] = useState<'ALL' | MovementType>('ALL');
   const [movementTierFilter, setMovementTierFilter] = useState<'ALL' | StockClassification>('ALL');
+
+  useEffect(() => {
+    if (
+      categoryFilter !== 'all' &&
+      !inventoryCategories.some((c) => c.id === categoryFilter)
+    ) {
+      setCategoryFilter('all');
+    }
+  }, [categoryFilter, inventoryCategories]);
+
+  const activeFilterCount =
+    (categoryFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0);
 
   // "Needs Attention Today" collapsible strip state
   const [attentionExpanded, setAttentionExpanded] = useState(true);
@@ -143,6 +176,11 @@ export const InventoryView: React.FC = () => {
   const [editingIng, setEditingIng] = useState<Ingredient | null>(null);
   const [ingName, setIngName] = useState('');
   const [ingNameVi, setIngNameVi] = useState('');
+  const [ingCategoryId, setIngCategoryId] = useState<string>(UNCATEGORIZED_ID);
+  const [addingIngCategory, setAddingIngCategory] = useState(false);
+  const [newIngCategoryName, setNewIngCategoryName] = useState('');
+  const [newIngCategoryError, setNewIngCategoryError] = useState<string | null>(null);
+  const [creatingIngCategory, setCreatingIngCategory] = useState(false);
   const [ingUnit, setIngUnit] = useState<IngredientUnit>('g');
   const [ingStock, setIngStock] = useState('0');
   const [ingReorder, setIngReorder] = useState('500');
@@ -242,6 +280,7 @@ export const InventoryView: React.FC = () => {
         name: ing.name,
         nameVi: ing.nameVi,
         tier: 'ingredient',
+        categoryId: resolveIngredientCategoryId(ing, categories),
         unit: ing.unit,
         stockQty: ing.stockQty,
         reorderLevel: ing.reorderLevel,
@@ -266,6 +305,7 @@ export const InventoryView: React.FC = () => {
         name: prod.name,
         nameVi: prod.nameVi,
         tier: 'prepared_stock',
+        categoryId: resolveProductCategoryId(prod, categories),
         unit: prod.unit || 'pcs',
         stockQty: prod.stockQty,
         reorderLevel: prod.reorderLevel,
@@ -291,6 +331,7 @@ export const InventoryView: React.FC = () => {
         name: prod.name,
         nameVi: prod.nameVi,
         tier: 'packaged',
+        categoryId: resolveProductCategoryId(prod, categories),
         unit: prod.unit || 'pcs',
         stockQty: prod.stockQty,
         reorderLevel: prod.reorderLevel,
@@ -316,7 +357,7 @@ export const InventoryView: React.FC = () => {
       return 3;
     };
     return items.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
-  }, [ingredients, preparedStockProducts, packagedProducts, latestBatchPrepByItem, today]);
+  }, [ingredients, preparedStockProducts, packagedProducts, categories, latestBatchPrepByItem, today]);
 
   // "Needs Attention Today" 3 priority buckets
   const attentionItems = useMemo(() => {
@@ -482,6 +523,14 @@ export const InventoryView: React.FC = () => {
     setEditingIng(null);
     setIngName('');
     setIngNameVi('');
+    const defaultCat =
+      inventoryCategories.find((c) => c.id === 'produce')?.id ||
+      inventoryCategories[0]?.id ||
+      UNCATEGORIZED_ID;
+    setIngCategoryId(defaultCat);
+    setAddingIngCategory(false);
+    setNewIngCategoryName('');
+    setNewIngCategoryError(null);
     setIngUnit('g');
     setIngStock('0');
     setIngReorder(String(settings.lowStockDefault || 15));
@@ -494,12 +543,45 @@ export const InventoryView: React.FC = () => {
     setEditingIng(ing);
     setIngName(ing.name);
     setIngNameVi(ing.nameVi);
+    setIngCategoryId(resolveIngredientCategoryId(ing, categories));
+    setAddingIngCategory(false);
+    setNewIngCategoryName('');
+    setNewIngCategoryError(null);
     setIngUnit(ing.unit);
     setIngStock(String(ing.stockQty));
     setIngReorder(String(ing.reorderLevel));
     setIngCost(String(ing.unitCostKhr));
     setIngSupplier(ing.supplier);
     setIngModalOpen(true);
+  };
+
+  const handleCreateInlineIngCategory = async () => {
+    const trimmed = newIngCategoryName.trim();
+    if (!trimmed) {
+      setNewIngCategoryError(
+        isVi ? 'Vui lòng nhập tên danh mục.' : 'Please enter a category name.'
+      );
+      return;
+    }
+    setCreatingIngCategory(true);
+    setNewIngCategoryError(null);
+    try {
+      const res = await addCategory({
+        name: trimmed,
+        scope: 'inventory',
+      });
+      if (!res.ok || !res.category) {
+        setNewIngCategoryError(
+          res.error || (isVi ? 'Không thể tạo danh mục.' : 'Could not create category.')
+        );
+        return;
+      }
+      setIngCategoryId(res.category.id);
+      setAddingIngCategory(false);
+      setNewIngCategoryName('');
+    } finally {
+      setCreatingIngCategory(false);
+    }
   };
 
   const handleSaveIngredient = async (e: React.FormEvent) => {
@@ -509,6 +591,7 @@ export const InventoryView: React.FC = () => {
       id: editingIng?.id,
       name: ingName.trim(),
       nameVi: ingNameVi.trim() || ingName.trim(),
+      categoryId: ingCategoryId || UNCATEGORIZED_ID,
       unit: ingUnit,
       stockQty: Number(ingStock) || 0,
       reorderLevel: Math.max(0, Number(ingReorder) || 0),
@@ -701,6 +784,8 @@ export const InventoryView: React.FC = () => {
       if (activeTab === 'prepared_stock' && item.tier !== 'prepared_stock') return false;
       if (activeTab === 'packaged' && item.tier !== 'packaged') return false;
 
+      if (categoryFilter !== 'all' && item.categoryId !== categoryFilter) return false;
+
       if (statusFilter === 'out' && item.status !== 'out') return false;
       if (statusFilter === 'low' && item.status !== 'low') return false;
       if (statusFilter === 'healthy' && item.status !== 'healthy') return false;
@@ -713,7 +798,7 @@ export const InventoryView: React.FC = () => {
         (item.barcode || '').toLowerCase().includes(q)
       );
     });
-  }, [allUnifiedItems, activeTab, statusFilter, q]);
+  }, [allUnifiedItems, activeTab, categoryFilter, statusFilter, q]);
 
   const filteredMovements = useMemo(
     () =>
@@ -1241,24 +1326,55 @@ export const InventoryView: React.FC = () => {
             </div>
 
             {activeTab !== 'movements' ? (
-              <div className="flex items-center gap-2 shrink-0">
-                <label
-                  htmlFor="inv-status-filter"
-                  className="text-xs font-medium text-stone-500 dark:text-[#94A39B] whitespace-nowrap"
+              <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen((prev) => !prev)}
+                  aria-expanded={filtersOpen}
+                  aria-controls="inventory-stock-filters"
+                  className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap border ${
+                    filtersOpen || activeFilterCount > 0
+                      ? 'bg-stone-100 dark:bg-[#18251F] border-transparent dark:border-[#24352C] text-stone-900 dark:text-[#F1F5F3] hover:bg-stone-200/70 dark:hover:bg-[#1F3028]'
+                      : 'bg-transparent border-transparent text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
+                  }`}
                 >
-                  {t.common.status}:
-                </label>
-                <select
-                  id="inv-status-filter"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as StockStatusFilter)}
-                  className="h-11 px-3.5 text-sm font-medium border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
+                  <span>
+                    {activeFilterCount > 0
+                      ? filtersOpen
+                        ? isVi
+                          ? `Ẩn bộ lọc (${activeFilterCount})`
+                          : `Hide Filters (${activeFilterCount})`
+                        : isVi
+                          ? `Bộ lọc (${activeFilterCount})`
+                          : `Filters (${activeFilterCount})`
+                      : filtersOpen
+                        ? isVi
+                          ? 'Ẩn bộ lọc'
+                          : 'Hide Filters'
+                        : isVi
+                          ? 'Hiện bộ lọc'
+                          : 'Show Filters'}
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-200 motion-reduce:transition-none ${
+                      filtersOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  disabled={activeFilterCount === 0 && !search.trim()}
+                  onClick={() => {
+                    setCategoryFilter('all');
+                    setStatusFilter('all');
+                    setSearch('');
+                  }}
+                  className="inline-flex items-center justify-center h-11 px-3 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors whitespace-nowrap"
                 >
-                  <option value="all">{isVi ? 'Tất cả trạng thái' : 'All'}</option>
-                  <option value="healthy">{isVi ? 'Ổn định' : 'Healthy'}</option>
-                  <option value="low">{isVi ? 'Sắp hết' : 'Low Stock'}</option>
-                  <option value="out">{isVi ? 'Hết hàng' : 'Out of Stock'}</option>
-                </select>
+                  {isVi ? 'Đặt lại tất cả' : 'Reset All'}
+                </button>
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -1289,6 +1405,60 @@ export const InventoryView: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Collapsible Category & Stock Status Pills Drawer (matches SalesView) */}
+          {activeTab !== 'movements' && (
+            <div
+              id="inventory-stock-filters"
+              className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
+                filtersOpen
+                  ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-stone-100 dark:border-[#24352C]'
+                  : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
+              }`}
+            >
+              <div className="overflow-hidden">
+                <div className="space-y-2.5">
+                  <CategoryFilterPills
+                    categories={inventoryCategories}
+                    selectedCategoryId={categoryFilter}
+                    onSelect={setCategoryFilter}
+                    isVi={isVi}
+                    allLabel={t.common.all}
+                  />
+
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="text-[11px] font-semibold text-stone-500 dark:text-[#94A39B] w-16 shrink-0">
+                      {t.common.status}
+                    </span>
+                    <div className="flex flex-nowrap items-center gap-2 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      {(
+                        [
+                          ['all', t.common.all],
+                          ['healthy', isVi ? 'Ổn định' : 'Healthy'],
+                          ['low', isVi ? 'Sắp hết' : 'Low Stock'],
+                          ['out', isVi ? 'Hết hàng' : 'Out of Stock'],
+                        ] as const
+                      ).map(([st, label]) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setStatusFilter(st)}
+                          aria-pressed={statusFilter === st}
+                          className={`h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${
+                            statusFilter === st
+                              ? 'bg-[#E6F2ED] text-[#0D5C3E] border-[#0D5C3E]/30 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/45 font-semibold'
+                              : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ================================================================== */}
@@ -1302,10 +1472,10 @@ export const InventoryView: React.FC = () => {
                   {isVi ? 'Không tìm thấy mặt hàng phù hợp' : 'No matching inventory items'}
                 </p>
                 <p className="text-xs text-stone-500 dark:text-[#94A39B]">
-                  {search || statusFilter !== 'all'
+                  {search || statusFilter !== 'all' || categoryFilter !== 'all'
                     ? isVi
-                      ? 'Hãy thử xóa từ khóa tìm kiếm hoặc đổi bộ lọc trạng thái.'
-                      : 'Try clearing your search or changing the status filter.'
+                      ? 'Hãy thử xóa từ khóa tìm kiếm hoặc đổi bộ lọc danh mục / trạng thái.'
+                      : 'Try clearing your search or changing the category or status filter.'
                     : activeTab === 'packaged'
                       ? isVi
                         ? 'Thêm sản phẩm đóng gói ở mục Sản phẩm để theo dõi tồn kho tại đây.'
@@ -1380,6 +1550,12 @@ export const InventoryView: React.FC = () => {
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${tierMeta.badgeClass}`}
                           >
                             {tierMeta.label}
+                          </span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-600 border border-stone-200/80 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] whitespace-nowrap">
+                            {getCategoryDisplayName(
+                              getCategoryById(item.categoryId, categories),
+                              isVi
+                            )}
                           </span>
                           <InfoHint
                             compact
@@ -1603,6 +1779,90 @@ export const InventoryView: React.FC = () => {
                   onChange={(e) => setIngNameVi(e.target.value)}
                   className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 />
+              </div>
+              <div>
+                <label
+                  htmlFor="ing-category-select"
+                  className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                >
+                  {isVi ? 'Danh mục kho' : 'Category'}
+                </label>
+                <select
+                  id="ing-category-select"
+                  value={addingIngCategory ? NEW_CATEGORY_OPTION_VALUE : ingCategoryId}
+                  onChange={(e) => {
+                    if (e.target.value === NEW_CATEGORY_OPTION_VALUE) {
+                      setAddingIngCategory(true);
+                      setNewIngCategoryName('');
+                      setNewIngCategoryError(null);
+                    } else {
+                      setAddingIngCategory(false);
+                      setNewIngCategoryError(null);
+                      setIngCategoryId(e.target.value);
+                    }
+                  }}
+                  className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                >
+                  {inventoryCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {getCategoryDisplayName(cat, isVi)}
+                    </option>
+                  ))}
+                  <option value={NEW_CATEGORY_OPTION_VALUE}>
+                    {isVi ? '+ Tạo danh mục mới...' : '+ New Category...'}
+                  </option>
+                </select>
+
+                {addingIngCategory && (
+                  <div className="mt-2 p-3 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        maxLength={40}
+                        value={newIngCategoryName}
+                        onChange={(e) => {
+                          setNewIngCategoryName(e.target.value);
+                          setNewIngCategoryError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void handleCreateInlineIngCategory();
+                          }
+                        }}
+                        placeholder={
+                          isVi ? 'VD: Trái cây tươi, Ly & Ống hút...' : 'e.g. Fresh Produce, Syrups...'
+                        }
+                        className="flex-1 min-w-0 h-11 px-3 text-sm bg-white dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        disabled={creatingIngCategory}
+                        onClick={() => void handleCreateInlineIngCategory()}
+                        className="h-11 px-3.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
+                      >
+                        {isVi ? 'Thêm' : 'Add'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddingIngCategory(false);
+                          setNewIngCategoryName('');
+                          setNewIngCategoryError(null);
+                        }}
+                        className="h-11 px-2.5 text-xs font-medium text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] rounded-lg"
+                      >
+                        {t.common.cancel}
+                      </button>
+                    </div>
+                    {newIngCategoryError && (
+                      <p className="text-xs text-red-600 dark:text-[#F87171]">
+                        {newIngCategoryError}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

@@ -22,6 +22,7 @@ import {
   Plus,
   RotateCcw,
   ShieldCheck,
+  Tag,
   Trash2,
   Upload,
   Users,
@@ -30,7 +31,13 @@ import {
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { useHints } from '../context/HintsContext';
-import type { BiometricSecurityConfig } from '../types';
+import type { BiometricSecurityConfig, CategoryScope } from '../types';
+import {
+  getCategoryDisplayName,
+  resolveIngredientCategoryId,
+  resolveProductCategoryId,
+  UNCATEGORIZED_ID,
+} from '../utils/categories';
 import {
   DEFAULT_SECURITY_CONFIG,
   enrollBiometricCredential,
@@ -54,11 +61,18 @@ interface SettingsViewProps {
   onLockNow: () => void;
 }
 
-type SettingsSectionId = 'language' | 'business' | 'family' | 'cloud-sync' | 'security';
+type SettingsSectionId =
+  | 'language'
+  | 'business'
+  | 'categories'
+  | 'family'
+  | 'cloud-sync'
+  | 'security';
 
 const SECTION_IDS: SettingsSectionId[] = [
   'language',
   'business',
+  'categories',
   'family',
   'cloud-sync',
   'security',
@@ -103,6 +117,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const {
     settings,
+    categories,
+    products,
+    ingredients,
     user,
     cloudSynced,
     syncing,
@@ -114,6 +131,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setLanguage,
     setActiveOperator,
     updateSettings,
+    addCategory,
+    updateCategory,
+    deleteCategory,
     startQuickCloudSync,
     signInWithGoogle,
     signOutGoogle,
@@ -147,6 +167,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [openSections, setOpenSections] = useState<Record<SettingsSectionId, boolean>>({
     language: true,
     business: true,
+    categories: true,
     family: true,
     'cloud-sync': true,
     security: true,
@@ -157,6 +178,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const sectionRefs = useRef<Record<SettingsSectionId, HTMLElement | null>>({
     language: null,
     business: null,
+    categories: null,
     family: null,
     'cloud-sync': null,
     security: null,
@@ -184,6 +206,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [presetFeedback, setPresetFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(
     null
   );
+
+  // Category manager state
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryScope, setNewCategoryScope] = useState<CategoryScope>('product');
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+  const [editCatScope, setEditCatScope] = useState<CategoryScope>('product');
+  const [deletingCatId, setDeletingCatId] = useState<string | null>(null);
+  const [reassignTargetId, setReassignTargetId] = useState<string>(UNCATEGORIZED_ID);
+  const [catBusy, setCatBusy] = useState(false);
+  const [catFeedback, setCatFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   // Family members
   const [newMember, setNewMember] = useState('');
@@ -242,6 +275,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setOpenSections({
       language: nextState,
       business: nextState,
+      categories: nextState,
       family: nextState,
       'cloud-sync': nextState,
       security: nextState,
@@ -569,9 +603,111 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     e.target.value = '';
   };
 
+  const categoryUsageMap = useMemo(() => {
+    const map = new Map<string, { products: number; ingredients: number }>();
+    for (const cat of categories) {
+      map.set(cat.id, { products: 0, ingredients: 0 });
+    }
+    for (const p of products) {
+      const cid = resolveProductCategoryId(p, categories);
+      const entry = map.get(cid) || { products: 0, ingredients: 0 };
+      entry.products += 1;
+      map.set(cid, entry);
+    }
+    for (const ing of ingredients) {
+      const cid = resolveIngredientCategoryId(ing, categories);
+      const entry = map.get(cid) || { products: 0, ingredients: 0 };
+      entry.ingredients += 1;
+      map.set(cid, entry);
+    }
+    return map;
+  }, [categories, products, ingredients]);
+
+  const showCategoryFeedback = (type: 'ok' | 'err', text: string) => {
+    setCatFeedback({ type, text });
+    window.setTimeout(() => {
+      setCatFeedback((prev) => (prev?.text === text ? null : prev));
+    }, 3200);
+  };
+
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim() || catBusy) return;
+    setCatBusy(true);
+    try {
+      const res = await addCategory({
+        name: newCategoryName.trim(),
+        scope: newCategoryScope,
+      });
+      if (!res.ok) {
+        showCategoryFeedback('err', res.error || (isVi ? 'Không thể thêm danh mục.' : 'Could not add category.'));
+        return;
+      }
+      setNewCategoryName('');
+      showCategoryFeedback(
+        'ok',
+        isVi
+          ? `Đã thêm danh mục "${res.category?.name}"`
+          : `Added category "${res.category?.name}"`
+      );
+    } finally {
+      setCatBusy(false);
+    }
+  };
+
+  const handleSaveEditCategory = async (catId: string) => {
+    if (!editCatName.trim() || catBusy) return;
+    setCatBusy(true);
+    try {
+      const res = await updateCategory(catId, {
+        name: editCatName.trim(),
+        scope: editCatScope,
+      });
+      if (!res.ok) {
+        showCategoryFeedback('err', res.error || (isVi ? 'Không thể cập nhật danh mục.' : 'Could not update category.'));
+        return;
+      }
+      setEditingCatId(null);
+      showCategoryFeedback(
+        'ok',
+        isVi ? 'Đã cập nhật danh mục và đồng bộ toàn ứng dụng.' : 'Category updated and synced across all views.'
+      );
+    } finally {
+      setCatBusy(false);
+    }
+  };
+
+  const handleConfirmDeleteCategory = async (catId: string) => {
+    if (catBusy) return;
+    setCatBusy(true);
+    try {
+      const targetId = reassignTargetId === catId ? UNCATEGORIZED_ID : reassignTargetId;
+      const res = await deleteCategory(catId, targetId);
+      if (!res.ok) {
+        showCategoryFeedback('err', res.error || (isVi ? 'Không thể xóa danh mục.' : 'Could not delete category.'));
+        return;
+      }
+      setDeletingCatId(null);
+      setReassignTargetId(UNCATEGORIZED_ID);
+      showCategoryFeedback(
+        'ok',
+        isVi ? 'Đã xóa danh mục và chuyển các mục liên quan an toàn.' : 'Category deleted and linked items safely reassigned.'
+      );
+    } finally {
+      setCatBusy(false);
+    }
+  };
+
+  const formatScopeLabel = (scope: CategoryScope) => {
+    if (scope === 'product') return isVi ? 'Sản phẩm & POS' : 'Products & POS';
+    if (scope === 'inventory') return isVi ? 'Kho nguyên liệu' : 'Inventory';
+    return isVi ? 'Cả hai' : 'Both';
+  };
+
   const quickJumpTabs: { id: SettingsSectionId; label: string }[] = [
     { id: 'language', label: isVi ? 'Ngôn ngữ' : 'Language' },
     { id: 'business', label: isVi ? 'Cửa hàng & Tiền tệ' : 'Business & Currency' },
+    { id: 'categories', label: isVi ? 'Danh mục' : 'Categories' },
     { id: 'family', label: isVi ? 'Gia đình' : 'Family Access' },
     { id: 'cloud-sync', label: isVi ? 'Đám mây & Sao lưu' : 'Cloud & Backup' },
     { id: 'security', label: isVi ? 'Bảo mật' : 'Security' },
@@ -581,6 +717,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const languageSummary = settings.language === 'vi' ? 'Tiếng Việt' : 'English';
   const formattedPosRate = (settings.posExchangeRate ?? 4000).toLocaleString('en-US');
   const businessSummary = `KHR • ${formattedPosRate} ៛`;
+  const categoriesSummary = isVi
+    ? `${categories.length} danh mục`
+    : `${categories.length} ${categories.length === 1 ? 'Category' : 'Categories'}`;
   const familySummary = isVi
     ? `${familyMembers.length} thành viên`
     : `${familyMembers.length} ${familyMembers.length === 1 ? 'Member' : 'Members'}`;
@@ -1255,6 +1394,320 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
             </form>
+          )}
+        </section>
+
+        {/* 2b. Categories Manager */}
+        <section
+          id="settings-categories"
+          ref={(el) => {
+            sectionRefs.current.categories = el;
+          }}
+          className="scroll-mt-36 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-6"
+        >
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => toggleSection('categories')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleSection('categories');
+              }
+            }}
+            className="flex items-center justify-between gap-3 cursor-pointer select-none"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <Tag className="w-5 h-5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+              <div className="flex items-center gap-1 min-w-0">
+                <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
+                  {isVi ? 'Quản lý danh mục' : 'Categories'}
+                </h2>
+                <InfoTrigger
+                  hintId="categoriesDesc"
+                  active={isHintVisible('categoriesDesc')}
+                  label={isVi ? 'Thông tin quản lý danh mục' : 'Categories management info'}
+                  onToggle={toggleSingleHint}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
+              {!openSections.categories && (
+                <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-stone-100 text-stone-700 dark:bg-[#18251F] dark:text-[#94A39B] border border-stone-200/80 dark:border-[#24352C] whitespace-nowrap">
+                  {categoriesSummary}
+                </span>
+              )}
+              {renderSectionToggleButton('categories')}
+            </div>
+          </div>
+
+          {isHintVisible('categoriesDesc') && (
+            <p className="mt-2.5 text-sm text-stone-500 dark:text-[#94A39B] leading-relaxed">
+              {isVi
+                ? 'Thêm, đổi tên hoặc xóa danh mục tại đây. Mọi thay đổi tự động đồng bộ trên POS, Sản phẩm, Kho hàng và Báo cáo tài chính mà không làm mất lịch sử bán hàng.'
+                : 'Add, rename, or remove categories here. Changes stay synced across POS, Products, Inventory, and Financial Reports without splitting historical data.'}
+            </p>
+          )}
+
+          {openSections.categories && (
+            <div className="mt-5 pt-5 border-t border-stone-200 dark:border-[#24352C] space-y-5">
+              {/* Add New Category Bar */}
+              <form
+                onSubmit={handleAddCategory}
+                className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2.5"
+              >
+                <div className="flex-1 min-w-0">
+                  <label
+                    htmlFor="new-category-name"
+                    className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                  >
+                    {isVi ? 'Tên danh mục mới' : 'New Category Name'}
+                  </label>
+                  <input
+                    id="new-category-name"
+                    type="text"
+                    maxLength={64}
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder={isVi ? 'VD: Nước ép Detox, Bánh ngọt...' : 'e.g. Detox Juices, Pastries...'}
+                    className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                  />
+                </div>
+                <div className="sm:w-44">
+                  <label
+                    htmlFor="new-category-scope"
+                    className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                  >
+                    {isVi ? 'Áp dụng cho' : 'Scope'}
+                  </label>
+                  <select
+                    id="new-category-scope"
+                    value={newCategoryScope}
+                    onChange={(e) => setNewCategoryScope(e.target.value as CategoryScope)}
+                    className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                  >
+                    <option value="product">{isVi ? 'Sản phẩm & POS' : 'Products & POS'}</option>
+                    <option value="inventory">{isVi ? 'Kho nguyên liệu' : 'Inventory'}</option>
+                    <option value="both">{isVi ? 'Cả hai' : 'Both'}</option>
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  disabled={!newCategoryName.trim() || catBusy}
+                  className="h-11 px-4 inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  {isVi ? 'Thêm danh mục' : 'Add Category'}
+                </button>
+              </form>
+
+              {catFeedback && (
+                <div
+                  role="status"
+                  className={`px-3.5 py-2.5 rounded-lg text-xs font-medium flex items-center justify-between gap-2 ${
+                    catFeedback.type === 'ok'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 dark:bg-[#064E3B]/40 dark:text-[#6EE7B7] dark:border-[#10B981]/30'
+                      : 'bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950/35 dark:text-rose-300 dark:border-rose-800/50'
+                  }`}
+                >
+                  <span>{catFeedback.text}</span>
+                  <button
+                    type="button"
+                    onClick={() => setCatFeedback(null)}
+                    className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/10"
+                    aria-label={t.common.close}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Category List */}
+              <div className="divide-y divide-stone-100 dark:divide-[#1F3028] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+                {categories.map((cat) => {
+                  const isSystem = Boolean(cat.isSystem || cat.id === UNCATEGORIZED_ID);
+                  const usage = categoryUsageMap.get(cat.id) || { products: 0, ingredients: 0 };
+                  const totalLinked = usage.products + usage.ingredients;
+                  const isEditing = editingCatId === cat.id;
+                  const isDeleting = deletingCatId === cat.id;
+                  const replacementOptions = categories.filter((c) => c.id !== cat.id);
+
+                  return (
+                    <div
+                      key={cat.id}
+                      className="p-3.5 bg-white dark:bg-[#131D18] hover:bg-stone-50/70 dark:hover:bg-[#16221C] transition-colors"
+                    >
+                      {isEditing ? (
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                          <input
+                            type="text"
+                            maxLength={64}
+                            value={editCatName}
+                            onChange={(e) => setEditCatName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void handleSaveEditCategory(cat.id);
+                              } else if (e.key === 'Escape') {
+                                setEditingCatId(null);
+                              }
+                            }}
+                            autoFocus
+                            className="flex-1 h-11 px-3 text-sm border border-[#0D5C3E] dark:border-[#10B981] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                          />
+                          {!isSystem && (
+                            <select
+                              value={editCatScope}
+                              onChange={(e) => setEditCatScope(e.target.value as CategoryScope)}
+                              className="sm:w-40 h-11 px-3 text-xs font-medium border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
+                            >
+                              <option value="product">{isVi ? 'Sản phẩm & POS' : 'Products & POS'}</option>
+                              <option value="inventory">{isVi ? 'Kho nguyên liệu' : 'Inventory'}</option>
+                              <option value="both">{isVi ? 'Cả hai' : 'Both'}</option>
+                            </select>
+                          )}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              disabled={!editCatName.trim() || catBusy}
+                              onClick={() => void handleSaveEditCategory(cat.id)}
+                              className="h-11 px-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              {t.common.save}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingCatId(null)}
+                              className="h-11 px-3 inline-flex items-center justify-center text-xs font-medium text-stone-600 dark:text-[#94A39B] bg-stone-100 dark:bg-[#18251F] hover:bg-stone-200 dark:hover:bg-[#1F3028] rounded-lg"
+                            >
+                              {t.common.cancel}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
+                            <span className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                              {getCategoryDisplayName(cat, isVi)}
+                            </span>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-700 dark:bg-[#18251F] dark:text-[#94A39B] border border-stone-200/80 dark:border-[#24352C]">
+                              {formatScopeLabel(cat.scope)}
+                            </span>
+                            <span className="font-mono-num text-[11px] text-stone-500 dark:text-[#94A39B]">
+                              {totalLinked === 0
+                                ? isVi
+                                  ? 'Chưa dùng'
+                                  : 'Unused'
+                                : [
+                                    usage.products > 0
+                                      ? `${usage.products} ${isVi ? 'sản phẩm' : usage.products === 1 ? 'product' : 'products'}`
+                                      : '',
+                                    usage.ingredients > 0
+                                      ? `${usage.ingredients} ${isVi ? 'nguyên liệu' : usage.ingredients === 1 ? 'ingredient' : 'ingredients'}`
+                                      : '',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                            </span>
+                            {isSystem && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-[#0D5C3E] dark:bg-[#064E3B]/60 dark:text-[#6EE7B7]">
+                                <Lock className="w-2.5 h-2.5" />
+                                {isVi ? 'Mặc định hệ thống' : 'System Default'}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeletingCatId(null);
+                                setEditingCatId(cat.id);
+                                setEditCatName(cat.name);
+                                setEditCatScope(cat.scope);
+                              }}
+                              aria-label={isVi ? `Sửa ${cat.name}` : `Edit ${cat.name}`}
+                              className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-medium text-stone-700 dark:text-[#D5DFDA] bg-stone-100/80 dark:bg-[#18251F] hover:bg-stone-200/80 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">{isVi ? 'Đổi tên' : 'Edit'}</span>
+                            </button>
+                            {!isSystem && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingCatId(null);
+                                  setDeletingCatId(isDeleting ? null : cat.id);
+                                  setReassignTargetId(UNCATEGORIZED_ID);
+                                }}
+                                aria-label={isVi ? `Xóa ${cat.name}` : `Delete ${cat.name}`}
+                                className="w-11 h-11 inline-flex items-center justify-center text-stone-500 hover:text-rose-600 dark:text-[#94A39B] dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {isDeleting && !isSystem && (
+                        <div className="mt-3 pt-3 border-t border-rose-200/70 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 -mx-3.5 -mb-3.5 px-3.5 pb-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
+                            <span className="text-xs font-medium text-rose-800 dark:text-rose-200">
+                              {totalLinked > 0
+                                ? isVi
+                                  ? `Chuyển ${totalLinked} mục sang:`
+                                  : `Reassign ${totalLinked} linked ${totalLinked === 1 ? 'item' : 'items'} to:`
+                                : isVi
+                                  ? `Xóa danh mục "${cat.name}"?`
+                                  : `Delete category "${cat.name}"?`}
+                            </span>
+                            {totalLinked > 0 && (
+                              <select
+                                value={reassignTargetId}
+                                onChange={(e) => setReassignTargetId(e.target.value)}
+                                className="h-11 px-3 text-xs font-medium border border-rose-200 dark:border-rose-800/70 rounded-lg bg-white dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3]"
+                              >
+                                {replacementOptions.map((opt) => (
+                                  <option key={opt.id} value={opt.id}>
+                                    {getCategoryDisplayName(opt, isVi)}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              disabled={catBusy}
+                              onClick={() => void handleConfirmDeleteCategory(cat.id)}
+                              className="h-11 px-4 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              {totalLinked > 0
+                                ? isVi
+                                  ? 'Chuyển & Xóa'
+                                  : 'Reassign & Delete'
+                                : isVi
+                                  ? 'Xác nhận xóa'
+                                  : 'Confirm Delete'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingCatId(null)}
+                              className="h-11 px-3 text-xs font-medium text-stone-600 dark:text-[#94A39B] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg"
+                            >
+                              {t.common.cancel}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </section>
 

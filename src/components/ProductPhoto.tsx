@@ -8,17 +8,16 @@ import {
   Leaf,
   Package,
 } from 'lucide-react';
-import type { ProductCategory } from '../types';
 
 interface ProductPhotoProps {
   src: string;
   alt: string;
-  category?: ProductCategory;
+  category?: string;
   className?: string;
 }
 
 const CATEGORY_PLACEHOLDER_STYLES: Record<
-  ProductCategory,
+  string,
   {
     bg: string;
     iconBg: string;

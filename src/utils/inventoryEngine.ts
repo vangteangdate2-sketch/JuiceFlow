@@ -1,4 +1,5 @@
 import type {
+  CategoryItem,
   Expense,
   Ingredient,
   IngredientUnit,
@@ -27,6 +28,12 @@ import {
   sanitizeString,
   todayIso,
 } from './format';
+import {
+  ensureCategoriesList,
+  getCategoryById,
+  resolveSaleItemCategoryId,
+  UNCATEGORIZED_ID,
+} from './categories';
 
 export function roundQty(val: number): number {
   if (!Number.isFinite(val)) return 0;
@@ -42,16 +49,6 @@ export function roundKhr(val: number): number {
 // Backward-compatible Normalizers (for legacy Firestore & localStorage docs)
 // ---------------------------------------------------------------------------
 
-const VALID_PRODUCT_CATEGORIES = new Set([
-  'juice',
-  'smoothie',
-  'tea',
-  'coffee',
-  'specialty',
-  'packaged',
-  'snack',
-]);
-
 const VALID_UNITS = new Set<IngredientUnit>(['pcs', 'ml', 'L', 'g', 'kg']);
 const VALID_PAYMENT_METHODS = new Set<PaymentMethod>(['cash', 'khqr', 'aba', 'wing']);
 
@@ -60,10 +57,15 @@ export function normalizeIngredient(raw: Partial<Ingredient> & { id: string }): 
     raw.unit && VALID_UNITS.has(raw.unit) ? raw.unit : 'pcs';
   const name = String(raw.name || 'Unnamed Ingredient').trim() || 'Unnamed Ingredient';
   const nameVi = String(raw.nameVi || name).trim() || name;
+  const categoryId =
+    typeof raw.categoryId === 'string' && raw.categoryId.trim().length > 0
+      ? raw.categoryId.trim()
+      : undefined;
   return {
     id: String(raw.id),
     name,
     nameVi,
+    ...(categoryId ? { categoryId } : {}),
     unit,
     stockQty: Number.isFinite(Number(raw.stockQty)) ? Number(raw.stockQty) : 0,
     reorderLevel: Number.isFinite(Number(raw.reorderLevel))
@@ -122,12 +124,19 @@ export function normalizeProduct(raw: Partial<Product> & { id: string }): Produc
           }))
       : [];
 
+  const rawCategoryId =
+    typeof raw.categoryId === 'string' && raw.categoryId.trim().length > 0
+      ? raw.categoryId.trim()
+      : undefined;
+  const rawCategoryStr =
+    typeof raw.category === 'string' && raw.category.trim().length > 0
+      ? raw.category.trim()
+      : '';
   const safeCategory =
-    typeof raw.category === 'string' && VALID_PRODUCT_CATEGORIES.has(raw.category)
-      ? raw.category
-      : productType === 'PACKAGED'
-        ? 'packaged'
-        : 'juice';
+    rawCategoryStr ||
+    rawCategoryId ||
+    (productType === 'PACKAGED' ? 'packaged' : 'juice');
+  const safeCategoryId = rawCategoryId || safeCategory;
 
   const safeUnit: IngredientUnit =
     raw.unit && VALID_UNITS.has(raw.unit) ? raw.unit : 'pcs';
@@ -137,7 +146,8 @@ export function normalizeProduct(raw: Partial<Product> & { id: string }): Produc
     name: String(raw.name || 'Untitled Item'),
     nameVi: String(raw.nameVi || raw.name || 'Sản phẩm'),
     brand: String(raw.brand ?? ''),
-    category: safeCategory as Product['category'],
+    category: safeCategory,
+    categoryId: safeCategoryId,
     productType,
     priceKhr: Math.max(0, Number(raw.priceKhr ?? 0) || 0),
     costPriceKhr: Math.max(0, Number(raw.costPriceKhr ?? 0) || 0),
@@ -205,6 +215,7 @@ export function normalizeSale(raw: Partial<Sale> & { id: string }): Sale {
           ...item,
           lineId: String(item.lineId || `${raw.id}_line_${idx}`),
           productId: String(item.productId || ''),
+          ...(item.categoryId ? { categoryId: String(item.categoryId).trim() } : {}),
           productName: String(item.productName || 'Item'),
           productNameVi: String(item.productNameVi || item.productName || 'Sản phẩm'),
           ...(item.variantName ? { variantName: String(item.variantName) } : {}),
@@ -819,6 +830,7 @@ export function buildCheckoutPlan(params: CheckoutPlanParams): CheckoutPlanResul
     saleItems.push({
       lineId,
       productId: prod.id,
+      categoryId: prod.categoryId || prod.category || UNCATEGORIZED_ID,
       ...(variant ? { variantId: variant.id, variantName: variant.name, variantNameVi: variant.nameVi } : {}),
       productType: prod.productType,
       recipeVersion: variant?.recipeVersion ?? prod.recipeVersion ?? 1,
@@ -1882,6 +1894,7 @@ export interface PeriodBucket {
 
 export interface ProductProfitRow {
   productId: string;
+  categoryId: string;
   name: string;
   nameVi: string;
   productType: ProductType;
@@ -1893,10 +1906,23 @@ export interface ProductProfitRow {
   marginPct: number;
 }
 
+export interface CategoryProfitRow {
+  categoryId: string;
+  categoryName: string;
+  categoryNameVi: string;
+  netQty: number;
+  orderCount: number;
+  netRevenueKhr: number;
+  netCogsKhr: number;
+  grossProfitKhr: number;
+  marginPct: number;
+}
+
 export interface FinancialReportSummary {
   dateStart: string;
   dateEnd: string;
   grouping: ReportGrouping;
+  activeCategoryFilterId: string;
   // Accrual Profit & Loss (NO double-counting of inventory purchases!)
   grossSalesKhr: number;
   returnsRefundsKhr: number;
@@ -1914,6 +1940,7 @@ export interface FinancialReportSummary {
   // Cash Flow Statement (Explicitly separates inventory purchases from operating expenses)
   cashInflowsKhr: number;
   cashInflowsByMethod: Record<PaymentMethod, number>;
+  paymentOrderCountsByMethod: Record<PaymentMethod, number>;
   inventoryPurchasesCashOutKhr: number;
   operatingExpensesCashOutKhr: number;
   householdExpensesCashOutKhr: number;
@@ -1925,8 +1952,9 @@ export interface FinancialReportSummary {
     preparedStockValueKhr: number;
     totalInventoryValueKhr: number;
   };
-  // Grouped Series & Product Profitability
+  // Grouped Series, Category Breakdown & Product Profitability
   series: PeriodBucket[];
+  categoryBreakdown: CategoryProfitRow[];
   productProfitability: ProductProfitRow[];
 }
 
@@ -1950,6 +1978,8 @@ export function computeFinancialReport(params: {
   purchases: PurchaseRecord[];
   products: Product[];
   ingredients: Ingredient[];
+  categories?: CategoryItem[];
+  categoryFilterId?: string;
   dateStart?: string;
   dateEnd?: string;
   grouping?: ReportGrouping;
@@ -1957,6 +1987,12 @@ export function computeFinancialReport(params: {
   const dateStart = params.dateStart || '2000-01-01';
   const dateEnd = params.dateEnd || '2099-12-31';
   const grouping: ReportGrouping = params.grouping || 'daily';
+  const safeCategories = ensureCategoriesList(params.categories);
+  const activeCategoryFilterId =
+    params.categoryFilterId && params.categoryFilterId !== 'all'
+      ? params.categoryFilterId
+      : 'all';
+  const isFilteredByCategory = activeCategoryFilterId !== 'all';
 
   const inRange = (d: string) => d >= dateStart && d <= dateEnd;
 
@@ -1974,6 +2010,12 @@ export function computeFinancialReport(params: {
   let unitsSoldNet = 0;
 
   const cashInflowsByMethod: Record<PaymentMethod, number> = {
+    cash: 0,
+    khqr: 0,
+    aba: 0,
+    wing: 0,
+  };
+  const paymentOrderCountsByMethod: Record<PaymentMethod, number> = {
     cash: 0,
     khqr: 0,
     aba: 0,
@@ -2004,40 +2046,122 @@ export function computeFinancialReport(params: {
 
   const prodLookup = new Map(params.products.map((p) => [p.id, p]));
   const productPerfMap = new Map<string, ProductProfitRow>();
+  const categoryPerfMap = new Map<string, CategoryProfitRow>();
 
   for (const sale of rangeSales) {
     if (sale.status === 'voided') {
-      voidedOrdersCount += 1;
-      voidedTotalKhr += sale.totalKhr;
+      if (!isFilteredByCategory) {
+        voidedOrdersCount += 1;
+        voidedTotalKhr += sale.totalKhr;
+      } else {
+        const voidedCatItems = sale.items.filter(
+          (it) => resolveSaleItemCategoryId(it, prodLookup, safeCategories) === activeCategoryFilterId
+        );
+        if (voidedCatItems.length > 0) {
+          voidedOrdersCount += 1;
+          voidedTotalKhr += voidedCatItems.reduce(
+            (sum, it) => sum + roundKhr(it.lineTotalKhr || it.unitPriceKhr * it.quantity),
+            0
+          );
+        }
+      }
       continue;
     }
 
-    const saleRefund = sale.refundedKhr ?? 0;
-    const saleNet = sale.netTotalKhr ?? Math.max(0, sale.totalKhr - saleRefund);
-    const saleNetCogs = Math.max(0, sale.cogsKhr - (sale.refundedCogsKhr ?? 0));
+    // 1. Always accumulate full Category Breakdown across ALL categories in the period
+    const categoriesSeenInSale = new Set<string>();
+    for (const item of sale.items) {
+      const catId = resolveSaleItemCategoryId(item, prodLookup, safeCategories);
+      const retQty = item.returnedQty ?? 0;
+      const netQty = Math.max(0, item.quantity - retQty);
+      const itemNetRev = roundKhr(item.unitPriceKhr * netQty);
+      const itemNetCogs = roundKhr(item.unitCogsKhr * netQty);
 
-    grossSalesKhr += sale.totalKhr;
+      const catMeta = getCategoryById(catId, safeCategories);
+      const existingCat = categoryPerfMap.get(catId) || {
+        categoryId: catId,
+        categoryName: catMeta.name,
+        categoryNameVi: catMeta.nameVi || catMeta.name,
+        netQty: 0,
+        orderCount: 0,
+        netRevenueKhr: 0,
+        netCogsKhr: 0,
+        grossProfitKhr: 0,
+        marginPct: 0,
+      };
+      existingCat.netQty += netQty;
+      if (!categoriesSeenInSale.has(catId)) {
+        existingCat.orderCount += 1;
+        categoriesSeenInSale.add(catId);
+      }
+      existingCat.netRevenueKhr += itemNetRev;
+      existingCat.netCogsKhr += itemNetCogs;
+      existingCat.grossProfitKhr = existingCat.netRevenueKhr - existingCat.netCogsKhr;
+      existingCat.marginPct =
+        existingCat.netRevenueKhr > 0
+          ? Math.round((existingCat.grossProfitKhr / existingCat.netRevenueKhr) * 100)
+          : 0;
+      categoryPerfMap.set(catId, existingCat);
+    }
+
+    // 2. Accumulate filtered (or full) KPIs, trend series, payment reconciliation, and product table
+    const relevantItems = isFilteredByCategory
+      ? sale.items.filter(
+          (item) =>
+            resolveSaleItemCategoryId(item, prodLookup, safeCategories) === activeCategoryFilterId
+        )
+      : sale.items;
+
+    if (isFilteredByCategory && relevantItems.length === 0) {
+      continue;
+    }
+
+    let saleGross = sale.totalKhr;
+    let saleRefund = sale.refundedKhr ?? 0;
+    let saleNet = sale.netTotalKhr ?? Math.max(0, sale.totalKhr - saleRefund);
+    let saleNetCogs = Math.max(0, sale.cogsKhr - (sale.refundedCogsKhr ?? 0));
+
+    if (isFilteredByCategory) {
+      saleGross = 0;
+      saleRefund = 0;
+      saleNet = 0;
+      saleNetCogs = 0;
+      for (const item of relevantItems) {
+        const retQty = item.returnedQty ?? 0;
+        const netQty = Math.max(0, item.quantity - retQty);
+        saleGross += roundKhr(item.unitPriceKhr * item.quantity);
+        saleRefund += roundKhr(item.unitPriceKhr * retQty);
+        saleNet += roundKhr(item.unitPriceKhr * netQty);
+        saleNetCogs += roundKhr(item.unitCogsKhr * netQty);
+      }
+    }
+
+    grossSalesKhr += saleGross;
     returnsRefundsKhr += saleRefund;
     netRevenueKhr += saleNet;
     netCogsKhr += saleNetCogs;
     completedOrderCount += 1;
     cashInflowsByMethod[sale.paymentMethod] =
       (cashInflowsByMethod[sale.paymentMethod] || 0) + saleNet;
+    paymentOrderCountsByMethod[sale.paymentMethod] =
+      (paymentOrderCountsByMethod[sale.paymentMethod] || 0) + 1;
 
     const b = ensureBucket(toPeriodKey(sale.saleDate, grouping));
-    b.grossSalesKhr += sale.totalKhr;
+    b.grossSalesKhr += saleGross;
     b.refundsKhr += saleRefund;
     b.netRevenueKhr += saleNet;
     b.cogsKhr += saleNetCogs;
     b.orderCount += 1;
 
-    for (const item of sale.items) {
+    for (const item of relevantItems) {
+      const catId = resolveSaleItemCategoryId(item, prodLookup, safeCategories);
       const retQty = item.returnedQty ?? 0;
       const netQty = Math.max(0, item.quantity - retQty);
       unitsSoldNet += netQty;
 
       const existing = productPerfMap.get(item.productId) || {
         productId: item.productId,
+        categoryId: catId,
         name: item.productName,
         nameVi: item.productNameVi,
         productType: item.productType || prodLookup.get(item.productId)?.productType || 'PREPARED_TO_ORDER',
@@ -2129,6 +2253,10 @@ export function computeFinancialReport(params: {
     })
     .sort((a, b) => a.periodKey.localeCompare(b.periodKey));
 
+  const categoryBreakdown = Array.from(categoryPerfMap.values()).sort(
+    (a, b) => b.netRevenueKhr - a.netRevenueKhr
+  );
+
   const productProfitability = Array.from(productPerfMap.values()).sort(
     (a, b) => b.netRevenueKhr - a.netRevenueKhr
   );
@@ -2137,6 +2265,7 @@ export function computeFinancialReport(params: {
     dateStart,
     dateEnd,
     grouping,
+    activeCategoryFilterId,
     grossSalesKhr: roundKhr(grossSalesKhr),
     returnsRefundsKhr: roundKhr(returnsRefundsKhr),
     voidedOrdersCount,
@@ -2152,6 +2281,7 @@ export function computeFinancialReport(params: {
     unitsSoldNet,
     cashInflowsKhr: roundKhr(netRevenueKhr),
     cashInflowsByMethod,
+    paymentOrderCountsByMethod,
     inventoryPurchasesCashOutKhr,
     operatingExpensesCashOutKhr: roundKhr(operatingExpensesKhr),
     householdExpensesCashOutKhr: roundKhr(householdExpensesCashOutKhr),
@@ -2163,6 +2293,7 @@ export function computeFinancialReport(params: {
       totalInventoryValueKhr: roundKhr(packagedValueKhr + ingredientsValueKhr + preparedStockValueKhr),
     },
     series,
+    categoryBreakdown,
     productProfitability,
   };
 }

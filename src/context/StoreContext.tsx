@@ -45,6 +45,8 @@ import type {
   BarcodeRegistryRecord,
   BarcodeResolutionResult,
   BarcodeSource,
+  CategoryItem,
+  CategoryScope,
   Expense,
   ExpenseCategory,
   ExpenseScope,
@@ -58,6 +60,15 @@ import type {
   StockMovement,
   WorkspaceSettings,
 } from '../types';
+import {
+  DEFAULT_CATEGORIES,
+  ensureCategoriesList,
+  normalizeCategoryItem,
+  resolveIngredientCategoryId,
+  resolveProductCategoryId,
+  sortCategories,
+  UNCATEGORIZED_ID,
+} from '../utils/categories';
 import {
   buildRegistryFromProducts,
   detectBarcodeFormat,
@@ -126,6 +137,7 @@ function saveCashPresets(presets: number[]): void {
 
 interface LocalSnapshot {
   settings: WorkspaceSettings;
+  categories: CategoryItem[];
   ingredients: Ingredient[];
   products: Product[];
   barcodeRegistry: BarcodeRegistryRecord[];
@@ -238,8 +250,13 @@ function loadLocalSnapshot(): LocalSnapshot {
         const barcodeRegistry =
           parsedRegistry.length > 0 ? parsedRegistry : buildRegistryFromProducts(products);
 
+        const categories = ensureCategoriesList(
+          Array.isArray(parsed.categories) ? parsed.categories : undefined
+        );
+
         return {
           settings,
+          categories,
           ingredients,
           products,
           barcodeRegistry,
@@ -261,6 +278,7 @@ function loadLocalSnapshot(): LocalSnapshot {
   const seed = createSeedData();
   return {
     settings: createInitialSettings(),
+    categories: ensureCategoriesList(),
     barcodeRegistry: buildRegistryFromProducts(seed.products),
     ...seed,
   };
@@ -393,8 +411,15 @@ export interface CloudAuthResult {
   redirected?: boolean;
 }
 
+export interface CategoryMutationResult {
+  ok: boolean;
+  category?: CategoryItem;
+  error?: string;
+}
+
 export interface StoreContextValue {
   settings: WorkspaceSettings;
+  categories: CategoryItem[];
   ingredients: Ingredient[];
   products: Product[];
   barcodeRegistry: BarcodeRegistryRecord[];
@@ -416,6 +441,19 @@ export interface StoreContextValue {
   setLanguage: (lang: AppLanguage) => void;
   setActiveOperator: (name: string) => void;
   updateSettings: (patch: Partial<WorkspaceSettings>) => Promise<void>;
+  addCategory: (input: {
+    name: string;
+    nameVi?: string;
+    scope: CategoryScope;
+  }) => Promise<CategoryMutationResult>;
+  updateCategory: (
+    categoryId: string,
+    patch: { name?: string; nameVi?: string; scope?: CategoryScope; sortOrder?: number }
+  ) => Promise<CategoryMutationResult>;
+  deleteCategory: (
+    categoryId: string,
+    reassignToCategoryId?: string
+  ) => Promise<OperationResult>;
   saveProduct: (
     product: Omit<Product, 'id'> & { id?: string; barcodeSource?: BarcodeSource }
   ) => Promise<SaveProductResult>;
@@ -455,12 +493,34 @@ export interface StoreContextValue {
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
+function categoryToFirestoreDoc(
+  cat: CategoryItem,
+  workspaceId: string,
+  memberUids: string[],
+  createdByUid: string
+) {
+  return stripUndefined({
+    workspaceId,
+    memberUids,
+    name: sanitizeString(cat.name, 64) || 'Category',
+    nameVi: sanitizeString(cat.nameVi || cat.name, 64),
+    scope: cat.scope,
+    sortOrder: clampNumber(Math.round(cat.sortOrder ?? 100), 0, 100000),
+    isSystem: Boolean(cat.isSystem || cat.id === UNCATEGORIZED_ID),
+    createdBy: createdByUid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 function productToFirestoreFields(clean: Product) {
+  const safeCatId = sanitizeString(clean.categoryId || clean.category || UNCATEGORIZED_ID, 64) || UNCATEGORIZED_ID;
   return stripUndefined({
     name: sanitizeString(clean.name, 100),
     nameVi: sanitizeString(clean.nameVi || clean.name, 100),
     brand: sanitizeString(clean.brand || '', 80),
-    category: clean.category,
+    category: sanitizeString(clean.category || safeCatId, 64) || UNCATEGORIZED_ID,
+    categoryId: safeCatId,
     productType: clean.productType,
     priceKhr: clampNumber(clean.priceKhr, 0, 100000000),
     costPriceKhr: clampNumber(clean.costPriceKhr, 0, 100000000),
@@ -658,6 +718,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const initial = useMemo(() => loadLocalSnapshot(), []);
 
   const [settings, setSettings] = useState<WorkspaceSettings>(initial.settings);
+  const [categories, setCategories] = useState<CategoryItem[]>(() =>
+    ensureCategoriesList(initial.categories)
+  );
   const [ingredients, setIngredients] = useState<Ingredient[]>(initial.ingredients);
   const [products, setProducts] = useState<Product[]>(initial.products);
   const [barcodeRegistry, setBarcodeRegistry] = useState<BarcodeRegistryRecord[]>(
@@ -676,6 +739,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [refreshing, setRefreshing] = useState(false);
   const [rememberMe, setRememberMeState] = useState<boolean>(() => loadRememberMePreference());
   const [cashPresets, setCashPresetsState] = useState<number[]>(() => loadCashPresets());
+  const seededCloudCategoriesWsRef = useRef<string | null>(null);
 
   const setRememberMe = useCallback((value: boolean) => {
     setRememberMeState(value);
@@ -693,6 +757,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const latestRef = useRef({
     settings,
+    categories,
     ingredients,
     products,
     barcodeRegistry,
@@ -705,6 +770,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   latestRef.current = {
     settings,
+    categories,
     ingredients,
     products,
     barcodeRegistry,
@@ -720,6 +786,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const snapshot: LocalSnapshot = {
         settings,
+        categories,
         ingredients,
         products,
         barcodeRegistry,
@@ -732,7 +799,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {
       // Ignore storage quota errors
     }
-  }, [settings, ingredients, products, barcodeRegistry, sales, expenses, purchases, stockMovements]);
+  }, [settings, categories, ingredients, products, barcodeRegistry, sales, expenses, purchases, stockMovements]);
 
   // Listen to Firebase Auth state & resolve any pending redirect sign-in
   useEffect(() => {
@@ -836,21 +903,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         // Seed existing local records into the newly created cloud workspace
         const seedBatch = writeBatch(db);
+        for (const cat of ensureCategoriesList(cur.categories)) {
+          seedBatch.set(
+            doc(db, 'workspaces', wsId, 'categories', cat.id),
+            categoryToFirestoreDoc(cat, wsId, uids, user.uid)
+          );
+        }
         for (const ing of cur.ingredients) {
-          seedBatch.set(doc(db, 'workspaces', wsId, 'ingredients', ing.id), {
-            workspaceId: wsId,
-            memberUids: uids,
-            name: sanitizeString(ing.name, 100),
-            nameVi: sanitizeString(ing.nameVi, 100),
-            unit: ing.unit,
-            stockQty: clampNumber(ing.stockQty, -1000000, 100000000),
-            reorderLevel: clampNumber(ing.reorderLevel, 0, 100000000),
-            unitCostKhr: clampNumber(ing.unitCostKhr, 0, 100000000),
-            supplier: sanitizeString(ing.supplier, 100),
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
+          seedBatch.set(
+            doc(db, 'workspaces', wsId, 'ingredients', ing.id),
+            stripUndefined({
+              workspaceId: wsId,
+              memberUids: uids,
+              name: sanitizeString(ing.name, 100),
+              nameVi: sanitizeString(ing.nameVi, 100),
+              ...(ing.categoryId ? { categoryId: sanitizeString(ing.categoryId, 64) } : {}),
+              unit: ing.unit,
+              stockQty: clampNumber(ing.stockQty, -1000000, 100000000),
+              reorderLevel: clampNumber(ing.reorderLevel, 0, 100000000),
+              unitCostKhr: clampNumber(ing.unitCostKhr, 0, 100000000),
+              supplier: sanitizeString(ing.supplier, 100),
+              createdBy: user.uid,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            })
+          );
         }
         for (const prod of cur.products) {
           seedBatch.set(doc(db, 'workspaces', wsId, 'products', prod.id), {
@@ -1135,8 +1212,56 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (err) => handleFirestoreError(err, OperationType.LIST, barcodePath)
     );
 
+    const catPath = `workspaces/${cloudWorkspaceId}/categories`;
+    const unsubCategories = onSnapshot(
+      query(collection(db, catPath), where('memberUids', 'array-contains', user.uid)),
+      (snap) => {
+        if (snap.empty) {
+          const fallbackCats = ensureCategoriesList(latestRef.current.categories);
+          setCategories(fallbackCats);
+          if (seededCloudCategoriesWsRef.current !== cloudWorkspaceId) {
+            seededCloudCategoriesWsRef.current = cloudWorkspaceId;
+            const uids =
+              latestRef.current.memberUids.length > 0
+                ? latestRef.current.memberUids
+                : [user.uid];
+            const seedCatBatch = writeBatch(db);
+            for (const cat of fallbackCats) {
+              seedCatBatch.set(
+                doc(db, 'workspaces', cloudWorkspaceId, 'categories', cat.id),
+                categoryToFirestoreDoc(cat, cloudWorkspaceId, uids, user.uid)
+              );
+            }
+            void seedCatBatch.commit().catch(() => {
+              // Non-fatal: will retry on next category mutation
+            });
+          }
+          return;
+        }
+        const list: CategoryItem[] = snap.docs.map((docSnap, idx) => {
+          const d = docSnap.data();
+          return normalizeCategoryItem(
+            {
+              id: docSnap.id,
+              name: typeof d.name === 'string' ? d.name : docSnap.id,
+              nameVi: typeof d.nameVi === 'string' ? d.nameVi : undefined,
+              scope: d.scope as CategoryScope,
+              sortOrder: Number(d.sortOrder),
+              isSystem: Boolean(d.isSystem),
+              createdAt: tsToIso(d.createdAt),
+              updatedAt: tsToIso(d.updatedAt),
+            },
+            (idx + 1) * 10
+          );
+        });
+        setCategories(ensureCategoriesList(list));
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, catPath)
+    );
+
     return () => {
       unsubWs();
+      unsubCategories();
       unsubProducts();
       unsubBarcodes();
       unsubIngredients();
@@ -1155,6 +1280,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const cur = latestRef.current;
         const batch = writeBatch(db);
         let ops = 0;
+        for (const cat of cur.categories) {
+          batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'categories', cat.id), {
+            memberUids,
+            updatedAt: serverTimestamp(),
+          });
+          ops++;
+        }
         for (const p of cur.products) {
           batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', p.id), {
             memberUids,
@@ -1537,14 +1669,235 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [user, cloudWorkspaceId]
   );
 
+  const addCategory = useCallback(
+    async (input: {
+      name: string;
+      nameVi?: string;
+      scope: CategoryScope;
+    }): Promise<CategoryMutationResult> => {
+      const trimmedName = sanitizeString(input.name, 64);
+      if (!trimmedName) {
+        return { ok: false, error: 'Category name is required.' };
+      }
+      const cur = latestRef.current;
+      const duplicate = cur.categories.find(
+        (c) => c.name.trim().toLowerCase() === trimmedName.toLowerCase()
+      );
+      if (duplicate) {
+        return { ok: false, error: `Category "${duplicate.name}" already exists.` };
+      }
+
+      const maxSort = cur.categories
+        .filter((c) => c.id !== UNCATEGORIZED_ID)
+        .reduce((max, c) => Math.max(max, c.sortOrder || 0), 0);
+
+      const nowIso = new Date().toISOString();
+      const newCat: CategoryItem = {
+        id: generateId('cat'),
+        name: trimmedName,
+        nameVi: sanitizeString(input.nameVi || trimmedName, 64) || trimmedName,
+        scope: input.scope,
+        sortOrder: maxSort + 10,
+        isSystem: false,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      setCategories((prev) => ensureCategoriesList([...prev, newCat]));
+
+      if (user && cloudWorkspaceId) {
+        const path = `workspaces/${cloudWorkspaceId}/categories/${newCat.id}`;
+        try {
+          await setDoc(
+            doc(db, 'workspaces', cloudWorkspaceId, 'categories', newCat.id),
+            categoryToFirestoreDoc(newCat, cloudWorkspaceId, activeMemberUids(), user.uid)
+          );
+        } catch (err) {
+          handleFirestoreError(err, OperationType.CREATE, path);
+        }
+      }
+
+      return { ok: true, category: newCat };
+    },
+    [user, cloudWorkspaceId, activeMemberUids]
+  );
+
+  const updateCategory = useCallback(
+    async (
+      categoryId: string,
+      patch: { name?: string; nameVi?: string; scope?: CategoryScope; sortOrder?: number }
+    ): Promise<CategoryMutationResult> => {
+      const cur = latestRef.current;
+      const existingCat = cur.categories.find((c) => c.id === categoryId);
+      if (!existingCat) {
+        return { ok: false, error: 'Category not found.' };
+      }
+
+      const nextName =
+        patch.name !== undefined ? sanitizeString(patch.name, 64) : existingCat.name;
+      if (!nextName) {
+        return { ok: false, error: 'Category name cannot be empty.' };
+      }
+
+      const duplicate = cur.categories.find(
+        (c) => c.id !== categoryId && c.name.trim().toLowerCase() === nextName.toLowerCase()
+      );
+      if (duplicate) {
+        return { ok: false, error: `Category "${duplicate.name}" already exists.` };
+      }
+
+      const nextScope: CategoryScope =
+        existingCat.id === UNCATEGORIZED_ID
+          ? 'both'
+          : patch.scope ?? existingCat.scope;
+      const nextNameVi =
+        patch.nameVi !== undefined
+          ? sanitizeString(patch.nameVi || nextName, 64)
+          : patch.name !== undefined && existingCat.nameVi === existingCat.name
+            ? nextName
+            : existingCat.nameVi || nextName;
+      const nextSortOrder =
+        existingCat.id === UNCATEGORIZED_ID
+          ? 9999
+          : patch.sortOrder !== undefined
+            ? clampNumber(Math.round(patch.sortOrder), 0, 100000)
+            : existingCat.sortOrder;
+
+      const updated: CategoryItem = {
+        ...existingCat,
+        name: nextName,
+        nameVi: nextNameVi,
+        scope: nextScope,
+        sortOrder: nextSortOrder,
+        updatedAt: new Date().toISOString(),
+      };
+
+      setCategories((prev) =>
+        sortCategories(prev.map((c) => (c.id === categoryId ? updated : c)))
+      );
+
+      if (user && cloudWorkspaceId) {
+        const path = `workspaces/${cloudWorkspaceId}/categories/${categoryId}`;
+        const catRef = doc(db, 'workspaces', cloudWorkspaceId, 'categories', categoryId);
+        try {
+          await updateDoc(catRef, {
+            name: updated.name,
+            nameVi: updated.nameVi || updated.name,
+            scope: updated.scope,
+            sortOrder: updated.sortOrder,
+            updatedAt: serverTimestamp(),
+          });
+        } catch (err) {
+          // If the default category doc wasn't created in Firestore yet, create it cleanly
+          try {
+            await setDoc(
+              catRef,
+              categoryToFirestoreDoc(updated, cloudWorkspaceId, activeMemberUids(), user.uid)
+            );
+          } catch (createErr) {
+            handleFirestoreError(createErr ?? err, OperationType.UPDATE, path);
+          }
+        }
+      }
+
+      return { ok: true, category: updated };
+    },
+    [user, cloudWorkspaceId, activeMemberUids]
+  );
+
+  const deleteCategory = useCallback(
+    async (
+      categoryId: string,
+      reassignToCategoryId: string = UNCATEGORIZED_ID
+    ): Promise<OperationResult> => {
+      const cur = latestRef.current;
+      const targetToDelete = cur.categories.find((c) => c.id === categoryId);
+      if (!targetToDelete) {
+        return { ok: false, error: 'Category not found.' };
+      }
+      if (targetToDelete.id === UNCATEGORIZED_ID || targetToDelete.isSystem) {
+        return { ok: false, error: 'Uncategorized is a protected system category and cannot be deleted.' };
+      }
+
+      const fallbackId =
+        reassignToCategoryId &&
+        reassignToCategoryId !== categoryId &&
+        cur.categories.some((c) => c.id === reassignToCategoryId)
+          ? reassignToCategoryId
+          : UNCATEGORIZED_ID;
+
+      const nowIso = new Date().toISOString();
+      const affectedProducts = cur.products.filter(
+        (p) => resolveProductCategoryId(p, cur.categories) === categoryId
+      );
+      const affectedIngredients = cur.ingredients.filter(
+        (i) => resolveIngredientCategoryId(i, cur.categories) === categoryId
+      );
+
+      if (affectedProducts.length > 0) {
+        const affectedProdIds = new Set(affectedProducts.map((p) => p.id));
+        setProducts((prev) =>
+          prev.map((p) =>
+            affectedProdIds.has(p.id)
+              ? { ...p, category: fallbackId, categoryId: fallbackId, updatedAt: nowIso }
+              : p
+          )
+        );
+      }
+
+      if (affectedIngredients.length > 0) {
+        const affectedIngIds = new Set(affectedIngredients.map((i) => i.id));
+        setIngredients((prev) =>
+          prev.map((i) =>
+            affectedIngIds.has(i.id) ? { ...i, categoryId: fallbackId, updatedAt: nowIso } : i
+          )
+        );
+      }
+
+      setCategories((prev) => ensureCategoriesList(prev.filter((c) => c.id !== categoryId)));
+
+      if (user && cloudWorkspaceId) {
+        const path = `workspaces/${cloudWorkspaceId}/categories/${categoryId}`;
+        try {
+          const batch = writeBatch(db);
+          for (const prod of affectedProducts) {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', prod.id), {
+              category: fallbackId,
+              categoryId: fallbackId,
+              updatedAt: serverTimestamp(),
+            });
+          }
+          for (const ing of affectedIngredients) {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ing.id), {
+              categoryId: fallbackId,
+              updatedAt: serverTimestamp(),
+            });
+          }
+          batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'categories', categoryId));
+          await batch.commit();
+        } catch (err) {
+          handleFirestoreError(err, OperationType.DELETE, path);
+        }
+      }
+
+      return { ok: true };
+    },
+    [user, cloudWorkspaceId]
+  );
+
   const saveIngredient = useCallback(
     async (input: Omit<Ingredient, 'id'> & { id?: string }) => {
       const isEdit = Boolean(input.id);
       const id = input.id || generateId('ing');
+      const safeCategoryId =
+        typeof input.categoryId === 'string' && input.categoryId.trim().length > 0
+          ? sanitizeString(input.categoryId, 64)
+          : UNCATEGORIZED_ID;
       const clean: Ingredient = {
         id,
         name: sanitizeString(input.name, 100),
         nameVi: sanitizeString(input.nameVi || input.name, 100),
+        categoryId: safeCategoryId,
         unit: input.unit,
         stockQty: clampNumber(input.stockQty, -1000000, 100000000),
         reorderLevel: clampNumber(input.reorderLevel, 0, 100000000),
@@ -1562,6 +1915,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             await updateDoc(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', id), {
               name: clean.name,
               nameVi: clean.nameVi,
+              categoryId: safeCategoryId,
               unit: clean.unit,
               stockQty: clean.stockQty,
               reorderLevel: clean.reorderLevel,
@@ -1575,6 +1929,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               memberUids: activeMemberUids(),
               name: clean.name,
               nameVi: clean.nameVi,
+              categoryId: safeCategoryId,
               unit: clean.unit,
               stockQty: clean.stockQty,
               reorderLevel: clean.reorderLevel,
@@ -2910,6 +3265,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       app: 'JuiceFlow',
       exportedAt: new Date().toISOString(),
       settings: latestRef.current.settings,
+      categories: latestRef.current.categories,
       ingredients: latestRef.current.ingredients,
       products: latestRef.current.products,
       barcodeRegistry: latestRef.current.barcodeRegistry,
@@ -2940,6 +3296,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             .filter((rec): rec is BarcodeRegistryRecord => rec !== null)
         : [];
       setSettings(normalizeSettings(parsed.settings, createInitialSettings()));
+      setCategories(
+        ensureCategoriesList(Array.isArray(parsed.categories) ? parsed.categories : undefined)
+      );
       setIngredients(normalizedIngs);
       setProducts(normalizedProds);
       setBarcodeRegistry(
@@ -2982,6 +3341,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const resetDemoData = useCallback(() => {
     const seed = createSeedData();
+    setCategories(ensureCategoriesList(DEFAULT_CATEGORIES));
     setIngredients(seed.ingredients);
     setProducts(seed.products);
     setBarcodeRegistry(buildRegistryFromProducts(seed.products));
@@ -2997,6 +3357,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!user || !cloudWorkspaceId) {
         const snap = loadLocalSnapshot();
         setSettings(snap.settings);
+        setCategories(ensureCategoriesList(snap.categories));
         setIngredients(snap.ingredients);
         setProducts(snap.products);
         setBarcodeRegistry(snap.barcodeRegistry);
@@ -3024,6 +3385,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
 
       const wsRef = doc(db, 'workspaces', cloudWorkspaceId);
+      const catPath = `workspaces/${cloudWorkspaceId}/categories`;
       const prodPath = `workspaces/${cloudWorkspaceId}/products`;
       const bcPath = `workspaces/${cloudWorkspaceId}/barcodes`;
       const ingPath = `workspaces/${cloudWorkspaceId}/ingredients`;
@@ -3032,9 +3394,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const purPath = `workspaces/${cloudWorkspaceId}/purchases`;
       const movPath = `workspaces/${cloudWorkspaceId}/stockMovements`;
 
-      const [wsSnap, prodSnap, bcSnap, ingSnap, salesSnap, expSnap, purSnap, movSnap] =
+      const [wsSnap, catSnap, prodSnap, bcSnap, ingSnap, salesSnap, expSnap, purSnap, movSnap] =
         await Promise.all([
           fetchDoc(wsRef),
+          fetchQuery(query(collection(db, catPath), where('memberUids', 'array-contains', user.uid))),
           fetchQuery(query(collection(db, prodPath), where('memberUids', 'array-contains', user.uid))),
           fetchQuery(query(collection(db, bcPath), where('memberUids', 'array-contains', user.uid))),
           fetchQuery(query(collection(db, ingPath), where('memberUids', 'array-contains', user.uid))),
@@ -3076,6 +3439,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               timezone: String(d.timezone || BUSINESS_TIMEZONE),
             },
             prev
+          )
+        );
+      }
+
+      if (!catSnap.empty) {
+        setCategories(
+          ensureCategoriesList(
+            catSnap.docs.map((docSnap, idx) => {
+              const d = docSnap.data();
+              return normalizeCategoryItem(
+                {
+                  id: docSnap.id,
+                  name: typeof d.name === 'string' ? d.name : docSnap.id,
+                  nameVi: typeof d.nameVi === 'string' ? d.nameVi : undefined,
+                  scope: d.scope as CategoryScope,
+                  sortOrder: Number(d.sortOrder),
+                  isSystem: Boolean(d.isSystem),
+                  createdAt: tsToIso(d.createdAt),
+                  updatedAt: tsToIso(d.updatedAt),
+                },
+                (idx + 1) * 10
+              );
+            })
           )
         );
       }
@@ -3228,6 +3614,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const value: StoreContextValue = {
     settings,
+    categories,
     ingredients,
     products,
     barcodeRegistry,
@@ -3249,6 +3636,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setLanguage,
     setActiveOperator,
     updateSettings,
+    addCategory,
+    updateCategory,
+    deleteCategory,
     saveProduct,
     deleteProduct,
     lookupBarcode,

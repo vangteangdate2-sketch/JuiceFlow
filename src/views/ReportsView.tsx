@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -14,8 +14,11 @@ import {
   Banknote,
   Building2,
   Calendar,
+  ChevronDown,
   Download,
+  Layers,
   QrCode,
+  SlidersHorizontal,
   Smartphone,
   Sparkles,
   Wallet,
@@ -36,7 +39,13 @@ import {
   isLegacyInventoryPurchaseExpense,
   type ReportGrouping,
 } from '../utils/inventoryEngine';
+import {
+  getCategoriesForScope,
+  getCategoryById,
+  getCategoryDisplayName,
+} from '../utils/categories';
 import { useTheme } from '../hooks/useTheme';
+import { CategoryFilterPills } from '../components/CategoryFilterPills';
 import { InfoHint } from '../components/InfoHint';
 
 type PeriodPreset = 'today' | 'week' | 'month' | 'custom';
@@ -54,10 +63,15 @@ function getStartOfWeekIso(referenceIso: string): string {
 }
 
 export const ReportsView: React.FC = () => {
-  const { settings, sales, expenses, purchases, products, ingredients, t } = useStore();
+  const { settings, sales, expenses, purchases, products, ingredients, categories, t } = useStore();
   const { isDark } = useTheme();
   const isVi = settings.language === 'vi';
   const usdRate = settings.usdRate > 0 ? settings.usdRate : 4000;
+
+  const reportCategories = useMemo(
+    () => getCategoriesForScope(categories, 'product'),
+    [categories]
+  );
 
   const chartColors = useMemo(
     () => ({
@@ -65,6 +79,7 @@ export const ReportsView: React.FC = () => {
       tick: isDark ? '#94A39B' : '#78716C',
       yLabel: isDark ? '#D5DFDA' : '#44403C',
       revenue: isDark ? '#10B981' : '#0F5C43',
+      grossProfit: isDark ? '#6EE7B7' : '#34A87F',
       cost: isDark ? '#F59E0B' : '#D9822B',
       line: isDark ? '#F1F5F3' : '#1C1917',
       tooltipBg: isDark ? '#131D18' : '#FFFFFF',
@@ -79,6 +94,23 @@ export const ReportsView: React.FC = () => {
   const [chartView, setChartView] = useState<'pnl' | 'cashflow'>('pnl');
   const [customStart, setCustomStart] = useState(daysAgoIso(29));
   const [customEnd, setCustomEnd] = useState(todayIso());
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [filtersOpen, setFiltersOpen] = useState(true);
+
+  useEffect(() => {
+    if (
+      categoryFilter !== 'all' &&
+      !reportCategories.some((c) => c.id === categoryFilter)
+    ) {
+      setCategoryFilter('all');
+    }
+  }, [categoryFilter, reportCategories]);
+
+  const activeFilterCount = categoryFilter !== 'all' ? 1 : 0;
+  const activeCategoryName = useMemo(() => {
+    if (categoryFilter === 'all') return null;
+    return getCategoryDisplayName(getCategoryById(categoryFilter, categories), isVi);
+  }, [categoryFilter, categories, isVi]);
 
   const dateRange = useMemo(() => {
     const today = todayIso();
@@ -116,25 +148,20 @@ export const ReportsView: React.FC = () => {
         purchases,
         products,
         ingredients,
+        categories,
+        categoryFilterId: categoryFilter,
         dateStart: dateRange.start,
         dateEnd: dateRange.end,
         grouping,
       }),
-    [sales, expenses, purchases, products, ingredients, dateRange, grouping]
+    [sales, expenses, purchases, products, ingredients, categories, categoryFilter, dateRange, grouping]
   );
 
   // Payment Method Breakdown with transaction counts & exact reconciliation totals
   const paymentReconciliation = useMemo(() => {
     const methods: PaymentMethod[] = ['cash', 'khqr', 'aba', 'wing'];
-    const txCounts: Record<PaymentMethod, number> = { cash: 0, khqr: 0, aba: 0, wing: 0 };
+    const txCounts = report.paymentOrderCountsByMethod;
     const cashOutByMethod: Record<PaymentMethod, number> = { cash: 0, khqr: 0, aba: 0, wing: 0 };
-
-    for (const s of sales) {
-      if (s.saleDate < dateRange.start || s.saleDate > dateRange.end) continue;
-      if (s.status === 'voided' || s.status === 'refunded') continue;
-      const pm = methods.includes(s.paymentMethod) ? s.paymentMethod : 'cash';
-      txCounts[pm] += 1;
-    }
 
     for (const p of purchases) {
       if (p.purchaseDate < dateRange.start || p.purchaseDate > dateRange.end) continue;
@@ -155,7 +182,7 @@ export const ReportsView: React.FC = () => {
       const sharePct = totalInflows > 0 ? Math.round((totalKhr / totalInflows) * 100) : 0;
       return {
         method: pm,
-        txCount: txCounts[pm],
+        txCount: txCounts[pm] || 0,
         totalKhr,
         outflowKhr: cashOutByMethod[pm],
         sharePct,
@@ -177,16 +204,52 @@ export const ReportsView: React.FC = () => {
       digitalTxCount,
       totalTxCount: cashRow.txCount + digitalTxCount,
     };
-  }, [sales, purchases, expenses, dateRange, report.cashInflowsByMethod, report.cashInflowsKhr]);
+  }, [
+    purchases,
+    expenses,
+    dateRange,
+    report.cashInflowsByMethod,
+    report.cashInflowsKhr,
+    report.paymentOrderCountsByMethod,
+  ]);
 
   // Plain-English Financial Takeaway Banner
   const financialTakeaway = useMemo(() => {
     const revKhr = formatKhr(report.netRevenueKhr);
     const revUsd = formatUsdRef(report.netRevenueKhr, usdRate);
     const cogsKhr = formatKhr(report.netCogsKhr);
+    const gpKhr = formatKhr(report.grossProfitKhr);
+    const gpUsd = formatUsdRef(report.grossProfitKhr, usdRate);
     const opExKhr = formatKhr(report.operatingExpensesKhr);
     const netKhr = formatKhr(report.netProfitKhr);
     const netUsd = formatUsdRef(report.netProfitKhr, usdRate);
+
+    if (activeCategoryName) {
+      if (isVi) {
+        if (report.completedOrderCount === 0) {
+          return {
+            headline: `Không có đơn hàng nào thuộc danh mục "${activeCategoryName}" trong ${periodLabel}.`,
+            detail: 'Hãy chọn danh mục khác hoặc nhấn Đặt lại tất cả để xem toàn bộ quán.',
+          };
+        }
+        return {
+          headline: `Trong ${periodLabel}, danh mục "${activeCategoryName}" mang lại ${revKhr} (${revUsd}) từ ${report.unitsSoldNet} sản phẩm (${report.completedOrderCount} đơn).`,
+          detail: `Giá vốn (COGS) là ${cogsKhr}, lợi nhuận gộp đạt ${gpKhr} (${gpUsd}, biên gộp ${report.grossMarginPct}%). Lưu ý: Chi phí vận hành ${opExKhr} được tính chung cho toàn quán.`,
+        };
+      }
+      if (report.completedOrderCount === 0) {
+        return {
+          headline: `No completed orders found in "${activeCategoryName}" for ${periodLabel}.`,
+          detail: 'Pick another category above or tap Reset All to view shop-wide totals.',
+        };
+      }
+      return {
+        headline: `For ${periodLabel}, "${activeCategoryName}" earned ${revKhr} (${revUsd}) across ${report.unitsSoldNet} ${
+          report.unitsSoldNet === 1 ? 'unit' : 'units'
+        } (${report.completedOrderCount} ${report.completedOrderCount === 1 ? 'order' : 'orders'}).`,
+        detail: `Ingredient & unit COGS totaled ${cogsKhr}, leaving ${gpKhr} (${gpUsd}, ${report.grossMarginPct}% gross margin). Shop-wide operating expenses (${opExKhr}) are shown separately.`,
+      };
+    }
 
     if (isVi) {
       if (report.completedOrderCount === 0 && report.operatingExpensesKhr === 0) {
@@ -215,12 +278,16 @@ export const ReportsView: React.FC = () => {
       detail: `After ${cogsKhr} in ingredient & unit COGS and ${opExKhr} in operating expenses, net income is ${netKhr} (${netUsd}, ${report.netMarginPct}% net margin).`,
     };
   }, [
+    activeCategoryName,
     report.netRevenueKhr,
     report.netCogsKhr,
+    report.grossProfitKhr,
+    report.grossMarginPct,
     report.operatingExpensesKhr,
     report.netProfitKhr,
     report.netMarginPct,
     report.completedOrderCount,
+    report.unitsSoldNet,
     usdRate,
     periodLabel,
     isVi,
@@ -240,6 +307,17 @@ export const ReportsView: React.FC = () => {
       }))
       .sort((a, b) => b.amount - a.amount);
   }, [expenses, dateRange, t]);
+
+  const categoryChartSeries = useMemo(
+    () =>
+      report.categoryBreakdown.map((row) => ({
+        categoryId: row.categoryId,
+        name: isVi ? row.categoryNameVi || row.categoryName : row.categoryName,
+        netRevenueKhr: row.netRevenueKhr,
+        grossProfitKhr: row.grossProfitKhr,
+      })),
+    [report.categoryBreakdown, isVi]
+  );
 
   const chartSeries = useMemo(
     () =>
@@ -261,6 +339,7 @@ export const ReportsView: React.FC = () => {
     const rows: (string | number)[][] = [
       ['JuiceFlow Financial Report', settings.name],
       ['Period', `${dateRange.start} to ${dateRange.end}`],
+      ['Category Filter', activeCategoryName || 'All Categories'],
       ['Grouping', grouping],
       ['Timezone', BUSINESS_TIMEZONE],
       ['Currency', 'KHR'],
@@ -276,6 +355,25 @@ export const ReportsView: React.FC = () => {
       ['Net Income (Accrual)', report.netProfitKhr],
       ['Net Margin %', `${report.netMarginPct}%`],
       ['Voided Orders (Excluded)', report.voidedOrdersCount],
+      [],
+      [
+        'REVENUE & GROSS PROFIT BY CATEGORY',
+        'Units Sold',
+        'Orders',
+        'Net Revenue (KHR)',
+        'COGS (KHR)',
+        'Gross Profit (KHR)',
+        'Gross Margin %',
+      ],
+      ...report.categoryBreakdown.map((cat) => [
+        isVi ? cat.categoryNameVi || cat.categoryName : cat.categoryName,
+        cat.netQty,
+        cat.orderCount,
+        cat.netRevenueKhr,
+        cat.netCogsKhr,
+        cat.grossProfitKhr,
+        `${cat.marginPct}%`,
+      ]),
       [],
       ['CASH FLOW & PAYMENT RECONCILIATION', 'Amount (KHR)', 'Transactions'],
       ['Sales Cash Inflows (Net)', report.cashInflowsKhr, paymentReconciliation.totalTxCount],
@@ -483,7 +581,7 @@ export const ReportsView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start lg:self-auto shrink-0">
+          <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto shrink-0">
             <span className="text-xs font-medium text-stone-500 dark:text-[#94A39B] whitespace-nowrap">
               {isVi ? 'Nhóm theo:' : 'Group by:'}
             </span>
@@ -509,6 +607,51 @@ export const ReportsView: React.FC = () => {
                 </button>
               ))}
             </div>
+
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+              aria-expanded={filtersOpen}
+              aria-controls="reports-category-filters"
+              className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap border ${
+                filtersOpen || activeFilterCount > 0
+                  ? 'bg-stone-100 dark:bg-[#18251F] border-transparent dark:border-[#24352C] text-stone-900 dark:text-[#F1F5F3] hover:bg-stone-200/70 dark:hover:bg-[#1F3028]'
+                  : 'bg-transparent border-transparent text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
+              <span>
+                {activeFilterCount > 0
+                  ? filtersOpen
+                    ? isVi
+                      ? `Ẩn bộ lọc (${activeFilterCount})`
+                      : `Hide Filters (${activeFilterCount})`
+                    : isVi
+                      ? `Bộ lọc (${activeFilterCount})`
+                      : `Filters (${activeFilterCount})`
+                  : filtersOpen
+                    ? isVi
+                      ? 'Ẩn bộ lọc'
+                      : 'Hide Filters'
+                    : isVi
+                      ? 'Hiện bộ lọc'
+                      : 'Show Filters'}
+              </span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-200 motion-reduce:transition-none ${
+                  filtersOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            <button
+              type="button"
+              disabled={activeFilterCount === 0}
+              onClick={() => setCategoryFilter('all')}
+              className="inline-flex items-center justify-center h-11 px-3 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors whitespace-nowrap"
+            >
+              {isVi ? 'Đặt lại tất cả' : 'Reset All'}
+            </button>
           </div>
         </div>
 
@@ -539,6 +682,26 @@ export const ReportsView: React.FC = () => {
             />
           </div>
         )}
+
+        {/* Collapsible Dynamic Category Filter Pills Drawer (matches SalesView) */}
+        <div
+          id="reports-category-filters"
+          className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
+            filtersOpen
+              ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-stone-100 dark:border-[#24352C]'
+              : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
+          }`}
+        >
+          <div className="overflow-hidden">
+            <CategoryFilterPills
+              categories={reportCategories}
+              selectedCategoryId={categoryFilter}
+              onSelect={setCategoryFilter}
+              isVi={isVi}
+              allLabel={t.common.all}
+            />
+          </div>
+        </div>
       </div>
 
       {/* ================================================================== */}
@@ -639,6 +802,9 @@ export const ReportsView: React.FC = () => {
           </p>
           <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
             {formatUsdRef(report.operatingExpensesKhr, usdRate)}
+            {activeCategoryName && (
+              <span className="font-sans"> · {isVi ? 'toàn quán' : 'shop-wide'}</span>
+            )}
           </p>
         </div>
 
@@ -1217,13 +1383,223 @@ export const ReportsView: React.FC = () => {
         )}
       </div>
 
+      {/* Revenue & Gross Profit by Category Breakdown */}
+      <section className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Layers className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+            <h2 className="font-display text-base sm:text-lg font-bold text-stone-900 dark:text-[#F1F5F3]">
+              {isVi
+                ? 'Doanh thu & Lợi nhuận gộp theo Danh mục'
+                : 'Revenue & Gross Profit by Category'}
+            </h2>
+            <InfoHint
+              compact
+              label={isVi ? 'Giải thích phân bổ theo danh mục' : 'About Category Breakdown'}
+              text={
+                isVi
+                  ? 'So sánh doanh thu thuần, giá vốn (COGS) và biên lợi nhuận gộp giữa các danh mục sản phẩm. Nhấn vào một dòng để lọc toàn bộ báo cáo theo danh mục đó.'
+                  : 'Compare net revenue, COGS, and gross margin across product categories. Tap any category row to filter the entire report.'
+              }
+            />
+          </div>
+
+          {activeCategoryName && (
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('all')}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold bg-emerald-50 text-[#0D5C3E] border border-[#0D5C3E]/30 hover:bg-emerald-100 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/40 transition-colors"
+            >
+              <span>
+                {isVi ? `Đang lọc: ${activeCategoryName}` : `Filtered: ${activeCategoryName}`}
+              </span>
+              <span aria-hidden="true">×</span>
+            </button>
+          )}
+        </div>
+
+        {report.categoryBreakdown.length === 0 ? (
+          <p className="p-8 text-center text-sm text-stone-500 dark:text-[#94A39B]">
+            {t.common.noResults}
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-12 divide-y xl:divide-y-0 xl:divide-x divide-stone-200 dark:divide-[#24352C]">
+            {/* Horizontal Bar Chart comparing Net Revenue & Gross Profit */}
+            <div className="xl:col-span-5 p-5 flex flex-col justify-center">
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={categoryChartSeries}
+                    layout="vertical"
+                    margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartColors.grid}
+                      horizontal={false}
+                    />
+                    <XAxis
+                      type="number"
+                      tick={{ fontSize: 11, fill: chartColors.tick }}
+                      tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={110}
+                      tick={{ fontSize: 12, fill: chartColors.yLabel }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      formatter={(val) => formatKhr(Number(val ?? 0))}
+                      contentStyle={{
+                        borderRadius: '10px',
+                        border: `1px solid ${chartColors.tooltipBorder}`,
+                        backgroundColor: chartColors.tooltipBg,
+                        color: chartColors.tooltipText,
+                        boxShadow: 'none',
+                        fontSize: '12px',
+                      }}
+                      labelStyle={{ color: chartColors.tooltipText, fontWeight: 600 }}
+                      itemStyle={{ color: chartColors.tooltipText }}
+                    />
+                    <Bar
+                      dataKey="netRevenueKhr"
+                      name={isVi ? 'Doanh thu thuần' : 'Net Revenue'}
+                      fill={chartColors.revenue}
+                      radius={[0, 4, 4, 0]}
+                      maxBarSize={14}
+                    />
+                    <Bar
+                      dataKey="grossProfitKhr"
+                      name={isVi ? 'Lợi nhuận gộp' : 'Gross Profit'}
+                      fill={chartColors.grossProfit}
+                      radius={[0, 4, 4, 0]}
+                      maxBarSize={14}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-2 flex items-center justify-center gap-4 text-[11px] text-stone-500 dark:text-[#94A39B]">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="w-2.5 h-2.5 rounded-xs"
+                    style={{ backgroundColor: chartColors.revenue }}
+                  />
+                  {isVi ? 'Doanh thu thuần' : 'Net Revenue'}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="w-2.5 h-2.5 rounded-xs"
+                    style={{ backgroundColor: chartColors.grossProfit }}
+                  />
+                  {isVi ? 'Lợi nhuận gộp' : 'Gross Profit'}
+                </span>
+              </div>
+            </div>
+
+            {/* Interactive Category Breakdown Table */}
+            <div className="xl:col-span-7 overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
+                    <th className="py-3 px-5 font-medium">{isVi ? 'Danh mục' : 'Category'}</th>
+                    <th className="py-3 px-3 font-medium text-right whitespace-nowrap">
+                      {t.reports.unitsSold}
+                    </th>
+                    <th className="py-3 px-3 font-medium text-right whitespace-nowrap">
+                      {isVi ? 'Đơn' : 'Orders'}
+                    </th>
+                    <th className="py-3 px-3 font-medium text-right whitespace-nowrap">
+                      {t.reports.revenue}
+                    </th>
+                    <th className="py-3 px-3 font-medium text-right whitespace-nowrap">COGS</th>
+                    <th className="py-3 px-5 font-medium text-right whitespace-nowrap">
+                      {isVi ? 'Lãi gộp' : 'Gross Profit'}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100 dark:divide-[#1F3028] text-sm">
+                  {report.categoryBreakdown.map((row) => {
+                    const isActiveRow = categoryFilter === row.categoryId;
+                    const label = isVi ? row.categoryNameVi || row.categoryName : row.categoryName;
+                    return (
+                      <tr
+                        key={row.categoryId}
+                        onClick={() =>
+                          setCategoryFilter((prev) =>
+                            prev === row.categoryId ? 'all' : row.categoryId
+                          )
+                        }
+                        className={`cursor-pointer transition-colors ${
+                          isActiveRow
+                            ? 'bg-emerald-50/80 dark:bg-[#064E3B]/45'
+                            : 'hover:bg-stone-50/70 dark:hover:bg-[#18251F]/70'
+                        }`}
+                      >
+                        <td className="py-3 px-5">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`font-semibold ${
+                                isActiveRow
+                                  ? 'text-[#0D5C3E] dark:text-[#34D399]'
+                                  : 'text-stone-900 dark:text-[#F1F5F3]'
+                              }`}
+                            >
+                              {label}
+                            </span>
+                            {isActiveRow && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#0D5C3E] text-white dark:bg-[#10B981] dark:text-[#042419]">
+                                {isVi ? 'Đang lọc' : 'Active'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono-num text-stone-700 dark:text-[#D5DFDA]">
+                          {row.netQty}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono-num text-stone-500 dark:text-[#94A39B]">
+                          {row.orderCount}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono-num font-medium text-stone-900 dark:text-[#F1F5F3]">
+                          {formatKhr(row.netRevenueKhr)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono-num text-xs text-stone-500 dark:text-[#94A39B]">
+                          {formatKhr(row.netCogsKhr)}
+                        </td>
+                        <td className="py-3 px-5 text-right font-mono-num">
+                          <span className="font-semibold text-emerald-700 dark:text-[#34D399] block">
+                            {formatKhr(row.grossProfitKhr)}
+                          </span>
+                          <span className="text-[11px] text-stone-400 dark:text-[#94A39B]">
+                            {row.marginPct}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* Product Profitability + Operating Expense Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <div className="lg:col-span-7 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C]">
+          <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-2">
             <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
               {t.reports.productPerformance}
             </h2>
+            {activeCategoryName && (
+              <span className="text-xs font-medium text-[#0D5C3E] dark:text-[#34D399]">
+                {activeCategoryName}
+              </span>
+            )}
           </div>
           {report.productProfitability.length === 0 ? (
             <p className="p-8 text-center text-sm text-stone-500 dark:text-[#94A39B]">
@@ -1252,7 +1628,11 @@ export const ReportsView: React.FC = () => {
                           {isVi ? row.nameVi || row.name : row.name}
                         </p>
                         <p className="text-[11px] text-stone-500 dark:text-[#94A39B]">
-                          {t.productTypes[row.productType]}
+                          {getCategoryDisplayName(
+                            getCategoryById(row.categoryId, categories),
+                            isVi
+                          )}{' '}
+                          · {t.productTypes[row.productType]}
                           {row.returnedQty > 0
                             ? ` · ${row.returnedQty} ${isVi ? 'đã trả' : 'returned'}`
                             : ''}

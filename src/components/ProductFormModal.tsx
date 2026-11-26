@@ -37,7 +37,12 @@ import type {
   RecipeItem,
   WorkspaceSettings,
 } from '../types';
-import type { SaveProductResult, StoreContextValue } from '../context/StoreContext';
+import { useStore, type SaveProductResult, type StoreContextValue } from '../context/StoreContext';
+import {
+  getCategoriesForScope,
+  getCategoryDisplayName,
+  resolveProductCategoryId,
+} from '../utils/categories';
 import {
   calculateRecipeCogs,
   computePriceFromMarkup,
@@ -65,15 +70,7 @@ import { BarcodeLabelModal } from './BarcodeLabelModal';
 
 type WizardStep = 1 | 2 | 3;
 
-const ALL_CATEGORIES: ProductCategory[] = [
-  'juice',
-  'smoothie',
-  'tea',
-  'coffee',
-  'specialty',
-  'packaged',
-  'snack',
-];
+const NEW_CATEGORY_SENTINEL = '__new_category__';
 
 const ALL_UNITS: IngredientUnit[] = ['pcs', 'ml', 'L', 'g', 'kg'];
 
@@ -199,6 +196,18 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [activeVariantRecipeIdx, setActiveVariantRecipeIdx] = useState(0);
 
+  const { categories: allCategories, addCategory } = useStore();
+  const productCategories = useMemo(
+    () => getCategoriesForScope(allCategories, 'product'),
+    [allCategories]
+  );
+
+  // Inline "+ New Category" creator state
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [inlineCategoryName, setInlineCategoryName] = useState('');
+  const [inlineCategoryError, setInlineCategoryError] = useState('');
+  const [inlineCategoryBusy, setInlineCategoryBusy] = useState(false);
+
   // Form fields
   const [name, setName] = useState('');
   const [nameVi, setNameVi] = useState('');
@@ -254,6 +263,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setSaving(false);
     setExternalLookupNote('');
     setLabelModalOpen(false);
+    setCreatingCategory(false);
+    setInlineCategoryName('');
+    setInlineCategoryError('');
     setActiveVariantRecipeIdx(0);
     setCurrentStep(initialFocusSection === 'recipe' ? 3 : 1);
 
@@ -262,7 +274,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setNameVi(editingProduct.nameVi);
       setBrand(editingProduct.brand || '');
       setProductType(editingProduct.productType);
-      setCategory(editingProduct.category);
+      setCategory(resolveProductCategoryId(editingProduct, allCategories));
       setCostPriceKhr(String(editingProduct.costPriceKhr ?? 0));
       setMarkupPercent(
         editingProduct.markupPercent !== undefined ? String(editingProduct.markupPercent) : ''
@@ -609,14 +621,40 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const handleProductTypeChange = (nextType: ProductType) => {
     setProductType(nextType);
     setStepError('');
+    const hasPackaged = productCategories.some((c) => c.id === 'packaged');
+    const hasJuice = productCategories.some((c) => c.id === 'juice');
     if (nextType === 'PACKAGED') {
-      if (!['packaged', 'snack'].includes(category)) setCategory('packaged');
+      if (!['packaged', 'snack'].includes(category) && hasPackaged) setCategory('packaged');
       setVariants([]);
     } else if (nextType === 'PREPARED_STOCK') {
-      if (['packaged', 'snack'].includes(category)) setCategory('juice');
+      if (['packaged', 'snack'].includes(category) && hasJuice) setCategory('juice');
       setVariants([]);
     } else {
-      if (['packaged', 'snack'].includes(category)) setCategory('juice');
+      if (['packaged', 'snack'].includes(category) && hasJuice) setCategory('juice');
+    }
+  };
+
+  const handleCreateInlineCategory = async () => {
+    const trimmed = inlineCategoryName.trim();
+    if (!trimmed || inlineCategoryBusy) return;
+    setInlineCategoryBusy(true);
+    setInlineCategoryError('');
+    try {
+      const res = await addCategory({
+        name: trimmed,
+        scope: productType === 'PACKAGED' ? 'both' : 'product',
+      });
+      if (!res.ok || !res.category) {
+        setInlineCategoryError(
+          res.error || (isVi ? 'Không thể tạo danh mục.' : 'Could not create category.')
+        );
+        return;
+      }
+      setCategory(res.category.id);
+      setInlineCategoryName('');
+      setCreatingCategory(false);
+    } finally {
+      setInlineCategoryBusy(false);
     }
   };
 
@@ -733,6 +771,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         brand: brand.trim(),
         productType,
         category,
+        categoryId: category,
         priceKhr: effectivePrice,
         costPriceKhr: effectiveCost,
         markupPercent: markupPercent !== '' ? Math.max(0, Number(markupPercent) || 0) : undefined,
@@ -1288,15 +1327,77 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             <select
                               id="pf-category"
                               value={category}
-                              onChange={(e) => setCategory(e.target.value as ProductCategory)}
+                              onChange={(e) => {
+                                if (e.target.value === NEW_CATEGORY_SENTINEL) {
+                                  setCreatingCategory(true);
+                                  setInlineCategoryError('');
+                                  return;
+                                }
+                                setCategory(e.target.value as ProductCategory);
+                              }}
                               className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                             >
-                              {ALL_CATEGORIES.map((c) => (
-                                <option key={c} value={c}>
-                                  {t.productCategories[c]}
+                              {productCategories.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {getCategoryDisplayName(c, isVi)}
                                 </option>
                               ))}
+                              <option value={NEW_CATEGORY_SENTINEL}>
+                                {isVi ? '+ Thêm danh mục mới...' : '+ New Category...'}
+                              </option>
                             </select>
+
+                            {creatingCategory && (
+                              <div className="mt-2 p-2.5 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2">
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    maxLength={64}
+                                    value={inlineCategoryName}
+                                    onChange={(e) => {
+                                      setInlineCategoryName(e.target.value);
+                                      if (inlineCategoryError) setInlineCategoryError('');
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        void handleCreateInlineCategory();
+                                      } else if (e.key === 'Escape') {
+                                        setCreatingCategory(false);
+                                      }
+                                    }}
+                                    placeholder={isVi ? 'Tên danh mục mới...' : 'New category name...'}
+                                    autoFocus
+                                    className="flex-1 min-w-0 h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3]"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={!inlineCategoryName.trim() || inlineCategoryBusy}
+                                    onClick={() => void handleCreateInlineCategory()}
+                                    className="h-11 px-3 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] disabled:opacity-50 rounded-lg shrink-0"
+                                  >
+                                    {isVi ? 'Lưu' : 'Add'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCreatingCategory(false);
+                                      setInlineCategoryName('');
+                                      setInlineCategoryError('');
+                                    }}
+                                    aria-label={t.common.cancel}
+                                    className="w-11 h-11 inline-flex items-center justify-center text-stone-500 hover:text-stone-800 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] rounded-lg shrink-0"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                {inlineCategoryError && (
+                                  <p className="text-[11px] text-rose-600 dark:text-rose-400">
+                                    {inlineCategoryError}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
 

@@ -4,6 +4,7 @@ import {
   Camera,
   Check,
   CheckSquare,
+  ChevronDown,
   CupSoda,
   Edit2,
   Eye,
@@ -19,6 +20,7 @@ import {
   QrCode,
   ScanBarcode,
   Search,
+  SlidersHorizontal,
   Table2,
   Trash2,
   X,
@@ -28,7 +30,6 @@ import { useUndoToast } from '../context/UndoToastContext';
 import type {
   ExternalBarcodePrefill,
   Product,
-  ProductCategory,
   ProductType,
 } from '../types';
 import {
@@ -38,21 +39,19 @@ import {
   formatQty,
 } from '../utils/format';
 import { compressImageBlobToDataUrl } from '../utils/image';
+import {
+  getCategoriesForScope,
+  getCategoryById,
+  getCategoryDisplayName,
+  resolveProductCategoryId,
+  UNCATEGORIZED_ID,
+} from '../utils/categories';
 import { ProductPhoto } from '../components/ProductPhoto';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { BarcodeLabelModal } from '../components/BarcodeLabelModal';
+import { CategoryFilterPills } from '../components/CategoryFilterPills';
 import { InfoHint } from '../components/InfoHint';
-
-const CATALOG_CATEGORIES: ProductCategory[] = [
-  'juice',
-  'smoothie',
-  'coffee',
-  'tea',
-  'packaged',
-  'snack',
-  'specialty',
-];
 
 const VIEW_MODE_STORAGE_KEY = 'juiceflow_products_view_mode';
 
@@ -76,6 +75,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     settings,
     products,
     ingredients,
+    categories,
     barcodeRegistry,
     saveProduct,
     deleteProduct,
@@ -84,8 +84,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   } = useStore();
   const isVi = settings.language === 'vi';
 
+  const productCategories = useMemo(
+    () => getCategoriesForScope(categories, 'product'),
+    [categories]
+  );
+
   const [typeFilter, setTypeFilter] = useState<'ALL' | ProductType>('ALL');
-  const [categoryFilter, setCategoryFilter] = useState<'ALL' | ProductCategory>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => {
     if (typeof window === 'undefined') return 'grid';
@@ -124,13 +130,36 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   // Select Mode & Bulk Operations state
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [bulkCategory, setBulkCategory] = useState<ProductCategory>('juice');
+  const [bulkCategory, setBulkCategory] = useState<string>(
+    () => productCategories[0]?.id || UNCATEGORIZED_ID
+  );
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkAction, setBulkAction] = useState<'category' | 'delete' | null>(null);
   const [bulkFeedback, setBulkFeedback] = useState<{ kind: 'ok' | 'error'; text: string } | null>(
     null
   );
   const bulkProcessing = bulkAction !== null;
+
+  // Keep selected category filter and bulk target category valid when categories change
+  useEffect(() => {
+    if (
+      categoryFilter !== 'all' &&
+      !productCategories.some((c) => c.id === categoryFilter)
+    ) {
+      setCategoryFilter('all');
+    }
+  }, [categoryFilter, productCategories]);
+
+  useEffect(() => {
+    if (
+      productCategories.length > 0 &&
+      !productCategories.some((c) => c.id === bulkCategory)
+    ) {
+      setBulkCategory(productCategories[0].id);
+    }
+  }, [bulkCategory, productCategories]);
+
+  const activeFilterCount = (categoryFilter !== 'all' ? 1 : 0) + (typeFilter !== 'ALL' ? 1 : 0);
 
   const ingMap = useMemo(() => new Map(ingredients.map((i) => [i.id, i])), [ingredients]);
 
@@ -164,7 +193,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     const q = search.trim().toLowerCase();
     return products.filter((p) => {
       if (typeFilter !== 'ALL' && p.productType !== typeFilter) return false;
-      if (categoryFilter !== 'ALL' && p.category !== categoryFilter) return false;
+      if (
+        categoryFilter !== 'all' &&
+        resolveProductCategoryId(p, categories) !== categoryFilter
+      ) {
+        return false;
+      }
       if (!q) return true;
       const packCodes = (p.packagingBarcodes || []).map((pb) => pb.barcode).join(' ');
       const variantCodes = (p.variants || []).map((v) => v.barcode || '').join(' ');
@@ -177,7 +211,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         variantCodes.toLowerCase().includes(q)
       );
     });
-  }, [products, typeFilter, categoryFilter, search]);
+  }, [products, categories, typeFilter, categoryFilter, search]);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
@@ -271,11 +305,15 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
 
     try {
       for (const prod of targets) {
-        if (prod.category === bulkCategory) {
+        if (resolveProductCategoryId(prod, categories) === bulkCategory) {
           succeededIds.add(prod.id);
           continue;
         }
-        const res = await saveProduct({ ...prod, category: bulkCategory });
+        const res = await saveProduct({
+          ...prod,
+          category: bulkCategory,
+          categoryId: bulkCategory,
+        });
         if (res && !res.ok && res.error) {
           errors.push(res.error);
         } else {
@@ -296,7 +334,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         setActionError(errors[0]);
         setBulkFeedback({ kind: 'error', text: errors[0] });
       } else if (succeededIds.size > 0) {
-        const catLabel = t.productCategories[bulkCategory];
+        const catLabel = getCategoryDisplayName(
+          getCategoryById(bulkCategory, categories),
+          isVi
+        );
         const msg = isVi
           ? `Đã chuyển ${succeededIds.size} sản phẩm sang danh mục "${catLabel}".`
           : `Changed category to "${catLabel}" for ${succeededIds.size} ${
@@ -723,7 +764,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           </div>
         </div>
 
-        {/* Row 2: Aligned Search Bar + Labeled Category Filter */}
+        {/* Row 2: Search Bar + Collapsible Filter Toggle & Reset All (matches SalesView) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-stone-400 dark:text-[#94A39B] absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -746,26 +787,75 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <label
-              htmlFor="products-category-filter"
-              className="text-xs font-medium text-stone-500 dark:text-[#94A39B] whitespace-nowrap"
+          <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+              aria-expanded={filtersOpen}
+              aria-controls="products-catalog-filters"
+              className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap border ${
+                filtersOpen || activeFilterCount > 0
+                  ? 'bg-stone-100 dark:bg-[#18251F] border-transparent dark:border-[#24352C] text-stone-900 dark:text-[#F1F5F3] hover:bg-stone-200/70 dark:hover:bg-[#1F3028]'
+                  : 'bg-transparent border-transparent text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
+              }`}
             >
-              {t.products.category}:
-            </label>
-            <select
-              id="products-category-filter"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value as 'ALL' | ProductCategory)}
-              className="h-11 px-3.5 text-sm font-medium border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
+              <span>
+                {activeFilterCount > 0
+                  ? filtersOpen
+                    ? isVi
+                      ? `Ẩn bộ lọc (${activeFilterCount})`
+                      : `Hide Filters (${activeFilterCount})`
+                    : isVi
+                      ? `Bộ lọc (${activeFilterCount})`
+                      : `Filters (${activeFilterCount})`
+                  : filtersOpen
+                    ? isVi
+                      ? 'Ẩn bộ lọc'
+                      : 'Hide Filters'
+                    : isVi
+                      ? 'Hiện bộ lọc'
+                      : 'Show Filters'}
+              </span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-200 motion-reduce:transition-none ${
+                  filtersOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            <button
+              type="button"
+              disabled={activeFilterCount === 0 && !search.trim()}
+              onClick={() => {
+                setCategoryFilter('all');
+                setTypeFilter('ALL');
+                setSearch('');
+              }}
+              className="inline-flex items-center justify-center h-11 px-3 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors whitespace-nowrap"
             >
-              <option value="ALL">{isVi ? 'Tất cả danh mục' : 'All Categories'}</option>
-              {CATALOG_CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {t.productCategories[cat]}
-                </option>
-              ))}
-            </select>
+              {isVi ? 'Đặt lại tất cả' : 'Reset All'}
+            </button>
+          </div>
+        </div>
+
+        {/* Collapsible Dynamic Category Filter Pills Drawer (matches SalesView) */}
+        <div
+          id="products-catalog-filters"
+          className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
+            filtersOpen
+              ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-stone-100 dark:border-[#24352C]'
+              : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
+          }`}
+        >
+          <div className="overflow-hidden">
+            <CategoryFilterPills
+              categories={productCategories}
+              selectedCategoryId={categoryFilter}
+              onSelect={setCategoryFilter}
+              isVi={isVi}
+              allLabel={t.common.all}
+            />
           </div>
         </div>
       </div>
@@ -955,7 +1045,13 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         </span>
                         <span className="text-stone-400 dark:text-[#94A39B]"> · </span>
                         <span className="text-stone-600 dark:text-[#94A39B]">
-                          {t.productCategories[product.category]}
+                          {getCategoryDisplayName(
+                            getCategoryById(
+                              resolveProductCategoryId(product, categories),
+                              categories
+                            ),
+                            isVi
+                          )}
                         </span>
                       </td>
 
@@ -1262,7 +1358,13 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                             {t.productTypes[product.productType]}
                           </span>
                           {' · '}
-                          {t.productCategories[product.category]}
+                          {getCategoryDisplayName(
+                            getCategoryById(
+                              resolveProductCategoryId(product, categories),
+                              categories
+                            ),
+                            isVi
+                          )}
                         </p>
                         <h3 className="mt-1 font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                           {displayName}
@@ -1595,13 +1697,13 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 <select
                   value={bulkCategory}
                   disabled={bulkProcessing}
-                  onChange={(e) => setBulkCategory(e.target.value as ProductCategory)}
+                  onChange={(e) => setBulkCategory(e.target.value)}
                   aria-label={isVi ? 'Danh mục đích' : 'Target category'}
                   className="h-11 min-h-[44px] px-3 text-xs font-medium bg-white dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 >
-                  {CATALOG_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {t.productCategories[cat]}
+                  {productCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {getCategoryDisplayName(cat, isVi)}
                     </option>
                   ))}
                 </select>

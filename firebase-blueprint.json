@@ -75,7 +75,8 @@
         "name": { "type": "string", "minLength": 1, "maxLength": 100 },
         "nameVi": { "type": "string", "maxLength": 100 },
         "brand": { "type": "string", "maxLength": 80 },
-        "category": { "type": "string", "enum": ["juice", "smoothie", "tea", "coffee", "specialty", "packaged", "snack"] },
+        "category": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "productType": { "type": "string", "enum": ["PACKAGED", "PREPARED_TO_ORDER", "PREPARED_STOCK"] },
         "priceKhr": { "type": "number" },
         "costPriceKhr": { "type": "number" },
@@ -136,6 +137,7 @@
         "memberUids": { "type": "array" },
         "name": { "type": "string", "minLength": 1, "maxLength": 100 },
         "nameVi": { "type": "string", "maxLength": 100 },
+        "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "unit": { "type": "string", "enum": ["g", "kg", "ml", "L", "pcs"] },
         "stockQty": { "type": "number" },
         "reorderLevel": { "type": "number" },
@@ -287,6 +289,27 @@
         "movementType", "deltaQty", "unit", "totalCostKhr", "referenceId",
         "movementDate", "note", "recordedBy", "createdBy", "createdAt"
       ]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "User-editable category synced across Products, POS, Inventory, and Financial Reports.",
+      "type": "object",
+      "properties": {
+        "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberUids": { "type": "array" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "nameVi": { "type": "string", "maxLength": 64 },
+        "scope": { "type": "string", "enum": ["product", "inventory", "both"] },
+        "sortOrder": { "type": "number" },
+        "isSystem": { "type": "boolean" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "workspaceId", "memberUids", "name", "nameVi", "scope",
+        "sortOrder", "isSystem", "createdBy", "createdAt", "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -333,6 +356,10 @@
     "/workspaces/{workspaceId}/stockMovements/{movementId}": {
       "schema": { "$ref": "#/entities/StockMovement" },
       "description": "Immutable stock movement audit ledger across all 3 inventory tiers."
+    },
+    "/workspaces/{workspaceId}/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Centralized editable categories for Products, POS, Inventory, and Reports."
     }
   }
 }
