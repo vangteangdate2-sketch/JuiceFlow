@@ -129,8 +129,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ? settings.familyMembers
       : [settings.activeOperator || 'Family'];
 
-  // Sync with global "Show Hints" toggle + per-item overrides
-  const { showHints, resetEpoch } = useHints();
+  // Sync with global "Show Hints" toggle + per-item overrides + app-wide ? icon visibility
+  const {
+    showHints,
+    resetEpoch,
+    hideHintsOutsideSettings,
+    setHideHintsOutsideSettings,
+  } = useHints();
+  const showQuestionHintsAcrossApp = !hideHintsOutsideSettings;
   const [hintOverrides, setHintOverrides] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -743,37 +749,103 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
 
           {openSections.language && (
-            <div className="mt-5 pt-5 border-t border-stone-100 dark:border-[#1F3028] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="text-sm text-stone-700 dark:text-[#D5DFDA] font-medium">
-                {isVi ? 'Ngôn ngữ hiển thị hiện tại' : 'Current Interface Language'}:{' '}
-                <span className="font-semibold text-[#0F5C43] dark:text-[#34D399]">
-                  {languageSummary}
-                </span>
+            <div className="mt-5 pt-5 border-t border-stone-100 dark:border-[#1F3028] space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="text-sm text-stone-700 dark:text-[#D5DFDA] font-medium">
+                  {isVi ? 'Ngôn ngữ hiển thị hiện tại' : 'Current Interface Language'}:{' '}
+                  <span className="font-semibold text-[#0F5C43] dark:text-[#34D399]">
+                    {languageSummary}
+                  </span>
+                </div>
+
+                <div className="inline-flex items-center p-1 bg-stone-100 dark:bg-[#18251F] border border-stone-200/80 dark:border-[#24352C] rounded-lg self-start sm:self-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('en')}
+                    className={`h-11 min-h-[44px] px-4 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+                      settings.language === 'en'
+                        ? 'bg-[#0F5C43] text-white dark:bg-[#10B981] dark:text-[#042419]'
+                        : 'text-stone-700 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                    }`}
+                  >
+                    English
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('vi')}
+                    className={`h-11 min-h-[44px] px-4 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+                      settings.language === 'vi'
+                        ? 'bg-[#0F5C43] text-white dark:bg-[#10B981] dark:text-[#042419]'
+                        : 'text-stone-700 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                    }`}
+                  >
+                    Tiếng Việt
+                  </button>
+                </div>
               </div>
 
-              <div className="inline-flex items-center p-1 bg-stone-100 dark:bg-[#18251F] border border-stone-200/80 dark:border-[#24352C] rounded-lg self-start sm:self-auto shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setLanguage('en')}
-                  className={`h-11 min-h-[44px] px-4 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
-                    settings.language === 'en'
-                      ? 'bg-[#0F5C43] text-white dark:bg-[#10B981] dark:text-[#042419]'
-                      : 'text-stone-700 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
-                  }`}
-                >
-                  English
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLanguage('vi')}
-                  className={`h-11 min-h-[44px] px-4 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
-                    settings.language === 'vi'
-                      ? 'bg-[#0F5C43] text-white dark:bg-[#10B981] dark:text-[#042419]'
-                      : 'text-stone-700 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
-                  }`}
-                >
-                  Tiếng Việt
-                </button>
+              {/* Show ? Hints Across App Toggle (always keeps ? hints visible inside Settings) */}
+              <div className="pt-4 border-t border-stone-100 dark:border-[#1F3028] flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-sm font-medium text-stone-900 dark:text-[#F1F5F3]">
+                      {isVi ? 'Hiện nút gợi ý ? trên toàn ứng dụng' : 'Show ? Hints Across App'}
+                    </span>
+                    <InfoTrigger
+                      hintId="showQuestionHintsAcrossAppDesc"
+                      active={isHintVisible('showQuestionHintsAcrossAppDesc')}
+                      label={
+                        isVi
+                          ? 'Thông tin hiển thị nút gợi ý ?'
+                          : 'About showing ? hints across the app'
+                      }
+                      onToggle={toggleSingleHint}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={showQuestionHintsAcrossApp}
+                    onClick={() => setHideHintsOutsideSettings(showQuestionHintsAcrossApp)}
+                    aria-label={
+                      isVi ? 'Hiện nút gợi ý ? trên toàn ứng dụng' : 'Show ? Hints Across App'
+                    }
+                    className="h-11 min-h-[44px] px-2.5 inline-flex items-center gap-2.5 rounded-lg hover:bg-stone-50 dark:hover:bg-[#18251F] transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                  >
+                    <span className="text-xs font-semibold text-stone-600 dark:text-[#94A39B]">
+                      {showQuestionHintsAcrossApp
+                        ? isVi
+                          ? 'Bật'
+                          : 'ON'
+                        : isVi
+                          ? 'Tắt'
+                          : 'OFF'}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        showQuestionHintsAcrossApp
+                          ? 'bg-[#0D5C3E] dark:bg-[#10B981]'
+                          : 'bg-stone-300 dark:bg-[#2A3D33]'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white dark:bg-[#0B110E] shadow-xs transition-transform ${
+                          showQuestionHintsAcrossApp ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </span>
+                  </button>
+                </div>
+
+                {isHintVisible('showQuestionHintsAcrossAppDesc') && (
+                  <p className="text-xs text-stone-500 dark:text-[#94A39B] leading-relaxed">
+                    {isVi
+                      ? 'Khi tắt, các nút dấu hỏi ? sẽ được ẩn trên Tổng quan, Bán hàng, Sản phẩm, Kho hàng, Chi phí và Báo cáo — nhưng vẫn luôn hiển thị trong trang Cài đặt này.'
+                      : 'When OFF, ? help buttons are hidden on Dashboard, Sales, Products, Inventory, Expenses, and Reports, while remaining available here in Settings.'}
+                  </p>
+                )}
               </div>
             </div>
           )}

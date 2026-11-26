@@ -12,6 +12,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: false,
         includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
         manifest: {
           id: '/',
@@ -83,6 +84,37 @@ export default defineConfig(() => {
           type: 'module',
         },
       }),
+      // Guards vite-plugin-pwa's dev HMR handshake against Vite 6 SendBeforeConnectError
+      // (both when HMR is disabled via DISABLE_HMR=true and before the WS connects).
+      {
+        name: 'pwa-safe-dev-hmr',
+        apply: 'serve',
+        enforce: 'post',
+        transformIndexHtml: {
+          order: 'post',
+          handler(html: string) {
+            if (process.env.DISABLE_HMR === 'true') {
+              return html.replace(
+                /<script id="vite-plugin-pwa:register-dev-sw"[\s\S]*?<\/script>\s*/g,
+                ''
+              );
+            }
+            return html;
+          },
+        },
+        transform(code: string, id: string) {
+          if (!id.includes('pwa-entry-point-loaded')) {
+            return null;
+          }
+          if (process.env.DISABLE_HMR === 'true') {
+            return 'export default function registerDevSW() {}\n';
+          }
+          return code.replace(
+            /import\.meta\.hot\.send\(([^)]+)\);?/g,
+            "if (import.meta.hot) { import.meta.hot.on('vite:ws:connect', () => { try { import.meta.hot?.send($1); } catch {} }); }"
+          );
+        },
+      },
       // Copies src/assets into dist/ so root-relative URLs like
       // "/src/assets/images/..." (e.g. generate_image output) still resolve
       // in production builds. Do not remove.

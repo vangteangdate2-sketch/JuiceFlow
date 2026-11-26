@@ -46,7 +46,12 @@ const NAV_ITEMS: { id: AppTab; icon: React.ComponentType<{ className?: string }>
   { id: 'settings', icon: Settings },
 ];
 
-const JuiceFlowShell: React.FC = () => {
+interface JuiceFlowShellProps {
+  activeTab: AppTab;
+  setActiveTab: React.Dispatch<React.SetStateAction<AppTab>>;
+}
+
+const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab }) => {
   const { settings, cloudSynced, syncing, refreshing, refreshData, t, setActiveOperator } = useStore();
   const { isDark, toggleTheme } = useTheme();
   const { showHints, toggleShowHints } = useHints();
@@ -57,12 +62,6 @@ const JuiceFlowShell: React.FC = () => {
       : [settings?.activeOperator || 'Family'];
   const activeOperator = settings?.activeOperator || familyMembers[0] || 'Family';
 
-  const [activeTab, setActiveTab] = useState<AppTab>(() => {
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('join')) {
-      return 'settings';
-    }
-    return 'dashboard';
-  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -515,11 +514,18 @@ const JuiceFlowShell: React.FC = () => {
 };
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<AppTab>(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('join')) {
+      return 'settings';
+    }
+    return 'dashboard';
+  });
+
   return (
     <ErrorBoundary>
       <StoreProvider>
-        <HintsProvider>
-          <JuiceFlowShell />
+        <HintsProvider activeView={activeTab}>
+          <JuiceFlowShell activeTab={activeTab} setActiveTab={setActiveTab} />
         </HintsProvider>
       </StoreProvider>
     </ErrorBoundary>

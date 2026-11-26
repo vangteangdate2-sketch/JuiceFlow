@@ -24,6 +24,8 @@ export interface InfoHintProps {
 /**
  * Reusable ? info button with uniform neutral gray styling, subtle text contrast,
  * and consistent 0.5rem (8px) spacing around the icon inside a 44px x 44px touch target.
+ * Respects the route-aware Settings toggle: hidden on non-Settings pages when disabled,
+ * while always rendered on the Settings view.
  */
 export const InfoHint: React.FC<InfoHintProps> = ({
   text,
@@ -33,7 +35,7 @@ export const InfoHint: React.FC<InfoHintProps> = ({
   textClassName = '',
   compact = false,
 }) => {
-  const { showHints, resetEpoch } = useHints();
+  const { showHints, resetEpoch, areQuestionHintsVisible } = useHints();
   const [localOverride, setLocalOverride] = useState<boolean | null>(null);
   const popoverRef = useRef<HTMLSpanElement | null>(null);
 
@@ -46,7 +48,7 @@ export const InfoHint: React.FC<InfoHintProps> = ({
 
   // Close individual popover when clicking outside (only when global Show Hints is OFF)
   useEffect(() => {
-    if (mode !== 'popover' || !isOpen || showHints) return;
+    if (!areQuestionHintsVisible || mode !== 'popover' || !isOpen || showHints) return;
     const handleOutside = (e: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
         setLocalOverride(false);
@@ -54,7 +56,12 @@ export const InfoHint: React.FC<InfoHintProps> = ({
     };
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
-  }, [mode, isOpen, showHints]);
+  }, [areQuestionHintsVisible, mode, isOpen, showHints]);
+
+  // Hide ? hint trigger on non-Settings pages when disabled in Settings
+  if (!areQuestionHintsVisible) {
+    return null;
+  }
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
