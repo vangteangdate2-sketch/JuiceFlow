@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ChevronDown,
-  ChevronUp,
   Edit2,
   Plus,
   Search,
@@ -29,7 +27,6 @@ const ALL_CATEGORIES: ExpenseCategory[] = [
 ];
 
 const BUSINESS_CATEGORY_PILLS: { id: ExpenseCategory; labelEn: string; labelVi: string }[] = [
-  { id: 'ingredients', labelEn: 'Ingredients', labelVi: 'Nguyên liệu' },
   { id: 'packaging', labelEn: 'Packaging', labelVi: 'Bao bì' },
   { id: 'utilities', labelEn: 'Utilities', labelVi: 'Điện nước' },
   { id: 'equipment', labelEn: 'Equipment', labelVi: 'Thiết bị' },
@@ -54,92 +51,6 @@ interface QuickRepeatPreset {
   vendor: string;
   count: number;
 }
-
-const DEFAULT_REPEAT_PRESETS_EN: QuickRepeatPreset[] = [
-  {
-    key: 'preset_ice',
-    title: 'Ice Delivery',
-    scope: 'business',
-    category: 'ingredients',
-    amountKhr: 20000,
-    paymentMethod: 'cash',
-    vendor: 'Local Ice Supplier',
-    count: 0,
-  },
-  {
-    key: 'preset_fruit',
-    title: 'Fresh Fruit Restock',
-    scope: 'business',
-    category: 'ingredients',
-    amountKhr: 80000,
-    paymentMethod: 'cash',
-    vendor: 'Morning Market',
-    count: 0,
-  },
-  {
-    key: 'preset_cups',
-    title: 'Cups & Straws',
-    scope: 'business',
-    category: 'packaging',
-    amountKhr: 45000,
-    paymentMethod: 'aba',
-    vendor: 'Packaging Shop',
-    count: 0,
-  },
-  {
-    key: 'preset_utilities',
-    title: 'Electricity & Water',
-    scope: 'business',
-    category: 'utilities',
-    amountKhr: 120000,
-    paymentMethod: 'aba',
-    vendor: 'EDC / PPWSA',
-    count: 0,
-  },
-];
-
-const DEFAULT_REPEAT_PRESETS_VI: QuickRepeatPreset[] = [
-  {
-    key: 'preset_ice',
-    title: 'Giao đá viên',
-    scope: 'business',
-    category: 'ingredients',
-    amountKhr: 20000,
-    paymentMethod: 'cash',
-    vendor: 'Đại lý đá',
-    count: 0,
-  },
-  {
-    key: 'preset_fruit',
-    title: 'Nhập trái cây tươi',
-    scope: 'business',
-    category: 'ingredients',
-    amountKhr: 80000,
-    paymentMethod: 'cash',
-    vendor: 'Chợ sáng',
-    count: 0,
-  },
-  {
-    key: 'preset_cups',
-    title: 'Ly & Ống hút',
-    scope: 'business',
-    category: 'packaging',
-    amountKhr: 45000,
-    paymentMethod: 'aba',
-    vendor: 'Cửa hàng bao bì',
-    count: 0,
-  },
-  {
-    key: 'preset_utilities',
-    title: 'Tiền điện & nước',
-    scope: 'business',
-    category: 'utilities',
-    amountKhr: 120000,
-    paymentMethod: 'aba',
-    vendor: 'Điện nước',
-    count: 0,
-  },
-];
 
 interface ExpensesViewProps {
   autoOpenAdd?: boolean;
@@ -244,7 +155,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       }
     }
 
-    const sorted = Array.from(grouped.entries())
+    return Array.from(grouped.entries())
       .map(([key, g]) => {
         const sortedAmts = [...g.amounts].sort((a, b) => a - b);
         const typicalAmount = sortedAmts[Math.floor(sortedAmts.length / 2)] || 0;
@@ -252,7 +163,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           key,
           title: g.title,
           scope: g.scope,
-          category: g.category,
+          category: g.category === 'ingredients' ? 'other' : g.category,
           amountKhr: typicalAmount,
           paymentMethod: g.paymentMethod,
           vendor: g.vendor,
@@ -265,23 +176,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
         return b.latestDate.localeCompare(a.latestDate);
       })
       .slice(0, 5);
-
-    if (sorted.length >= 4) {
-      return sorted;
-    }
-
-    // Pad with helpful shop presets if history is still short
-    const defaults = isVi ? DEFAULT_REPEAT_PRESETS_VI : DEFAULT_REPEAT_PRESETS_EN;
-    const seenKeys = new Set(sorted.map((s) => s.key));
-    const merged: QuickRepeatPreset[] = [...sorted];
-    for (const preset of defaults) {
-      if (merged.length >= 5) break;
-      if (!seenKeys.has(preset.title.toLowerCase())) {
-        merged.push(preset);
-      }
-    }
-    return merged;
-  }, [expenses, isVi]);
+  }, [expenses]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -399,7 +294,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
         title: title.trim(),
         scope,
         category,
-        isInventoryPurchase: scope === 'business' && category === 'ingredients',
+        isInventoryPurchase: editing ? editing.isInventoryPurchase : false,
         amountKhr: Math.max(0, computedAmountKhr),
         expenseDate,
         paymentMethod,
@@ -553,73 +448,51 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       </div>
 
       {/* ================================================================== */}
-      {/* FAST DAILY EXPENSE LOGGER + "QUICK REPEAT RECENT" PILL STRIP       */}
+      {/* FAST DAILY EXPENSE LOGGER (Shown only when adding/editing)         */}
       {/* ================================================================== */}
-      <section className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
-        {/* Quick Repeat Recent Strip (always 1 tap away above the form) */}
-        <div className="px-4 sm:px-5 py-3.5 bg-stone-50/75 dark:bg-[#16231C] border-b border-stone-200 dark:border-[#24352C] space-y-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <Sparkles className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
-              <span className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-[#D5DFDA]">
-                {isVi ? 'Lặp nhanh chi phí thường gặp' : 'Quick Repeat Recent'}
-              </span>
-              <InfoHint
-                compact
-                label={isVi ? 'Lặp nhanh chi phí' : 'About Quick Repeat'}
-                text={
-                  isVi
-                    ? 'Chạm một lần để điền sẵn mô tả, danh mục và số tiền thường chi cho các khoản lặp lại hàng ngày.'
-                    : 'Tap any frequent expense to pre-fill description, category, and typical amount in one tap.'
-                }
-              />
+      {formOpen && (
+        <section className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+          {/* Quick Repeat Recent Strip — only appears when adding and user has real past expenses */}
+          {!editing && quickRepeatItems.length > 0 && (
+            <div className="px-4 sm:px-5 py-3.5 bg-stone-50/75 dark:bg-[#16231C] border-b border-stone-200 dark:border-[#24352C] space-y-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+                <span className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-[#D5DFDA]">
+                  {isVi ? 'Lặp nhanh chi phí gần đây' : 'Quick Repeat Recent'}
+                </span>
+                <InfoHint
+                  compact
+                  label={isVi ? 'Lặp nhanh chi phí' : 'About Quick Repeat'}
+                  text={
+                    isVi
+                      ? 'Chạm một lần để điền sẵn mô tả, danh mục và số tiền từ các khoản chi bạn đã ghi trước đó.'
+                      : 'Tap any past expense you recorded to pre-fill its description, category, and typical amount in one tap.'
+                  }
+                />
+              </div>
+
+              <div className="flex items-center gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
+                {quickRepeatItems.map((preset) => (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => applyQuickRepeat(preset)}
+                    className="h-11 px-3.5 inline-flex items-center gap-2 rounded-full bg-white dark:bg-[#0F1814] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] dark:hover:border-[#10B981] text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+                    <span>{preset.title}</span>
+                    {preset.amountKhr > 0 && (
+                      <span className="font-mono-num text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
+                        {formatKhr(preset.amountKhr)}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
+          )}
 
-            <button
-              type="button"
-              onClick={() => (formOpen ? setFormOpen(false) : openNew())}
-              aria-expanded={formOpen}
-              className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap shrink-0"
-            >
-              <span>
-                {formOpen
-                  ? isVi
-                    ? 'Thu gọn biểu mẫu'
-                    : 'Hide Form'
-                  : isVi
-                    ? 'Mở biểu mẫu'
-                    : 'Open Form'}
-              </span>
-              {formOpen ? (
-                <ChevronUp className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5" />
-              )}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
-            {quickRepeatItems.map((preset) => (
-              <button
-                key={preset.key}
-                type="button"
-                onClick={() => applyQuickRepeat(preset)}
-                className="h-11 px-3.5 inline-flex items-center gap-2 rounded-full bg-white dark:bg-[#0F1814] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] dark:hover:border-[#10B981] text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
-                <span>{preset.title}</span>
-                {preset.amountKhr > 0 && (
-                  <span className="font-mono-num text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
-                    {formatKhr(preset.amountKhr)}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Compact 2-Column Add / Edit Expense Form */}
-        {formOpen && (
+          {/* Compact 2-Column Add / Edit Expense Form */}
           <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -671,8 +544,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                   label={t.expenses.categoryLabel}
                   text={
                     isVi
-                      ? 'Danh mục "Nguyên liệu" được tính là Nhập kho (chỉ tính dòng tiền). Các danh mục vận hành khác được trừ trực tiếp vào Lãi/Lỗ.'
-                      : '"Ingredients" is classified as an inventory purchase (Cash Flow only). Other business categories flow into Operating Expenses on P&L.'
+                      ? 'Chọn nhóm chi phí vận hành (bao bì, điện nước, thiết bị, mặt bằng, vận chuyển). Nhập kho nguyên liệu nên ghi ở mục Kho hàng.'
+                      : 'Choose an operating expense category (packaging, utilities, equipment, rent, transport). Log ingredient restocks under Inventory.'
                   }
                 />
               </div>
@@ -854,8 +727,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
               </button>
             </div>
           </form>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* ================================================================== */}
       {/* EXPENSES TABLE WITH INVENTORY-ALIGNED TOOLBAR                      */}
