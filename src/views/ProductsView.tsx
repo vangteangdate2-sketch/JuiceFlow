@@ -4,14 +4,17 @@ import {
   Camera,
   Check,
   CheckSquare,
+  CupSoda,
   Edit2,
   Eye,
   EyeOff,
+  FlaskConical,
   FolderInput,
   Layers,
   LayoutGrid,
   Loader2,
   Minus,
+  Package,
   Plus,
   QrCode,
   ScanBarcode,
@@ -137,6 +140,23 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       // Ignore storage write errors
     }
   };
+
+  const typeCounts = useMemo(() => {
+    let madeToOrder = 0;
+    let packaged = 0;
+    let preparedStock = 0;
+    for (const p of products) {
+      if (p.productType === 'PREPARED_TO_ORDER') madeToOrder += 1;
+      else if (p.productType === 'PACKAGED') packaged += 1;
+      else if (p.productType === 'PREPARED_STOCK') preparedStock += 1;
+    }
+    return {
+      ALL: products.length,
+      PREPARED_TO_ORDER: madeToOrder,
+      PACKAGED: packaged,
+      PREPARED_STOCK: preparedStock,
+    };
+  }, [products]);
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -578,87 +598,154 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         </div>
       )}
 
-      {/* Filter, Category, Search & View Switcher Toolbar */}
-      <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-        {/* Item Type Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 xl:pb-0">
-          {(['ALL', 'PREPARED_TO_ORDER', 'PACKAGED', 'PREPARED_STOCK'] as const).map((pt) => (
-            <button
-              key={pt}
-              type="button"
-              onClick={() => setTypeFilter(pt)}
-              className={`h-11 min-h-[44px] px-3.5 text-xs font-semibold rounded-full transition-colors whitespace-nowrap shrink-0 ${
-                typeFilter === pt
-                  ? 'bg-[#0F5C43] text-white dark:bg-[#10B981] dark:text-[#042419]'
-                  : 'bg-stone-100 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-200 dark:hover:bg-[#1F3028] border border-transparent dark:border-[#24352C]'
-              }`}
+      {/* Filter, Category, Search & View Switcher Toolbar (aligned to match InventoryView) */}
+      <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-4 space-y-3">
+        {/* Row 1: Segmented Product-Type Tabs + Right-Aligned Grid/Table Switcher */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <div className="overflow-x-auto pb-0.5 -mx-1 px-1">
+            <div
+              role="tablist"
+              aria-label={isVi ? 'Phân loại sản phẩm' : 'Product types'}
+              className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl"
             >
-              {pt === 'ALL' ? `${t.common.all} (${products.length})` : t.productTypes[pt]}
-            </button>
-          ))}
-        </div>
-
-        {/* Category Dropdown + Search Input + Grid/Table Switcher */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value as 'ALL' | ProductCategory)}
-            aria-label={t.products.category}
-            className="h-11 min-h-[44px] px-3 text-xs font-medium bg-white dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981] shrink-0"
-          >
-            <option value="ALL">{isVi ? 'Tất cả danh mục' : 'All Categories'}</option>
-            {CATALOG_CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {t.productCategories[cat]}
-              </option>
-            ))}
-          </select>
-
-          <div className="relative flex-1 min-w-[180px] sm:w-56">
-            <Search className="w-4 h-4 text-stone-400 dark:text-[#94A39B] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={isVi ? 'Tìm tên, thương hiệu, mã vạch...' : 'Search name, brand, barcode...'}
-              className="w-full h-11 min-h-[44px] pl-9 pr-3 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]/70 border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-            />
+              {(
+                [
+                  {
+                    id: 'ALL',
+                    icon: Layers,
+                    label: isVi ? 'Tất cả' : 'All Items',
+                    count: typeCounts.ALL,
+                  },
+                  {
+                    id: 'PREPARED_TO_ORDER',
+                    icon: CupSoda,
+                    label: t.productTypes.PREPARED_TO_ORDER,
+                    count: typeCounts.PREPARED_TO_ORDER,
+                  },
+                  {
+                    id: 'PACKAGED',
+                    icon: Package,
+                    label: t.productTypes.PACKAGED,
+                    count: typeCounts.PACKAGED,
+                  },
+                  {
+                    id: 'PREPARED_STOCK',
+                    icon: FlaskConical,
+                    label: t.productTypes.PREPARED_STOCK,
+                    count: typeCounts.PREPARED_STOCK,
+                  },
+                ] as const
+              ).map((tab) => {
+                const Icon = tab.icon;
+                const active = typeFilter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setTypeFilter(tab.id)}
+                    className={`h-11 px-3.5 inline-flex items-center gap-2 text-xs sm:text-sm font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                      active
+                        ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
+                        : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span>{tab.label}</span>
+                    <span
+                      className={`font-mono-num text-[11px] font-bold ${
+                        active ? 'opacity-80' : 'text-stone-400 dark:text-[#94A39B]'
+                      }`}
+                    >
+                      ({tab.count})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Grid / Table View Toggle */}
           <div
             role="group"
             aria-label={isVi ? 'Chế độ hiển thị danh mục' : 'Catalog layout view'}
-            className="inline-flex items-center p-1 h-11 min-h-[44px] bg-stone-100 dark:bg-[#18251F] border border-stone-200/80 dark:border-[#24352C] rounded-lg shrink-0"
+            className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl self-start xl:self-auto shrink-0"
           >
             <button
               type="button"
               onClick={() => handleSetViewMode('grid')}
               aria-pressed={viewMode === 'grid'}
               title={isVi ? 'Xem dạng lưới' : 'Grid view'}
-              className={`h-9 px-2.5 inline-flex items-center gap-1.5 text-xs font-semibold rounded-md transition-colors ${
+              className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors whitespace-nowrap ${
                 viewMode === 'grid'
-                  ? 'bg-white dark:bg-[#064E3B] text-stone-900 dark:text-[#D1FAE5] shadow-2xs'
+                  ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                   : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
               }`}
             >
-              <LayoutGrid className="w-4 h-4" />
-              <span className="hidden sm:inline">{isVi ? 'Lưới' : 'Grid'}</span>
+              <LayoutGrid className="w-4 h-4 shrink-0" />
+              <span>{isVi ? 'Lưới' : 'Grid'}</span>
             </button>
             <button
               type="button"
               onClick={() => handleSetViewMode('table')}
               aria-pressed={viewMode === 'table'}
               title={isVi ? 'Xem dạng bảng' : 'Table view'}
-              className={`h-9 px-2.5 inline-flex items-center gap-1.5 text-xs font-semibold rounded-md transition-colors ${
+              className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors whitespace-nowrap ${
                 viewMode === 'table'
-                  ? 'bg-white dark:bg-[#064E3B] text-stone-900 dark:text-[#D1FAE5] shadow-2xs'
+                  ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                   : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
               }`}
             >
-              <Table2 className="w-4 h-4" />
-              <span className="hidden sm:inline">{isVi ? 'Bảng' : 'Table'}</span>
+              <Table2 className="w-4 h-4 shrink-0" />
+              <span>{isVi ? 'Bảng' : 'Table'}</span>
             </button>
+          </div>
+        </div>
+
+        {/* Row 2: Aligned Search Bar + Labeled Category Filter */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-stone-400 dark:text-[#94A39B] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={isVi ? 'Tìm tên, thương hiệu, mã vạch...' : 'Search name, brand, barcode...'}
+              className="w-full h-11 pl-10 pr-9 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] absolute right-1 top-1/2 -translate-y-1/2 rounded-md"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <label
+              htmlFor="products-category-filter"
+              className="text-xs font-medium text-stone-500 dark:text-[#94A39B] whitespace-nowrap"
+            >
+              {t.products.category}:
+            </label>
+            <select
+              id="products-category-filter"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value as 'ALL' | ProductCategory)}
+              className="h-11 px-3.5 text-sm font-medium border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+            >
+              <option value="ALL">{isVi ? 'Tất cả danh mục' : 'All Categories'}</option>
+              {CATALOG_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {t.productCategories[cat]}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
