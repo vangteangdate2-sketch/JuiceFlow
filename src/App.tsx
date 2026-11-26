@@ -72,6 +72,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
     }
   });
   const [justRefreshed, setJustRefreshed] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'add_expense' | 'add_product' | null>(null);
   const [security, setSecurity] = useState<BiometricSecurityConfig>(() => loadSecurityConfig());
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     const cfg = loadSecurityConfig();
@@ -126,8 +127,9 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
     }
   }, []);
 
-  const navigate = (tab: AppTab) => {
+  const navigate = (tab: AppTab, action?: 'add_expense' | 'add_product') => {
     setActiveTab(tab);
+    setPendingAction(action ?? null);
     setMobileMenuOpen(false);
   };
 
@@ -497,9 +499,19 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
           >
             {activeTab === 'dashboard' && <DashboardView onNavigate={navigate} />}
             {activeTab === 'sales' && <SalesView sidebarCollapsed={sidebarCollapsed} />}
-            {activeTab === 'products' && <ProductsView />}
+            {activeTab === 'products' && (
+              <ProductsView
+                autoOpenAdd={pendingAction === 'add_product'}
+                onAutoOpenHandled={() => setPendingAction(null)}
+              />
+            )}
             {activeTab === 'inventory' && <InventoryView />}
-            {activeTab === 'expenses' && <ExpensesView />}
+            {activeTab === 'expenses' && (
+              <ExpensesView
+                autoOpenAdd={pendingAction === 'add_expense'}
+                onAutoOpenHandled={() => setPendingAction(null)}
+              />
+            )}
             {activeTab === 'reports' && <ReportsView />}
             {activeTab === 'settings' && (
               <SettingsView

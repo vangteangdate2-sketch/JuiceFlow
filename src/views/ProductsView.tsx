@@ -59,7 +59,15 @@ function hasLinkedRecipe(product: Product): boolean {
   return product.recipe.length > 0;
 }
 
-export const ProductsView: React.FC = () => {
+interface ProductsViewProps {
+  autoOpenAdd?: boolean;
+  onAutoOpenHandled?: () => void;
+}
+
+export const ProductsView: React.FC<ProductsViewProps> = ({
+  autoOpenAdd = false,
+  onAutoOpenHandled,
+}) => {
   const {
     settings,
     products,
@@ -350,6 +358,13 @@ export const ProductsView: React.FC = () => {
     setInitialFocusSection(null);
     setModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!autoOpenAdd) return;
+    openNew();
+    onAutoOpenHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenAdd]);
 
   const openEdit = (product: Product, focusSection: 'recipe' | null = null) => {
     resetQuickScanSeed();

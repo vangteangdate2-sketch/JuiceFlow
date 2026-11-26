@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Edit2, Plus, Search, Trash2, X } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import type { Expense, ExpenseCategory, ExpenseScope, PaymentMethod } from '../types';
@@ -18,7 +18,15 @@ const ALL_CATEGORIES: ExpenseCategory[] = [
   'other',
 ];
 
-export const ExpensesView: React.FC = () => {
+interface ExpensesViewProps {
+  autoOpenAdd?: boolean;
+  onAutoOpenHandled?: () => void;
+}
+
+export const ExpensesView: React.FC<ExpensesViewProps> = ({
+  autoOpenAdd,
+  onAutoOpenHandled,
+}) => {
   const { settings, expenses, purchases, saveExpense, deleteExpense, t } = useStore();
   const isVi = settings.language === 'vi';
 
@@ -81,6 +89,21 @@ export const ExpensesView: React.FC = () => {
     setNote('');
     setModalOpen(true);
   };
+
+  useEffect(() => {
+    if (!autoOpenAdd) return;
+    setEditing(null);
+    setTitle('');
+    setScope('business');
+    setCategory('utilities');
+    setAmountKhr('');
+    setExpenseDate(todayIso());
+    setPaymentMethod('cash');
+    setVendor('');
+    setNote('');
+    setModalOpen(true);
+    onAutoOpenHandled?.();
+  }, [autoOpenAdd, onAutoOpenHandled]);
 
   const openEdit = (exp: Expense) => {
     setEditing(exp);

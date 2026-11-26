@@ -893,7 +893,7 @@ export const InventoryView: React.FC = () => {
       {/* 1. "NEEDS ATTENTION TODAY" PRIORITY RESTOCK STRIP                  */}
       {/* ================================================================== */}
       {attentionItems.combined.length === 0 ? (
-        <div className="bg-emerald-50/75 dark:bg-[#064E3B]/40 border border-emerald-200 dark:border-[#10B981]/35 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="needs-attention-container bg-emerald-50/75 dark:bg-[#064E3B]/40 border border-emerald-200 dark:border-[#10B981]/35 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-2">
           <div className="inline-flex items-center gap-2.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-900 dark:bg-[#065F46] dark:text-[#D1FAE5]">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 dark:text-[#34D399]" />
@@ -909,7 +909,7 @@ export const InventoryView: React.FC = () => {
       ) : (
         <section
           aria-label={isVi ? 'Cần xử lý hôm nay' : 'Needs Attention Today'}
-          className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden"
+          className="needs-attention-container bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden"
         >
           {/* Collapsible Strip Header */}
           <div className="px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3 bg-stone-50/80 dark:bg-[#16231C] border-b border-stone-200 dark:border-[#24352C]">
@@ -998,11 +998,11 @@ export const InventoryView: React.FC = () => {
             )}
           </div>
 
-          {/* Horizontal Priority Cards */}
+          {/* Priority Action Cards — Unified Grid matching DashboardView Needs Restock */}
           {attentionExpanded && (
-            <div className="p-4">
+            <div className="p-4 sm:p-5">
               {visibleAttentionItems.length === 0 ? (
-                <p className="text-xs text-stone-500 dark:text-[#94A39B] py-2 text-center">
+                <p className="text-xs text-stone-500 dark:text-[#94A39B] py-3 text-center">
                   {isVi
                     ? 'Không có mặt hàng nào trong nhóm cảnh báo này.'
                     : 'No items in this alert bucket right now.'}
@@ -1017,20 +1017,26 @@ export const InventoryView: React.FC = () => {
                       !isOut &&
                       (item.status === 'low' || item.isExpiringBatch);
 
+                    const barColor = isOut
+                      ? 'bg-red-600 dark:bg-red-500'
+                      : isPreparedBucket
+                        ? 'bg-purple-600 dark:bg-purple-400'
+                        : 'bg-amber-500 dark:bg-amber-400';
+
                     return (
                       <div
                         key={`attn-${item.tier}-${item.id}`}
-                        className="p-3.5 rounded-xl border border-stone-200 dark:border-[#24352C] bg-stone-50/60 dark:bg-[#0F1814] flex items-center justify-between gap-3"
+                        className="p-4 rounded-xl border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#0F1814] hover:border-stone-300 dark:hover:border-[#344B3F] transition-colors flex items-center justify-between gap-3.5"
                       >
-                        <div className="min-w-0 space-y-1">
+                        <div className="min-w-0 flex-1 space-y-2">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
                                 isOut
-                                  ? 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/80 dark:text-red-200 dark:border-red-500/40'
+                                  ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/70 dark:text-red-200 dark:border-red-500/40'
                                   : isPreparedBucket
-                                    ? 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/80 dark:text-purple-200 dark:border-purple-500/40'
-                                    : 'bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-950/80 dark:text-amber-200 dark:border-amber-500/40'
+                                    ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/70 dark:text-purple-200 dark:border-purple-500/40'
+                                    : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-500/40'
                               }`}
                             >
                               {isOut
@@ -1041,7 +1047,7 @@ export const InventoryView: React.FC = () => {
                                   ? item.isExpiringBatch
                                     ? isVi
                                       ? `Mẻ cũ (${item.daysSinceBatchPrep} ngày)`
-                                      : `Expiring (${item.daysSinceBatchPrep}d old)`
+                                      : `Expiring (${item.daysSinceBatchPrep}d)`
                                     : isVi
                                       ? 'Mẻ pha thấp'
                                       : 'Low Batch'
@@ -1058,37 +1064,48 @@ export const InventoryView: React.FC = () => {
                             {isVi ? item.nameVi || item.name : item.name}
                           </p>
 
-                          <p className="font-mono-num text-xs text-stone-600 dark:text-[#D5DFDA]">
-                            <strong
-                              className={
-                                isOut
-                                  ? 'text-red-700 dark:text-[#F87171]'
-                                  : isPreparedBucket
-                                    ? 'text-purple-700 dark:text-purple-300'
-                                    : 'text-amber-700 dark:text-amber-300'
-                              }
-                            >
-                              {formatQty(item.stockQty, item.unit)}
-                            </strong>{' '}
-                            <span className="text-stone-400 dark:text-[#94A39B]">
-                              / {isVi ? 'ngưỡng' : 'min'} {formatQty(item.reorderLevel, item.unit)}
-                            </span>
-                          </p>
+                          <div className="space-y-1">
+                            <div className="flex items-baseline justify-between gap-2 font-mono-num text-xs">
+                              <strong
+                                className={
+                                  isOut
+                                    ? 'text-red-700 dark:text-[#F87171]'
+                                    : isPreparedBucket
+                                      ? 'text-purple-700 dark:text-purple-300'
+                                      : 'text-amber-700 dark:text-amber-300'
+                                }
+                              >
+                                {formatQty(item.stockQty, item.unit)}
+                              </strong>
+                              <span className="text-[11px] text-stone-400 dark:text-[#94A39B]">
+                                {isVi ? 'tối thiểu' : 'min'}{' '}
+                                {formatQty(item.reorderLevel, item.unit)}
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-stone-100 dark:bg-[#1F3028] overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-200 ${barColor}`}
+                                style={{ width: `${Math.max(item.progressPct, isOut ? 0 : 8)}%` }}
+                              />
+                            </div>
+                          </div>
                         </div>
 
                         <button
                           type="button"
                           onClick={() => openQuickRestockForItem(item)}
-                          className="h-10 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                          className="h-10 px-3.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
                         >
-                          <Plus className="w-3.5 h-3.5" />
-                          {item.tier === 'prepared_stock'
-                            ? isVi
-                              ? 'Pha mẻ'
-                              : '+ Restock'
-                            : isVi
-                              ? 'Nhập thêm'
-                              : '+ Restock'}
+                          <Plus className="w-3.5 h-3.5 shrink-0" />
+                          <span>
+                            {item.tier === 'prepared_stock'
+                              ? isVi
+                                ? 'Pha mẻ'
+                                : 'Restock'
+                              : isVi
+                                ? 'Nhập thêm'
+                                : 'Restock'}
+                          </span>
                         </button>
                       </div>
                     );
