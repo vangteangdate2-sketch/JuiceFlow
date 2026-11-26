@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  Banknote,
   Check,
   ChevronDown,
   Eye,
@@ -81,6 +82,7 @@ interface SalesViewProps {
 export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }) => {
   const {
     settings,
+    cashPresets,
     products: rawProducts,
     ingredients: rawIngredients,
     barcodeRegistry: rawBarcodeRegistry,
@@ -113,8 +115,11 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
   const [cart, setCart] = useState<Record<string, CartEntry>>({});
   const [cartTxId, setCartTxId] = useState<string>(() => generateId('sale'));
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [cashModalOpen, setCashModalOpen] = useState(false);
+  const [showUsdTender, setShowUsdTender] = useState(false);
   const [cashUsdInput, setCashUsdInput] = useState('');
   const [cashKhrInput, setCashKhrInput] = useState('');
+  const cashKhrInputRef = useRef<HTMLInputElement | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [note, setNote] = useState('');
   const [saleDate, setSaleDate] = useState(todayIso());
@@ -220,7 +225,6 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
   );
 
   const isCashSelected = paymentMethod === 'cash';
-  const cashInsufficient = isCashSelected && cartTotal > 0 && !cashCalc.isCovered;
 
   const handleQuickAddUsd = (deltaUsd: number) => {
     const current = parseNonNegativeNumber(cashUsdInput);
@@ -228,10 +232,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
     setCashUsdInput(String(next));
   };
 
-  const handleQuickAddKhr = (deltaKhr: number) => {
-    const current = parseNonNegativeNumber(cashKhrInput);
-    const next = Math.round(current + deltaKhr);
-    setCashKhrInput(String(next));
+  const handleSelectKhrPreset = (amountKhr: number) => {
+    setCashKhrInput(String(amountKhr));
   };
 
   const handleExactKhr = () => {
@@ -240,8 +242,32 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
       parseNonNegativeNumber(cashUsdInput),
       posExchangeRate
     );
-    setCashKhrInput(remaining > 0 ? String(remaining) : '');
+    setCashKhrInput(String(remaining));
   };
+
+  const closeCashModal = () => {
+    if (submitting) return;
+    setCashModalOpen(false);
+  };
+
+  // Focus cash input when Cash Payment Modal opens & dismiss on Escape
+  useEffect(() => {
+    if (!cashModalOpen) return;
+    const rafId = window.requestAnimationFrame(() => {
+      cashKhrInputRef.current?.focus();
+    });
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) {
+        e.preventDefault();
+        setCashModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [cashModalOpen, submitting]);
 
   // Live stock validation for current cart
   const liveStockValidation = useMemo(() => {
@@ -446,10 +472,13 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
     return { ok: true, message: msg };
   };
 
-  const handleCheckout = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const completeSale = async (cashTender?: {
+    usdReceived: number;
+    khrReceived: number;
+    exchangeRate: number;
+    changeDueKhr: number;
+  }) => {
     if (cartLines.length === 0 || submitting) return;
-    if (paymentMethod === 'cash' && cartTotal > 0 && !cashCalc.isCovered) return;
 
     setCheckoutError(null);
     setCheckoutShortages([]);
@@ -463,10 +492,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
           quantity: l.quantity,
         })),
         paymentMethod,
-        cash_received_usd: paymentMethod === 'cash' ? cashCalc.usdReceived : null,
-        cash_received_khr: paymentMethod === 'cash' ? cashCalc.khrReceived : null,
-        exchange_rate_used: paymentMethod === 'cash' ? cashCalc.exchangeRate : null,
-        change_given_khr: paymentMethod === 'cash' ? cashCalc.changeDueKhr : null,
+        cash_received_usd: cashTender ? cashTender.usdReceived : null,
+        cash_received_khr: cashTender ? cashTender.khrReceived : null,
+        exchange_rate_used: cashTender ? cashTender.exchangeRate : null,
+        change_given_khr: cashTender ? cashTender.changeDueKhr : null,
         customerName,
         note,
         saleDate,
@@ -478,6 +507,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
         return;
       }
 
+      setCashModalOpen(false);
+      setShowUsdTender(false);
       setCart({});
       setCartTxId(generateId('sale'));
       setCashUsdInput('');
@@ -491,6 +522,36 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleCheckout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (cartLines.length === 0 || submitting || !liveStockValidation.ok) return;
+
+    if (paymentMethod === 'cash') {
+      setCheckoutError(null);
+      setCheckoutShortages([]);
+      setCashUsdInput('');
+      setCashKhrInput('');
+      setShowUsdTender(false);
+      setCashModalOpen(true);
+      return;
+    }
+
+    await completeSale();
+  };
+
+  const handleConfirmCashPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (cartLines.length === 0 || submitting || !liveStockValidation.ok) return;
+    if (cartTotal > 0 && !cashCalc.isCovered) return;
+
+    await completeSale({
+      usdReceived: cashCalc.usdReceived,
+      khrReceived: cashCalc.khrReceived,
+      exchangeRate: cashCalc.exchangeRate,
+      changeDueKhr: cashCalc.changeDueKhr,
+    });
   };
 
   const filteredSales = useMemo(() => {
@@ -653,6 +714,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               <BarcodeScanner
                 enabled={
                   subTab === 'pos' &&
+                  !cashModalOpen &&
                   !variantPickerProduct &&
                   !receiptSale &&
                   !detailSaleId &&
@@ -1021,10 +1083,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               )}
             </div>
 
-            {/* Region 2: Scrollable Cart Line Items + Stock Warnings */}
-            <div className="flex-1 min-h-[120px] overflow-y-auto px-4 sm:px-5 py-2 space-y-3">
+            {/* Region 2: Spacious Scrollable Cart Line Items + Stock Warnings */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-5 py-2 space-y-3">
               {cartLines.length === 0 ? (
-                <div className="h-full min-h-[110px] flex flex-col items-center justify-center text-center py-6 text-sm text-stone-400 dark:text-[#94A39B]">
+                <div className="h-full min-h-[140px] flex flex-col items-center justify-center text-center py-8 text-sm text-stone-400 dark:text-[#94A39B]">
                   <ShoppingBag className="w-7 h-7 text-stone-300 dark:text-[#24352C] mb-2" />
                   <p>{t.sales.emptyCart}</p>
                 </div>
@@ -1033,7 +1095,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   {cartLines.map(({ key, product, variant, unitPrice, quantity, lineTotal }) => {
                     const incCheck = canAddToCart(product.id, variant?.id, 1);
                     return (
-                      <li key={key} className="py-3 flex items-center justify-between gap-2.5">
+                      <li key={key} className="py-2.5 flex items-center justify-between gap-2.5">
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-stone-900 dark:text-[#F1F5F3] truncate">
                             {isVi ? product.nameVi || product.name : product.name}
@@ -1153,8 +1215,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               )}
             </div>
 
-            {/* Region 3: Checkout Controls (Accordion Details, 48px Payment Grid, Conditional Cash Box) */}
-            <div className="shrink-0 max-h-[54%] overflow-y-auto border-t border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] px-4 sm:px-5 py-3 space-y-3">
+            {/* Region 3: Compact Pinned Checkout Footer (Details Accordion, 1-Row Payment Selector, Total, 48px Charge CTA) */}
+            <div className="shrink-0 border-t border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] px-4 sm:px-5 py-3 space-y-2.5">
               {/* Collapsible 1-Line "Order Details & Notes" Accordion (44px touch height) */}
               <div className="border border-stone-200 dark:border-[#24352C] rounded-lg bg-stone-50/60 dark:bg-[#18251F] overflow-hidden">
                 <button
@@ -1189,7 +1251,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   }`}
                 >
                   <div className="overflow-hidden">
-                    <div className="px-3 pb-3 pt-2.5 border-t border-stone-200/80 dark:border-[#24352C] bg-white dark:bg-[#131D18] space-y-2.5">
+                    <div className="px-3 pb-3 pt-2.5 border-t border-stone-200/80 dark:border-[#24352C] bg-white dark:bg-[#131D18] space-y-2">
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1">
@@ -1235,232 +1297,31 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 </div>
               </div>
 
-              {/* Payment Method Grid (minimum 48px height, generous gap-2.5 spacing) */}
-              <div className="grid grid-cols-2 gap-2.5">
-                {(['cash', 'khqr', 'aba', 'wing'] as PaymentMethod[]).map((pm) => (
-                  <button
-                    key={pm}
-                    type="button"
-                    onClick={() => setPaymentMethod(pm)}
-                    className={`h-12 px-3 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
-                      paymentMethod === pm
-                        ? 'border-[#0D5C3E] bg-[#E6F2ED] text-[#0D5C3E] dark:border-[#10B981] dark:bg-[#064E3B] dark:text-[#D1FAE5]'
-                        : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
-                    }`}
-                  >
-                    {t.paymentMethods[pm]}
-                  </button>
-                ))}
+              {/* Compact Single-Row Payment Method Selector (44px touch height) */}
+              <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label={t.common.payment}>
+                {(['cash', 'khqr', 'aba', 'wing'] as PaymentMethod[]).map((pm) => {
+                  const selected = paymentMethod === pm;
+                  return (
+                    <button
+                      key={pm}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setPaymentMethod(pm)}
+                      className={`h-11 px-1.5 text-[11px] xl:text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap truncate ${
+                        selected
+                          ? 'border-[#0D5C3E] bg-[#E6F2ED] text-[#0D5C3E] dark:border-[#10B981] dark:bg-[#064E3B] dark:text-[#D1FAE5]'
+                          : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
+                      }`}
+                    >
+                      {t.paymentMethods[pm]}
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Conditional Dual-Currency Cash Received & KHR Change Box (Cash Only) */}
-              <div
-                aria-hidden={!isCashSelected}
-                className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
-                  isCashSelected
-                    ? 'grid-rows-[1fr] opacity-100'
-                    : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
-                }`}
-              >
-                <div className="overflow-hidden">
-                  <div className="rounded-lg border border-stone-200 dark:border-[#24352C] bg-stone-50/70 dark:bg-[#18251F] p-3 space-y-2.5">
-                    {/* Cash Box Header + Rate Indicator + Quick Clear */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-stone-700 dark:text-[#F1F5F3]">
-                        {isVi ? 'Tiền khách đưa & Tiền thối' : 'Cash Received & Change'}
-                      </span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[11px] font-mono-num text-stone-500 dark:text-[#94A39B]">
-                          {isVi ? 'Tỷ giá' : 'Rate'}: {posExchangeRate.toLocaleString('en-US')} ៛/$
-                        </span>
-                        {cashCalc.hasAnyInput && (
-                          <button
-                            type="button"
-                            tabIndex={isCashSelected ? 0 : -1}
-                            onClick={() => {
-                              setCashUsdInput('');
-                              setCashKhrInput('');
-                            }}
-                            className="text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] underline px-1 py-1"
-                          >
-                            {isVi ? 'Xóa' : 'Clear'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Side-by-Side 48px USD & KHR Numeric Inputs + Touch Quick-Tap Chips (48px Exact button) */}
-                    <div className="grid grid-cols-2 gap-2.5">
-                      {/* Left: USD Received ($) */}
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="pos-cash-usd"
-                          className="block text-[11px] font-medium text-stone-600 dark:text-[#94A39B]"
-                        >
-                          {isVi ? 'Nhận USD ($)' : 'USD Received ($)'}
-                        </label>
-                        <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-400 dark:text-[#94A39B]">
-                            $
-                          </span>
-                          <input
-                            id="pos-cash-usd"
-                            type="number"
-                            inputMode="decimal"
-                            min={0}
-                            step="any"
-                            tabIndex={isCashSelected ? 0 : -1}
-                            value={cashUsdInput}
-                            onChange={(e) => setCashUsdInput(e.target.value)}
-                            placeholder="0"
-                            className="w-full h-12 pl-7 pr-8 text-sm font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] bg-white dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C3E]/30 dark:focus:ring-[#10B981]/30 focus:border-[#0D5C3E] dark:focus:border-[#10B981]"
-                          />
-                          {cashUsdInput && (
-                            <button
-                              type="button"
-                              tabIndex={isCashSelected ? 0 : -1}
-                              onClick={() => setCashUsdInput('')}
-                              aria-label="Clear USD"
-                              className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {[1, 5, 10, 20].map((amt, idx) => (
-                            <button
-                              key={amt}
-                              type="button"
-                              tabIndex={isCashSelected ? 0 : -1}
-                              onClick={() => handleQuickAddUsd(amt)}
-                              className={`${
-                                idx < 2 ? 'h-12' : 'h-11'
-                              } px-1.5 text-xs font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:text-[#0D5C3E] dark:hover:text-[#34D399] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap`}
-                            >
-                              ${amt}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Right: KHR Received (៛) */}
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="pos-cash-khr"
-                          className="block text-[11px] font-medium text-stone-600 dark:text-[#94A39B]"
-                        >
-                          {isVi ? 'Nhận KHR (៛)' : 'KHR Received (៛)'}
-                        </label>
-                        <div className="relative">
-                          <input
-                            id="pos-cash-khr"
-                            type="number"
-                            inputMode="numeric"
-                            min={0}
-                            step={100}
-                            tabIndex={isCashSelected ? 0 : -1}
-                            value={cashKhrInput}
-                            onChange={(e) => setCashKhrInput(e.target.value)}
-                            placeholder="0"
-                            className="w-full h-12 pl-3 pr-8 text-sm font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] bg-white dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C3E]/30 dark:focus:ring-[#10B981]/30 focus:border-[#0D5C3E] dark:focus:border-[#10B981]"
-                          />
-                          {cashKhrInput ? (
-                            <button
-                              type="button"
-                              tabIndex={isCashSelected ? 0 : -1}
-                              onClick={() => setCashKhrInput('')}
-                              aria-label="Clear KHR"
-                              className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-400 dark:text-[#94A39B]">
-                              ៛
-                            </span>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-1.5">
-                          <button
-                            type="button"
-                            tabIndex={isCashSelected ? 0 : -1}
-                            onClick={handleExactKhr}
-                            disabled={cartTotal <= 0}
-                            className="h-12 px-1.5 text-xs font-semibold text-[#0D5C3E] dark:text-[#6EE7B7] bg-[#E6F2ED] dark:bg-[#064E3B] border border-[#0D5C3E]/25 dark:border-[#10B981]/45 hover:bg-[#D5EAE0] dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
-                          >
-                            {isVi ? 'Đủ tiền' : 'Exact'}
-                          </button>
-                          {[5000, 10000, 50000].map((amt, idx) => (
-                            <button
-                              key={amt}
-                              type="button"
-                              tabIndex={isCashSelected ? 0 : -1}
-                              onClick={() => handleQuickAddKhr(amt)}
-                              className={`${
-                                idx === 0 ? 'h-12' : 'h-11'
-                              } px-1 text-[11px] font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:text-[#0D5C3E] dark:hover:text-[#34D399] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap`}
-                            >
-                              {amt.toLocaleString('en-US')} ៛
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Subtle Mixed-Currency Combined Breakdown Line */}
-                    {cashCalc.isMixed && (
-                      <p className="text-[11px] font-mono-num text-stone-600 dark:text-[#94A39B] text-center pt-0.5">
-                        {formatUsdClean(cashCalc.usdReceived)} ({formatKhr(cashCalc.usdEquivalentKhr)}) +{' '}
-                        {formatKhr(cashCalc.khrReceived)} ={' '}
-                        <span className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                          {formatKhr(cashCalc.totalTenderedKhr)}
-                        </span>
-                      </p>
-                    )}
-
-                    {/* Real-Time Change Due / Remaining Due Output Row */}
-                    <div className="pt-2 border-t border-stone-200/80 dark:border-[#24352C] flex items-center justify-between gap-2">
-                      {cartTotal === 0 ? (
-                        <>
-                          <span className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-                            {isVi ? 'Tiền thối lại' : 'Change Due'}
-                          </span>
-                          <span className="font-mono-num text-sm font-semibold text-stone-400 dark:text-[#94A39B]">
-                            0 ៛
-                          </span>
-                        </>
-                      ) : cashCalc.isCovered ? (
-                        <>
-                          <span className="text-xs font-semibold text-stone-700 dark:text-[#F1F5F3]">
-                            {isVi ? 'Tiền thối lại' : 'Change Due'}
-                          </span>
-                          <span className="font-mono-num text-base font-bold text-[#0D5C3E] dark:text-[#34D399]">
-                            {formatKhr(cashCalc.changeDueKhr)}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-xs font-medium text-red-700 dark:text-[#F87171]">
-                            {isVi ? 'Còn thiếu' : 'Remaining Due'}
-                          </span>
-                          <span className="font-mono-num text-xs font-semibold text-red-700 dark:text-[#F87171]">
-                            {isVi
-                              ? `Thiếu ${formatKhr(cashCalc.remainingDueKhr)}`
-                              : `Short by ${formatKhr(cashCalc.remainingDueKhr)}`}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Region 4: Permanently Pinned Total Row + 48px Primary Charge CTA */}
-            <div className="shrink-0 border-t border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] px-4 sm:px-5 py-3 space-y-2.5">
               {/* Optional Hidden Margin Breakdown + Total Row with Eye Toggle */}
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 pt-1 border-t border-stone-100 dark:border-[#24352C]">
                 {showMargins && (
                   <div className="space-y-1 pb-1.5 border-b border-stone-100 dark:border-[#24352C] text-xs">
                     <div className="flex justify-between text-stone-500 dark:text-[#94A39B]">
@@ -1523,12 +1384,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               {/* Pinned Full-Width 48px Primary Charge CTA */}
               <button
                 type="submit"
-                disabled={
-                  cartLines.length === 0 ||
-                  submitting ||
-                  !liveStockValidation.ok ||
-                  cashInsufficient
-                }
+                disabled={cartLines.length === 0 || submitting || !liveStockValidation.ok}
                 className="w-full h-12 px-4 text-sm font-bold text-white dark:text-[#042419] bg-[#0D5C3E] hover:bg-[#0A4A31] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap font-mono-num"
               >
                 {submitting
@@ -2096,6 +1952,336 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Dedicated Cash Payment Modal (Triggered when Cash is selected & Charge is clicked) */}
+      {cashModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cash-payment-modal-title"
+          onClick={closeCashModal}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <form
+            onSubmit={handleConfirmCashPayment}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-2xl shadow-2xl overflow-hidden my-auto"
+          >
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-[#E6F2ED] dark:bg-[#064E3B] text-[#0D5C3E] dark:text-[#34D399] inline-flex items-center justify-center shrink-0">
+                  <Banknote className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2
+                    id="cash-payment-modal-title"
+                    className="font-display text-lg font-bold text-stone-900 dark:text-[#F1F5F3] truncate"
+                  >
+                    {isVi ? 'Thanh toán tiền mặt' : 'Cash Payment'}
+                  </h2>
+                  <p className="text-[11px] font-mono-num text-stone-500 dark:text-[#94A39B]">
+                    {cartLines.reduce((s, l) => s + l.quantity, 0)}{' '}
+                    {isVi ? 'món' : cartLines.reduce((s, l) => s + l.quantity, 0) === 1 ? 'item' : 'items'}
+                    {' · '}
+                    {isVi ? 'Tỷ giá' : 'Rate'}: {posExchangeRate.toLocaleString('en-US')} ៛/$
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={closeCashModal}
+                aria-label={t.common.close}
+                className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] disabled:opacity-45 shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Order Total Summary Banner */}
+              <div className="rounded-xl bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] px-4 py-3.5 flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-[#94A39B]">
+                  {isVi ? 'Tổng đơn hàng' : 'Order Total'}
+                </span>
+                <div className="text-right">
+                  <div className="font-mono-num text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] leading-tight">
+                    {formatKhr(cartTotal)}
+                  </div>
+                  <div className="font-mono-num text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
+                    {formatUsdRef(cartTotal, posExchangeRate)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Freely Editable Cash Received Input + Exact Button */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label
+                    htmlFor="cash-modal-khr-input"
+                    className="text-xs font-semibold text-stone-700 dark:text-[#F1F5F3]"
+                  >
+                    {isVi ? 'Tiền khách đưa (KHR ៛)' : 'Cash Received (KHR ៛)'}
+                  </label>
+                  {cashCalc.hasAnyInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCashKhrInput('');
+                        setCashUsdInput('');
+                        cashKhrInputRef.current?.focus();
+                      }}
+                      className="text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] underline px-1 py-0.5"
+                    >
+                      {isVi ? 'Xóa số tiền' : 'Clear'}
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-stretch gap-2.5">
+                  <div className="relative flex-1">
+                    <input
+                      ref={cashKhrInputRef}
+                      id="cash-modal-khr-input"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={cashKhrInput}
+                      onChange={(e) => {
+                        const sanitized = e.target.value.replace(/[^0-9,]/g, '');
+                        setCashKhrInput(sanitized);
+                      }}
+                      placeholder="0"
+                      className="w-full h-12 pl-3.5 pr-10 text-lg font-mono-num font-bold text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] bg-white dark:bg-[#0B110E] border-2 border-stone-200 dark:border-[#24352C] rounded-xl focus:outline-none focus:border-[#0D5C3E] dark:focus:border-[#10B981] transition-colors"
+                    />
+                    {cashKhrInput ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCashKhrInput('');
+                          cashKhrInputRef.current?.focus();
+                        }}
+                        aria-label={isVi ? 'Xóa tiền KHR' : 'Clear KHR'}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 inline-flex items-center justify-center rounded-lg text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-base font-semibold text-stone-400 dark:text-[#94A39B]">
+                        ៛
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleExactKhr}
+                    disabled={cartTotal <= 0}
+                    className="h-12 px-4 sm:px-5 text-sm font-bold text-[#0D5C3E] dark:text-[#6EE7B7] bg-[#E6F2ED] dark:bg-[#064E3B] border border-[#0D5C3E]/30 dark:border-[#10B981]/50 hover:bg-[#D5EAE0] dark:hover:bg-[#065F46] disabled:opacity-45 rounded-xl transition-colors whitespace-nowrap shrink-0"
+                  >
+                    {isVi ? 'Đủ tiền' : 'Exact'}
+                  </button>
+                </div>
+              </div>
+
+              {/* User-Configured Quick-Cash Preset Buttons */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-[#94A39B]">
+                    {isVi ? 'Chọn nhanh' : 'Quick Cash'}
+                  </span>
+                </div>
+                {cashPresets.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {cashPresets.map((amt) => {
+                      const isActivePreset =
+                        !cashUsdInput && parseNonNegativeNumber(cashKhrInput) === amt;
+                      return (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => handleSelectKhrPreset(amt)}
+                          className={`h-12 px-3 text-sm font-mono-num font-bold rounded-xl border transition-colors whitespace-nowrap ${
+                            isActivePreset
+                              ? 'border-[#0D5C3E] bg-[#E6F2ED] text-[#0D5C3E] dark:border-[#10B981] dark:bg-[#064E3B] dark:text-[#D1FAE5]'
+                              : 'border-stone-200 dark:border-[#24352C] bg-stone-50/70 dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028]'
+                          }`}
+                        >
+                          {amt.toLocaleString('en-US')} ៛
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-stone-500 dark:text-[#94A39B]">
+                    {isVi
+                      ? 'Bạn có thể thêm nút chọn nhanh trong Cài đặt.'
+                      : 'Add custom quick-cash buttons in Settings.'}
+                  </p>
+                )}
+              </div>
+
+              {/* Optional Collapsible USD Tender Support (Dual-Currency Cash Drawer) */}
+              <div className="border-t border-stone-100 dark:border-[#24352C] pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowUsdTender((prev) => !prev)}
+                  aria-expanded={showUsdTender}
+                  className="h-11 w-full px-2 flex items-center justify-between text-xs font-semibold text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] rounded-lg hover:bg-stone-50 dark:hover:bg-[#18251F] transition-colors"
+                >
+                  <span>
+                    {isVi ? 'Khách đưa thêm tiền USD ($)?' : 'Also received USD bills ($)?'}
+                    {cashCalc.usdReceived > 0 && !showUsdTender && (
+                      <span className="ml-1.5 font-mono-num text-[#0D5C3E] dark:text-[#34D399]">
+                        · {formatUsdClean(cashCalc.usdReceived)}
+                      </span>
+                    )}
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${showUsdTender ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {showUsdTender && (
+                  <div className="mt-2 p-3 rounded-xl bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2.5">
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-stone-400 dark:text-[#94A39B]">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="any"
+                        value={cashUsdInput}
+                        onChange={(e) => setCashUsdInput(e.target.value)}
+                        placeholder="0"
+                        aria-label={isVi ? 'Nhận USD ($)' : 'USD Received ($)'}
+                        className="w-full h-11 pl-8 pr-9 text-sm font-mono-num font-bold text-stone-900 dark:text-[#F1F5F3] bg-white dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-lg focus:outline-none focus:border-[#0D5C3E] dark:focus:border-[#10B981]"
+                      />
+                      {cashUsdInput && (
+                        <button
+                          type="button"
+                          onClick={() => setCashUsdInput('')}
+                          aria-label="Clear USD"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[1, 5, 10, 20].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => handleQuickAddUsd(amt)}
+                          className="h-11 text-xs font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] rounded-lg transition-colors"
+                        >
+                          +${amt}
+                        </button>
+                      ))}
+                    </div>
+                    {cashCalc.isMixed && (
+                      <p className="text-[11px] font-mono-num text-stone-600 dark:text-[#94A39B] text-center">
+                        {formatUsdClean(cashCalc.usdReceived)} ({formatKhr(cashCalc.usdEquivalentKhr)}) +{' '}
+                        {formatKhr(cashCalc.khrReceived)} ={' '}
+                        <span className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                          {formatKhr(cashCalc.totalTenderedKhr)}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Live Change Due / Insufficient Cash Feedback */}
+              {cashCalc.isCovered ? (
+                <div
+                  role="status"
+                  className="rounded-xl px-4 py-3.5 bg-emerald-50 dark:bg-[#064E3B]/55 border border-emerald-200 dark:border-[#10B981]/45 flex items-center justify-between gap-3"
+                >
+                  <div>
+                    <span className="block text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5]">
+                      {isVi ? 'Tiền thối lại' : 'Change Due'}
+                    </span>
+                    {cashCalc.changeDueKhr === 0 && cartTotal > 0 && (
+                      <span className="text-[11px] text-emerald-700 dark:text-[#6EE7B7]">
+                        {isVi ? 'Khách đưa vừa đủ' : 'Exact amount received'}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono-num text-2xl font-bold text-[#0D5C3E] dark:text-[#34D399]">
+                    {formatKhr(cashCalc.changeDueKhr)}
+                  </span>
+                </div>
+              ) : (
+                <div
+                  role="alert"
+                  className="rounded-xl px-4 py-3.5 bg-red-50 dark:bg-red-950/45 border border-red-200 dark:border-red-500/45 flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-2 text-red-800 dark:text-red-200 min-w-0">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span className="text-xs font-semibold">
+                      {isVi ? 'Tiền mặt chưa đủ' : 'Insufficient cash'}
+                    </span>
+                  </div>
+                  <span className="font-mono-num text-sm font-bold text-red-700 dark:text-[#F87171] whitespace-nowrap">
+                    {isVi
+                      ? `Thiếu ${formatKhr(cashCalc.remainingDueKhr)}`
+                      : `Short by ${formatKhr(cashCalc.remainingDueKhr)}`}
+                  </span>
+                </div>
+              )}
+
+              {/* Stock / Submission Error inside Modal */}
+              {checkoutError && (
+                <div
+                  role="alert"
+                  className="p-3 rounded-lg border border-red-200 dark:border-red-500/45 bg-red-50 dark:bg-red-950/40 text-xs text-red-900 dark:text-red-200 font-medium"
+                >
+                  {checkoutError}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer: Cancel + Confirm Payment & Complete Sale */}
+            <div className="px-5 py-4 border-t border-stone-200 dark:border-[#24352C] bg-stone-50/60 dark:bg-[#0F1814] flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2.5">
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={closeCashModal}
+                className="h-12 px-5 text-sm font-semibold text-stone-700 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] disabled:opacity-45 rounded-xl transition-colors whitespace-nowrap"
+              >
+                {t.common.cancel}
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  submitting ||
+                  cartLines.length === 0 ||
+                  !liveStockValidation.ok ||
+                  (cartTotal > 0 && !cashCalc.isCovered)
+                }
+                className="h-12 flex-1 px-4 text-sm font-bold text-white dark:text-[#042419] bg-[#0D5C3E] hover:bg-[#0A4A31] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-xl transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {isVi ? 'Đang hoàn tất...' : 'Completing Sale...'}
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    {isVi ? 'Xác nhận & Hoàn tất đơn' : 'Confirm Payment & Complete Sale'}
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Banknote,
   Building2,
   Check,
   ChevronDown,
@@ -17,12 +18,14 @@ import {
   Link2,
   Lock,
   LogOut,
+  Pencil,
   Plus,
   RotateCcw,
   ShieldCheck,
   Trash2,
   Upload,
   Users,
+  X,
   Zap,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
@@ -37,6 +40,13 @@ import {
 import { FIREBASE_PROJECT_ID } from '../lib/firebase';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
+import {
+  addCashPreset,
+  DEFAULT_CASH_PRESETS,
+  MAX_CASH_PRESETS,
+  removeCashPreset,
+  updateCashPreset,
+} from '../utils/cashTender';
 
 interface SettingsViewProps {
   security: BiometricSecurityConfig;
@@ -98,6 +108,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     syncing,
     rememberMe,
     setRememberMe,
+    cashPresets,
+    setCashPresets,
     t,
     setLanguage,
     setActiveOperator,
@@ -158,6 +170,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     settings.enableOpenFoodFactsLookup !== false
   );
   const [savedNotice, setSavedNotice] = useState('');
+
+  // Quick-Cash Presets editor state
+  const [newPresetInput, setNewPresetInput] = useState('');
+  const [editingPreset, setEditingPreset] = useState<number | null>(null);
+  const [editPresetInput, setEditPresetInput] = useState('');
+  const [presetFeedback, setPresetFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(
+    null
+  );
 
   // Family members
   const [newMember, setNewMember] = useState('');
@@ -303,6 +323,74 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     });
     setSavedNotice(t.settings.savedSuccess);
     window.setTimeout(() => setSavedNotice(''), 2500);
+  };
+
+  const isDefaultCashPresets = useMemo(() => {
+    if (cashPresets.length !== DEFAULT_CASH_PRESETS.length) return false;
+    return cashPresets.every((amt, i) => amt === DEFAULT_CASH_PRESETS[i]);
+  }, [cashPresets]);
+
+  const handleAddPreset = () => {
+    const res = addCashPreset(cashPresets, newPresetInput);
+    if (!res.ok) {
+      setPresetFeedback({
+        type: 'err',
+        text: isVi ? 'Nhập số tiền KHR hợp lệ và chưa trùng lặp.' : res.error || 'Invalid preset amount.',
+      });
+      return;
+    }
+    setCashPresets(res.presets);
+    setNewPresetInput('');
+    setPresetFeedback({
+      type: 'ok',
+      text: isVi ? 'Đã thêm mức tiền nhanh.' : 'Quick-cash preset added.',
+    });
+    window.setTimeout(() => setPresetFeedback(null), 2200);
+  };
+
+  const handleStartEditPreset = (amount: number) => {
+    setEditingPreset(amount);
+    setEditPresetInput(String(amount));
+    setPresetFeedback(null);
+  };
+
+  const handleSaveEditPreset = (oldAmount: number) => {
+    const res = updateCashPreset(cashPresets, oldAmount, editPresetInput);
+    if (!res.ok) {
+      setPresetFeedback({
+        type: 'err',
+        text: isVi ? 'Số tiền KHR không hợp lệ hoặc đã tồn tại.' : res.error || 'Invalid preset amount.',
+      });
+      return;
+    }
+    setCashPresets(res.presets);
+    setEditingPreset(null);
+    setEditPresetInput('');
+    setPresetFeedback({
+      type: 'ok',
+      text: isVi ? 'Đã cập nhật mức tiền nhanh.' : 'Quick-cash preset updated.',
+    });
+    window.setTimeout(() => setPresetFeedback(null), 2200);
+  };
+
+  const handleRemovePreset = (amount: number) => {
+    setCashPresets(removeCashPreset(cashPresets, amount));
+    if (editingPreset === amount) {
+      setEditingPreset(null);
+      setEditPresetInput('');
+    }
+    setPresetFeedback(null);
+  };
+
+  const handleResetDefaultPresets = () => {
+    setCashPresets([...DEFAULT_CASH_PRESETS]);
+    setEditingPreset(null);
+    setEditPresetInput('');
+    setPresetFeedback({
+      type: 'ok',
+      text: isVi ? 'Đã khôi phục mức tiền mặc định.' : 'Default presets restored.',
+    });
+    window.setTimeout(() => setPresetFeedback(null), 2200);
   };
 
   const handleAddFamilyMember = async (e: React.FormEvent) => {
@@ -828,6 +916,185 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     className="w-full h-11 px-3.5 text-sm font-mono-num bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
+              </div>
+
+              {/* Customizable POS Quick-Cash Presets (KHR) */}
+              <div className="pt-4 border-t border-stone-100 dark:border-[#1F3028] space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Banknote className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+                    <span className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                      {isVi ? 'Mức tiền mặt nhanh tại POS (KHR)' : 'POS Quick-Cash Presets (KHR)'}
+                    </span>
+                    <InfoTrigger
+                      hintId="cashPresetsDesc"
+                      active={isHintVisible('cashPresetsDesc')}
+                      label={isVi ? 'Thông tin mức tiền mặt nhanh' : 'Quick-cash presets info'}
+                      onToggle={toggleSingleHint}
+                    />
+                  </div>
+                  {!isDefaultCashPresets && (
+                    <button
+                      type="button"
+                      onClick={handleResetDefaultPresets}
+                      className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      {isVi ? 'Mặc định' : 'Reset Defaults'}
+                    </button>
+                  )}
+                </div>
+
+                {isHintVisible('cashPresetsDesc') && (
+                  <p className="text-xs text-stone-500 dark:text-[#94A39B] leading-relaxed">
+                    {isVi
+                      ? 'Tùy chỉnh các nút tiền mặt KHR hiển thị trong hộp thoại thanh toán tiền mặt trên màn hình POS. Thay đổi được lưu tự động trên thiết bị này.'
+                      : 'Customize the one-tap KHR bill buttons shown inside the POS Cash Payment modal. Changes save automatically on this device.'}
+                  </p>
+                )}
+
+                {/* Existing Preset Chips / Inline Editors */}
+                {cashPresets.length === 0 ? (
+                  <p className="text-xs text-stone-500 dark:text-[#94A39B] py-2">
+                    {isVi
+                      ? 'Chưa có mức tiền nhanh nào. Thêm mức tiền bên dưới hoặc nhấn Mặc định.'
+                      : 'No quick-cash presets configured. Add an amount below or restore defaults.'}
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {cashPresets.map((amt) => {
+                      const isEditing = editingPreset === amt;
+                      if (isEditing) {
+                        return (
+                          <div
+                            key={amt}
+                            className="inline-flex items-center gap-1.5 p-1 rounded-lg border border-[#0D5C3E] dark:border-[#10B981] bg-white dark:bg-[#18251F]"
+                          >
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={1}
+                              step={100}
+                              value={editPresetInput}
+                              onChange={(e) => setEditPresetInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleSaveEditPreset(amt);
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  setEditingPreset(null);
+                                  setEditPresetInput('');
+                                }
+                              }}
+                              aria-label={isVi ? 'Sửa số tiền KHR' : 'Edit KHR amount'}
+                              className="w-28 h-10 px-2.5 text-sm font-mono-num font-semibold bg-stone-50 dark:bg-[#0B110E] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0D5C3E]/40 dark:focus:ring-[#10B981]/40"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveEditPreset(amt)}
+                              aria-label={t.common.save}
+                              className="w-10 h-10 inline-flex items-center justify-center rounded-md bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] text-white dark:text-[#042419] transition-colors"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingPreset(null);
+                                setEditPresetInput('');
+                              }}
+                              aria-label={t.common.cancel}
+                              className="w-10 h-10 inline-flex items-center justify-center rounded-md text-stone-500 dark:text-[#94A39B] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={amt}
+                          className="inline-flex items-center gap-1 pl-3.5 pr-1 py-1 rounded-lg border border-stone-200 dark:border-[#24352C] bg-stone-50/80 dark:bg-[#18251F]"
+                        >
+                          <span className="font-mono-num text-sm font-semibold text-stone-900 dark:text-[#F1F5F3] pr-1">
+                            {amt.toLocaleString('en-US')} ៛
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditPreset(amt)}
+                            aria-label={`${isVi ? 'Sửa' : 'Edit'} ${amt.toLocaleString('en-US')} KHR`}
+                            title={isVi ? 'Sửa mức tiền' : 'Edit preset'}
+                            className="w-9 h-9 inline-flex items-center justify-center rounded-md text-stone-500 dark:text-[#94A39B] hover:text-[#0D5C3E] dark:hover:text-[#34D399] hover:bg-white dark:hover:bg-[#1F3028] transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePreset(amt)}
+                            aria-label={`${isVi ? 'Xóa' : 'Remove'} ${amt.toLocaleString('en-US')} KHR`}
+                            title={isVi ? 'Xóa mức tiền' : 'Remove preset'}
+                            className="w-9 h-9 inline-flex items-center justify-center rounded-md text-stone-500 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Add New Custom Preset Row */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md">
+                  <div className="relative flex-1">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      step={100}
+                      value={newPresetInput}
+                      onChange={(e) => {
+                        setNewPresetInput(e.target.value);
+                        if (presetFeedback) setPresetFeedback(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddPreset();
+                        }
+                      }}
+                      placeholder={
+                        isVi ? 'Thêm mức tiền (VD: 15000, 100000)' : 'Add amount (e.g., 15000, 100000)'
+                      }
+                      className="w-full h-11 pl-3.5 pr-8 text-sm font-mono-num bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-stone-400 dark:text-[#94A39B]">
+                      ៛
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!newPresetInput.trim() || cashPresets.length >= MAX_CASH_PRESETS}
+                    onClick={handleAddPreset}
+                    className="h-11 px-4 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {isVi ? 'Thêm mức tiền' : 'Add Preset'}
+                  </button>
+                </div>
+
+                {presetFeedback && (
+                  <p
+                    className={`text-xs font-medium ${
+                      presetFeedback.type === 'ok'
+                        ? 'text-emerald-700 dark:text-[#34D399]'
+                        : 'text-red-700 dark:text-[#F87171]'
+                    }`}
+                  >
+                    {presetFeedback.text}
+                  </p>
+                )}
               </div>
 
               {/* Clean Checkboxes with Individual Info Triggers */}

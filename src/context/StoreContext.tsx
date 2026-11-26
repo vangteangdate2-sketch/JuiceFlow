@@ -99,9 +99,30 @@ import {
   createSeedData,
   getEnhancedSampleAdditions,
 } from '../utils/seedData';
+import { DEFAULT_CASH_PRESETS, sanitizeCashPresets } from '../utils/cashTender';
 
 const LOCAL_STORAGE_KEY = 'juiceflow_store_v1';
 const SAMPLE_PACK_MIGRATION_KEY = 'juiceflow_sample_pack_v2_migrated';
+const CASH_PRESETS_STORAGE_KEY = 'juiceflow_cash_presets_v1';
+
+function loadCashPresets(): number[] {
+  try {
+    const raw = localStorage.getItem(CASH_PRESETS_STORAGE_KEY);
+    if (raw === null) return [...DEFAULT_CASH_PRESETS];
+    const parsed = JSON.parse(raw);
+    return sanitizeCashPresets(parsed, DEFAULT_CASH_PRESETS);
+  } catch {
+    return [...DEFAULT_CASH_PRESETS];
+  }
+}
+
+function saveCashPresets(presets: number[]): void {
+  try {
+    localStorage.setItem(CASH_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+  } catch {
+    // Ignore storage quota / privacy mode errors
+  }
+}
 
 interface LocalSnapshot {
   settings: WorkspaceSettings;
@@ -389,6 +410,8 @@ export interface StoreContextValue {
   refreshData: () => Promise<OperationResult>;
   rememberMe: boolean;
   setRememberMe: (value: boolean) => void;
+  cashPresets: number[];
+  setCashPresets: (presets: number[]) => void;
   t: ReturnType<typeof getTranslations>;
   setLanguage: (lang: AppLanguage) => void;
   setActiveOperator: (name: string) => void;
@@ -652,11 +675,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [syncing, setSyncing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [rememberMe, setRememberMeState] = useState<boolean>(() => loadRememberMePreference());
+  const [cashPresets, setCashPresetsState] = useState<number[]>(() => loadCashPresets());
 
   const setRememberMe = useCallback((value: boolean) => {
     setRememberMeState(value);
     saveRememberMePreference(value);
     void applyAuthPersistence(value);
+  }, []);
+
+  const setCashPresets = useCallback((nextPresets: number[]) => {
+    const clean = sanitizeCashPresets(nextPresets, []);
+    setCashPresetsState(clean);
+    saveCashPresets(clean);
   }, []);
 
   const pendingDirectJoinRef = useRef(false);
@@ -2887,13 +2917,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       expenses: latestRef.current.expenses,
       purchases: latestRef.current.purchases,
       stockMovements: latestRef.current.stockMovements,
+      cashPresets,
     };
     return JSON.stringify(payload, null, 2);
-  }, []);
+  }, [cashPresets]);
 
   const importJsonBackup = useCallback((jsonText: string): { ok: boolean; error?: string } => {
     try {
-      const parsed = JSON.parse(jsonText) as Partial<LocalSnapshot>;
+      const parsed = JSON.parse(jsonText) as Partial<LocalSnapshot> & { cashPresets?: unknown };
       if (!parsed.settings || !Array.isArray(parsed.ingredients) || !Array.isArray(parsed.products)) {
         return { ok: false, error: 'Invalid JuiceFlow backup file.' };
       }
@@ -2940,11 +2971,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               .map((m) => normalizeStockMovement(m))
           : []
       );
+      if (Array.isArray(parsed.cashPresets)) {
+        setCashPresets(sanitizeCashPresets(parsed.cashPresets, DEFAULT_CASH_PRESETS));
+      }
       return { ok: true };
     } catch {
       return { ok: false, error: 'Could not parse JSON backup.' };
     }
-  }, []);
+  }, [setCashPresets]);
 
   const resetDemoData = useCallback(() => {
     const seed = createSeedData();
@@ -3209,6 +3243,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     refreshData,
     rememberMe,
     setRememberMe,
+    cashPresets,
+    setCashPresets,
     t,
     setLanguage,
     setActiveOperator,
