@@ -338,12 +338,12 @@ const JuiceFlowShell: React.FC = () => {
         {/* Main Workspace Viewport */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Top Bar (64px height so 44px touch targets have comfortable breathing room) */}
-          <header className="sticky top-0 z-30 h-16 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-xs border-b border-stone-200 dark:border-[#24352C] px-4 sm:px-6 flex items-center justify-between gap-4 shrink-0 transition-colors duration-150">
-            <div className="flex items-center gap-2.5 min-w-0">
+          <header className="sticky top-0 z-30 h-16 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-xs border-b border-stone-200 dark:border-[#24352C] px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 shrink-0 transition-colors duration-150">
+            <div className="flex items-center gap-2 min-w-0">
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="w-11 h-11 -ml-2 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] lg:hidden"
+                className="w-11 h-11 -ml-1.5 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] lg:hidden shrink-0"
                 aria-label="Open menu"
               >
                 <Menu className="w-5 h-5" />
@@ -361,7 +361,7 @@ const JuiceFlowShell: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {/* Global Show Hints Switch (minimum 44px touch height) */}
               <button
                 type="button"
@@ -370,13 +370,13 @@ const JuiceFlowShell: React.FC = () => {
                 onClick={toggleShowHints}
                 aria-label={isVi ? 'Bật hoặc tắt gợi ý trên toàn ứng dụng' : 'Toggle helper hints across all pages'}
                 title={isVi ? 'Hiện / ẩn gợi ý giải thích' : 'Show or hide helper hints'}
-                className="inline-flex items-center gap-2 h-11 min-h-[44px] px-3 text-xs font-medium text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                className="inline-flex items-center gap-1.5 sm:gap-2 h-11 min-h-[44px] px-2 sm:px-3 text-xs font-medium text-neutral-700 dark:text-neutral-200 bg-neutral-100/90 dark:bg-neutral-800/90 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200/70 dark:hover:bg-neutral-700/80 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
               >
                 <HelpCircle
                   className={`w-4 h-4 shrink-0 ${
                     showHints
                       ? 'text-[#0D5C3E] dark:text-[#34D399]'
-                      : 'text-stone-500 dark:text-[#94A39B]'
+                      : 'text-neutral-500 dark:text-neutral-400'
                   }`}
                 />
                 <span className="hidden md:inline">
@@ -387,7 +387,7 @@ const JuiceFlowShell: React.FC = () => {
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
                     showHints
                       ? 'bg-[#0D5C3E] dark:bg-[#10B981]'
-                      : 'bg-stone-300 dark:bg-[#24352C]'
+                      : 'bg-neutral-300 dark:bg-neutral-600'
                   }`}
                 >
                   <span

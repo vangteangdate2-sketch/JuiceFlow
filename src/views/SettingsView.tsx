@@ -72,13 +72,13 @@ const InfoTrigger: React.FC<InfoTriggerProps> = ({ hintId, active, label, onTogg
     aria-label={label}
     aria-expanded={active}
     title={label}
-    className="w-11 h-11 -my-2 -mx-1.5 inline-flex items-center justify-center shrink-0 rounded-full group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+    className="w-11 h-11 p-2 -my-1.5 mx-0 inline-flex items-center justify-center shrink-0 rounded-full group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
   >
     <span
       className={`w-7 h-7 rounded-full inline-flex items-center justify-center border transition-colors ${
         active
-          ? 'bg-[#E6F2ED] border-[#0D5C3E]/40 text-[#0D5C3E] dark:bg-[#064E3B] dark:border-[#10B981]/50 dark:text-[#6EE7B7]'
-          : 'bg-stone-100/80 border-stone-200 text-stone-500 group-hover:bg-stone-200/80 group-hover:text-stone-800 dark:bg-[#18251F] dark:border-[#24352C] dark:text-[#94A39B] dark:group-hover:bg-[#1F3028] dark:group-hover:text-[#F1F5F3]'
+          ? 'bg-neutral-200 border-neutral-300 text-neutral-800 dark:bg-neutral-700 dark:border-neutral-600 dark:text-neutral-100'
+          : 'bg-neutral-100 border-neutral-200/90 text-neutral-500 group-hover:bg-neutral-200/80 group-hover:text-neutral-700 dark:bg-neutral-800/90 dark:border-neutral-700/80 dark:text-neutral-400 dark:group-hover:bg-neutral-700/80 dark:group-hover:text-neutral-200'
       }`}
     >
       <HelpCircle className="w-3.5 h-3.5" />

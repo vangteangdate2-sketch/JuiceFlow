@@ -157,6 +157,7 @@ interface ProductFormModalProps {
   initialBarcode?: string;
   initialPrefill?: ExternalBarcodePrefill | null;
   initialNotFoundExternally?: boolean;
+  initialFocusSection?: 'recipe' | null;
   ingredients: Ingredient[];
   settings: WorkspaceSettings;
   t: StoreContextValue['t'];
@@ -173,6 +174,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   initialBarcode,
   initialPrefill = null,
   initialNotFoundExternally = false,
+  initialFocusSection = null,
   ingredients,
   settings,
   t,
@@ -225,6 +227,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   >(null);
 
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const recipeSectionRef = useRef<HTMLDivElement | null>(null);
   const ingMap = useMemo(() => new Map(ingredients.map((i) => [i.id, i])), [ingredients]);
 
   // Synchronize form state whenever modal opens or target product changes
@@ -256,7 +259,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setImageUrl(editingProduct.imageUrl || '');
       setActive(editingProduct.active);
       setPhotoError('');
-      setRecipe((editingProduct.recipe || []).map((r) => ({ ...r })));
+      const initialRecipe = (editingProduct.recipe || []).map((r) => ({ ...r }));
+      if (
+        initialFocusSection === 'recipe' &&
+        initialRecipe.length === 0 &&
+        !(editingProduct.variants && editingProduct.variants.length > 0) &&
+        ingredients.length > 0
+      ) {
+        const firstIng = ingredients[0];
+        initialRecipe.push({
+          ingredientId: firstIng.id,
+          quantity: 1,
+          unit: firstIng.unit,
+        });
+      }
+      setRecipe(initialRecipe);
       setVariants(
         (editingProduct.variants || []).map((v) => ({
           ...v,
@@ -326,9 +343,19 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     initialBarcode,
     initialPrefill,
     initialNotFoundExternally,
+    initialFocusSection,
     ingredients,
     settings.lowStockDefault,
   ]);
+
+  // Smoothly scroll directly to recipe mapping when opened via "+ Link Ingredients"
+  useEffect(() => {
+    if (!open || initialFocusSection !== 'recipe') return;
+    const timer = window.setTimeout(() => {
+      recipeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [open, initialFocusSection, editingProduct?.id]);
 
   // Close modal with Escape when sub-modals are not open
   useEffect(() => {
@@ -1185,11 +1212,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     {/* Recipe Builder for Made-to-Order & Prepared Stock */}
                     {productType !== 'PACKAGED' && (
                       <div
-                        className={
+                        ref={recipeSectionRef}
+                        className={`${
                           productType === 'PREPARED_STOCK'
                             ? 'pt-4 border-t border-stone-100 dark:border-[#1F3028] space-y-3'
                             : 'space-y-3'
-                        }
+                        } ${
+                          initialFocusSection === 'recipe'
+                            ? 'rounded-xl p-3 -m-1 bg-amber-50/50 dark:bg-amber-950/20 ring-2 ring-amber-400/60 dark:ring-amber-500/40'
+                            : ''
+                        }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
