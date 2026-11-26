@@ -3,12 +3,15 @@ import {
   AlertTriangle,
   Camera,
   Check,
+  CheckSquare,
   Edit2,
   Eye,
   EyeOff,
+  FolderInput,
   Layers,
   LayoutGrid,
   Loader2,
+  Minus,
   Plus,
   QrCode,
   ScanBarcode,
@@ -105,6 +108,13 @@ export const ProductsView: React.FC = () => {
   const [quickNotFoundExternally, setQuickNotFoundExternally] = useState(false);
   const [labelProduct, setLabelProduct] = useState<Product | null>(null);
 
+  // Select Mode & Bulk Operations state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkCategory, setBulkCategory] = useState<ProductCategory>('juice');
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   const ingMap = useMemo(() => new Map(ingredients.map((i) => [i.id, i])), [ingredients]);
 
   const handleSetViewMode = (mode: 'grid' | 'table') => {
@@ -134,6 +144,141 @@ export const ProductsView: React.FC = () => {
       );
     });
   }, [products, typeFilter, categoryFilter, search]);
+
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+
+  const activeSelectedIds = useMemo(() => {
+    const valid = new Set<string>();
+    selectedIds.forEach((id) => {
+      if (productById.has(id)) valid.add(id);
+    });
+    return valid;
+  }, [selectedIds, productById]);
+
+  const selectedCount = activeSelectedIds.size;
+  const allFilteredSelected =
+    filteredProducts.length > 0 && filteredProducts.every((p) => activeSelectedIds.has(p.id));
+  const someFilteredSelected =
+    filteredProducts.some((p) => activeSelectedIds.has(p.id)) && !allFilteredSelected;
+
+  const toggleSelectMode = () => {
+    setSelectMode((prev) => {
+      const next = !prev;
+      if (!next) {
+        setSelectedIds(new Set());
+        setConfirmBulkDelete(false);
+      } else {
+        setConfirmDeleteId(null);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectItem = (productId: string) => {
+    setConfirmBulkDelete(false);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setConfirmBulkDelete(false);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filteredProducts.forEach((p) => next.delete(p.id));
+      } else {
+        filteredProducts.forEach((p) => next.add(p.id));
+      }
+      return next;
+    });
+  };
+
+  const handleBulkReassignCategory = async () => {
+    if (selectedCount === 0 || bulkProcessing) return;
+    setBulkProcessing(true);
+    setActionError(null);
+    setScanNotice(null);
+    const targets = Array.from(activeSelectedIds)
+      .map((id) => productById.get(id))
+      .filter((p): p is Product => Boolean(p));
+
+    try {
+      let updated = 0;
+      const errors: string[] = [];
+      for (const prod of targets) {
+        if (prod.category === bulkCategory) {
+          updated += 1;
+          continue;
+        }
+        const res = await saveProduct({ ...prod, category: bulkCategory });
+        if (res && !res.ok && res.error) {
+          errors.push(res.error);
+        } else {
+          updated += 1;
+        }
+      }
+      if (errors.length > 0) {
+        setActionError(errors[0]);
+      }
+      if (updated > 0) {
+        const catLabel = t.productCategories[bulkCategory];
+        setScanNotice(
+          isVi
+            ? `Đã chuyển ${updated} sản phẩm sang danh mục "${catLabel}".`
+            : `Moved ${updated} ${updated === 1 ? 'product' : 'products'} to "${catLabel}".`
+        );
+      }
+      setSelectedIds(new Set());
+      setConfirmBulkDelete(false);
+    } catch (err) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : isVi
+            ? 'Không thể đổi danh mục hàng loạt.'
+            : 'Could not reassign categories.'
+      );
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedCount === 0 || bulkProcessing) return;
+    setBulkProcessing(true);
+    setActionError(null);
+    setScanNotice(null);
+    const idsToDelete = Array.from(activeSelectedIds);
+    try {
+      for (const id of idsToDelete) {
+        await deleteProduct(id);
+      }
+      setSelectedIds(new Set());
+      setConfirmBulkDelete(false);
+      setScanNotice(
+        isVi
+          ? `Đã xóa ${idsToDelete.length} sản phẩm khỏi danh mục.`
+          : `Deleted ${idsToDelete.length} ${idsToDelete.length === 1 ? 'product' : 'products'} from the catalog.`
+      );
+    } catch (err) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : isVi
+            ? 'Không thể xóa hàng loạt sản phẩm.'
+            : 'Could not delete selected products.'
+      );
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
 
   const resetQuickScanSeed = () => {
     setQuickInitialBarcode(null);
@@ -285,6 +430,25 @@ export const ProductsView: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
           <button
             type="button"
+            onClick={toggleSelectMode}
+            aria-pressed={selectMode}
+            className={`inline-flex items-center gap-2 h-11 px-4 text-sm font-semibold rounded-lg border transition-colors whitespace-nowrap ${
+              selectMode
+                ? 'bg-[#E6F2ED] border-[#0F5C43] text-[#0F5C43] dark:bg-[#064E3B] dark:border-[#10B981] dark:text-[#6EE7B7]'
+                : 'text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
+            }`}
+          >
+            <CheckSquare className="w-4 h-4 shrink-0" />
+            {selectMode
+              ? isVi
+                ? 'Xong chọn'
+                : 'Done Selecting'
+              : isVi
+                ? 'Chọn nhiều'
+                : 'Select Mode'}
+          </button>
+          <button
+            type="button"
             disabled={scanLookingUp}
             onClick={() => setScanLookupOpen(true)}
             className="inline-flex items-center gap-2 h-11 px-4 text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
@@ -426,6 +590,134 @@ export const ProductsView: React.FC = () => {
         </div>
       </div>
 
+      {/* Contextual Bulk Action Bar (visible while Select Mode is active) */}
+      {selectMode && (
+        <div
+          role="region"
+          aria-label={isVi ? 'Thao tác hàng loạt' : 'Bulk selection actions'}
+          className="sticky top-[72px] z-20 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border-2 border-[#0F5C43]/35 dark:border-[#10B981]/45 rounded-xl px-4 py-3 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+        >
+          {/* Left: Select All Filtered + Count + Clear */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              disabled={filteredProducts.length === 0 || bulkProcessing}
+              onClick={toggleSelectAllFiltered}
+              className="inline-flex items-center gap-2 h-10 min-h-[40px] px-3 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] hover:bg-stone-200 dark:hover:bg-[#1F3028] border border-stone-200 dark:border-[#24352C] rounded-lg transition-colors disabled:opacity-50"
+            >
+              <span
+                className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                  allFilteredSelected || someFilteredSelected
+                    ? 'bg-[#0F5C43] border-[#0F5C43] text-white dark:bg-[#10B981] dark:border-[#10B981] dark:text-[#042419]'
+                    : 'bg-white dark:bg-[#131D18] border-stone-300 dark:border-[#344E41]'
+                }`}
+              >
+                {allFilteredSelected ? (
+                  <Check className="w-3 h-3 stroke-[3]" />
+                ) : someFilteredSelected ? (
+                  <Minus className="w-3 h-3 stroke-[3]" />
+                ) : null}
+              </span>
+              {allFilteredSelected
+                ? isVi
+                  ? 'Bỏ chọn tất cả'
+                  : 'Deselect All'
+                : isVi
+                  ? `Chọn tất cả (${filteredProducts.length})`
+                  : `Select All (${filteredProducts.length})`}
+            </button>
+
+            <span className="text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] font-mono-num">
+              {selectedCount} {isVi ? 'đã chọn' : 'selected'}
+            </span>
+
+            {selectedCount > 0 && (
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => {
+                  setSelectedIds(new Set());
+                  setConfirmBulkDelete(false);
+                }}
+                className="h-9 px-2.5 text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] rounded-lg transition-colors"
+              >
+                {isVi ? 'Bỏ chọn' : 'Clear'}
+              </button>
+            )}
+          </div>
+
+          {/* Right: Bulk Category Reassignment + Bulk Delete */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <select
+                value={bulkCategory}
+                disabled={bulkProcessing}
+                onChange={(e) => setBulkCategory(e.target.value as ProductCategory)}
+                aria-label={isVi ? 'Danh mục đích' : 'Target category'}
+                className="h-10 min-h-[40px] px-3 text-xs font-medium bg-white dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+              >
+                {CATALOG_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {t.productCategories[cat]}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={selectedCount === 0 || bulkProcessing}
+                onClick={handleBulkReassignCategory}
+                className="inline-flex items-center gap-1.5 h-10 min-h-[40px] px-3.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+              >
+                {bulkProcessing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <FolderInput className="w-3.5 h-3.5" />
+                )}
+                {isVi ? 'Đổi danh mục' : 'Move Category'}
+              </button>
+            </div>
+
+            <div className="h-6 w-px bg-stone-200 dark:bg-[#24352C] hidden sm:block" aria-hidden="true" />
+
+            {confirmBulkDelete ? (
+              <div className="inline-flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={bulkProcessing}
+                  onClick={handleBulkDelete}
+                  className="inline-flex items-center gap-1.5 h-10 min-h-[40px] px-3.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
+                >
+                  {bulkProcessing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  {isVi ? `Xác nhận xóa (${selectedCount})` : `Confirm Delete (${selectedCount})`}
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkProcessing}
+                  onClick={() => setConfirmBulkDelete(false)}
+                  className="h-10 min-h-[40px] px-3 text-xs font-medium text-stone-600 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
+                >
+                  {t.common.cancel}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={selectedCount === 0 || bulkProcessing}
+                onClick={() => setConfirmBulkDelete(true)}
+                className="inline-flex items-center gap-1.5 h-10 min-h-[40px] px-3.5 text-xs font-semibold text-red-700 dark:text-[#F87171] bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/70 border border-red-200 dark:border-red-500/40 disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {isVi ? `Xóa (${selectedCount})` : `Delete (${selectedCount})`}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Empty State */}
       {filteredProducts.length === 0 ? (
         <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-12 text-center">
@@ -443,6 +735,38 @@ export const ProductsView: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
+                  {selectMode && (
+                    <th className="py-2 pl-3 pr-1 w-12">
+                      <button
+                        type="button"
+                        onClick={toggleSelectAllFiltered}
+                        aria-label={
+                          allFilteredSelected
+                            ? isVi
+                              ? 'Bỏ chọn tất cả'
+                              : 'Deselect all products'
+                            : isVi
+                              ? 'Chọn tất cả'
+                              : 'Select all products'
+                        }
+                        className="w-10 h-10 inline-flex items-center justify-center rounded-lg hover:bg-stone-200/70 dark:hover:bg-[#1F3028] transition-colors"
+                      >
+                        <span
+                          className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${
+                            allFilteredSelected || someFilteredSelected
+                              ? 'bg-[#0F5C43] border-[#0F5C43] text-white dark:bg-[#10B981] dark:border-[#10B981] dark:text-[#042419]'
+                              : 'bg-white dark:bg-[#131D18] border-stone-300 dark:border-[#344E41]'
+                          }`}
+                        >
+                          {allFilteredSelected ? (
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          ) : someFilteredSelected ? (
+                            <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                          ) : null}
+                        </span>
+                      </button>
+                    </th>
+                  )}
                   <th className="py-3 px-4 font-medium">
                     {isVi ? 'Sản phẩm / SKU' : 'Product / SKU'}
                   </th>
@@ -485,12 +809,53 @@ export const ProductsView: React.FC = () => {
                     product.productType === 'PREPARED_TO_ORDER' && !hasLinkedRecipe(product);
                   const isToggling = Boolean(togglingActiveIds[product.id]);
                   const isUploading = uploadingPhotoId === product.id;
+                  const isSelected = activeSelectedIds.has(product.id);
 
                   return (
                     <tr
                       key={product.id}
-                      className="hover:bg-stone-50/70 dark:hover:bg-[#18251F]/70 transition-colors"
+                      onClick={(e) => {
+                        if (!selectMode) return;
+                        if ((e.target as HTMLElement).closest('button, select, input, a')) return;
+                        toggleSelectItem(product.id);
+                      }}
+                      className={`transition-colors ${
+                        selectMode ? 'cursor-pointer' : ''
+                      } ${
+                        isSelected
+                          ? 'bg-emerald-50/75 dark:bg-[#064E3B]/35'
+                          : 'hover:bg-stone-50/70 dark:hover:bg-[#18251F]/70'
+                      }`}
                     >
+                      {selectMode && (
+                        <td className="py-2 pl-3 pr-1 w-12">
+                          <button
+                            type="button"
+                            onClick={() => toggleSelectItem(product.id)}
+                            aria-pressed={isSelected}
+                            aria-label={
+                              isSelected
+                                ? isVi
+                                  ? `Bỏ chọn ${displayName}`
+                                  : `Deselect ${displayName}`
+                                : isVi
+                                  ? `Chọn ${displayName}`
+                                  : `Select ${displayName}`
+                            }
+                            className="w-10 h-10 inline-flex items-center justify-center rounded-lg hover:bg-stone-200/60 dark:hover:bg-[#1F3028] transition-colors"
+                          >
+                            <span
+                              className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${
+                                isSelected
+                                  ? 'bg-[#0F5C43] border-[#0F5C43] text-white dark:bg-[#10B981] dark:border-[#10B981] dark:text-[#042419]'
+                                  : 'bg-white dark:bg-[#131D18] border-stone-300 dark:border-[#344E41]'
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            </span>
+                          </button>
+                        </td>
+                      )}
                       {/* Product Thumbnail + Name + SKU */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3 min-w-[200px]">
@@ -711,14 +1076,26 @@ export const ProductsView: React.FC = () => {
               product.productType === 'PREPARED_TO_ORDER' && !hasLinkedRecipe(product);
             const isToggling = Boolean(togglingActiveIds[product.id]);
             const isUploading = uploadingPhotoId === product.id;
+            const isSelected = activeSelectedIds.has(product.id);
 
             return (
               <div
                 key={product.id}
-                className="group bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden flex flex-col justify-between h-full transition-colors"
+                onClick={(e) => {
+                  if (!selectMode) return;
+                  if ((e.target as HTMLElement).closest('button, select, input, a')) return;
+                  toggleSelectItem(product.id);
+                }}
+                className={`group bg-white dark:bg-[#131D18] rounded-xl overflow-hidden flex flex-col justify-between h-full transition-all ${
+                  selectMode ? 'cursor-pointer' : ''
+                } ${
+                  isSelected
+                    ? 'border-2 border-[#0F5C43] ring-2 ring-[#0F5C43]/20 dark:border-[#10B981] dark:ring-[#10B981]/25'
+                    : 'border border-stone-200 dark:border-[#24352C]'
+                }`}
               >
                 <div>
-                  {/* Image Container with Top-Left Interactive POS Toggle & Centered Inline Photo Upload */}
+                  {/* Image Container with Top-Left Interactive POS Toggle, Top-Right Select Checkbox & Inline Photo Upload */}
                   <div className="relative h-40 w-full overflow-hidden">
                     <ProductPhoto
                       src={product.imageUrl}
@@ -765,6 +1142,35 @@ export const ProductsView: React.FC = () => {
                             : 'Hidden on POS'}
                       </span>
                     </button>
+
+                    {/* Bulk Selection Checkbox Overlay (Top-Right, visible in Select Mode) */}
+                    {selectMode && (
+                      <button
+                        type="button"
+                        onClick={() => toggleSelectItem(product.id)}
+                        aria-pressed={isSelected}
+                        aria-label={
+                          isSelected
+                            ? isVi
+                              ? `Bỏ chọn ${displayName}`
+                              : `Deselect ${displayName}`
+                            : isVi
+                              ? `Chọn ${displayName}`
+                              : `Select ${displayName}`
+                        }
+                        className="absolute top-1.5 right-1.5 z-10 w-10 h-10 inline-flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                      >
+                        <span
+                          className={`w-6 h-6 rounded-md flex items-center justify-center border-2 shadow-sm transition-colors ${
+                            isSelected
+                              ? 'bg-[#0F5C43] border-[#0F5C43] text-white dark:bg-[#10B981] dark:border-[#10B981] dark:text-[#042419]'
+                              : 'bg-white/95 dark:bg-[#131D18]/95 border-stone-300 dark:border-[#344E41] hover:border-[#0F5C43] dark:hover:border-[#10B981]'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
+                        </span>
+                      </button>
+                    )}
 
                     {/* Subtle Centered Inline Photo Upload Trigger when no photo is uploaded */}
                     {!product.imageUrl && (
