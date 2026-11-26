@@ -590,134 +590,6 @@ export const ProductsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Contextual Bulk Action Bar (visible while Select Mode is active) */}
-      {selectMode && (
-        <div
-          role="region"
-          aria-label={isVi ? 'Thao tác hàng loạt' : 'Bulk selection actions'}
-          className="sticky top-[72px] z-20 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border-2 border-[#0F5C43]/35 dark:border-[#10B981]/45 rounded-xl px-4 py-3 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3"
-        >
-          {/* Left: Select All Filtered + Count + Clear */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              disabled={filteredProducts.length === 0 || bulkProcessing}
-              onClick={toggleSelectAllFiltered}
-              className="inline-flex items-center gap-2 h-10 min-h-[40px] px-3 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] hover:bg-stone-200 dark:hover:bg-[#1F3028] border border-stone-200 dark:border-[#24352C] rounded-lg transition-colors disabled:opacity-50"
-            >
-              <span
-                className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
-                  allFilteredSelected || someFilteredSelected
-                    ? 'bg-[#0F5C43] border-[#0F5C43] text-white dark:bg-[#10B981] dark:border-[#10B981] dark:text-[#042419]'
-                    : 'bg-white dark:bg-[#131D18] border-stone-300 dark:border-[#344E41]'
-                }`}
-              >
-                {allFilteredSelected ? (
-                  <Check className="w-3 h-3 stroke-[3]" />
-                ) : someFilteredSelected ? (
-                  <Minus className="w-3 h-3 stroke-[3]" />
-                ) : null}
-              </span>
-              {allFilteredSelected
-                ? isVi
-                  ? 'Bỏ chọn tất cả'
-                  : 'Deselect All'
-                : isVi
-                  ? `Chọn tất cả (${filteredProducts.length})`
-                  : `Select All (${filteredProducts.length})`}
-            </button>
-
-            <span className="text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] font-mono-num">
-              {selectedCount} {isVi ? 'đã chọn' : 'selected'}
-            </span>
-
-            {selectedCount > 0 && (
-              <button
-                type="button"
-                disabled={bulkProcessing}
-                onClick={() => {
-                  setSelectedIds(new Set());
-                  setConfirmBulkDelete(false);
-                }}
-                className="h-9 px-2.5 text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] rounded-lg transition-colors"
-              >
-                {isVi ? 'Bỏ chọn' : 'Clear'}
-              </button>
-            )}
-          </div>
-
-          {/* Right: Bulk Category Reassignment + Bulk Delete */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <select
-                value={bulkCategory}
-                disabled={bulkProcessing}
-                onChange={(e) => setBulkCategory(e.target.value as ProductCategory)}
-                aria-label={isVi ? 'Danh mục đích' : 'Target category'}
-                className="h-10 min-h-[40px] px-3 text-xs font-medium bg-white dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-              >
-                {CATALOG_CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {t.productCategories[cat]}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                disabled={selectedCount === 0 || bulkProcessing}
-                onClick={handleBulkReassignCategory}
-                className="inline-flex items-center gap-1.5 h-10 min-h-[40px] px-3.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
-              >
-                {bulkProcessing ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <FolderInput className="w-3.5 h-3.5" />
-                )}
-                {isVi ? 'Đổi danh mục' : 'Move Category'}
-              </button>
-            </div>
-
-            <div className="h-6 w-px bg-stone-200 dark:bg-[#24352C] hidden sm:block" aria-hidden="true" />
-
-            {confirmBulkDelete ? (
-              <div className="inline-flex items-center gap-1.5">
-                <button
-                  type="button"
-                  disabled={bulkProcessing}
-                  onClick={handleBulkDelete}
-                  className="inline-flex items-center gap-1.5 h-10 min-h-[40px] px-3.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
-                >
-                  {bulkProcessing ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-3.5 h-3.5" />
-                  )}
-                  {isVi ? `Xác nhận xóa (${selectedCount})` : `Confirm Delete (${selectedCount})`}
-                </button>
-                <button
-                  type="button"
-                  disabled={bulkProcessing}
-                  onClick={() => setConfirmBulkDelete(false)}
-                  className="h-10 min-h-[40px] px-3 text-xs font-medium text-stone-600 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
-                >
-                  {t.common.cancel}
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={selectedCount === 0 || bulkProcessing}
-                onClick={() => setConfirmBulkDelete(true)}
-                className="inline-flex items-center gap-1.5 h-10 min-h-[40px] px-3.5 text-xs font-semibold text-red-700 dark:text-[#F87171] bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/70 border border-red-200 dark:border-red-500/40 disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {isVi ? `Xóa (${selectedCount})` : `Delete (${selectedCount})`}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Empty State */}
       {filteredProducts.length === 0 ? (
         <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-12 text-center">
@@ -1455,6 +1327,140 @@ export const ProductsView: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Sticky Bottom Bulk Action Bar (visible while Select Mode is active) */}
+      {selectMode && (
+        <div
+          role="region"
+          aria-label={isVi ? 'Thao tác hàng loạt' : 'Bulk selection actions'}
+          className="sticky bottom-4 z-30 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border-2 border-[#0F5C43]/40 dark:border-[#10B981]/50 rounded-xl px-4 py-3 shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+        >
+          {/* Left: Select All Filtered + Count + Clear */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              disabled={filteredProducts.length === 0 || bulkProcessing}
+              onClick={toggleSelectAllFiltered}
+              className="inline-flex items-center gap-2 h-11 min-h-[44px] px-3 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] hover:bg-stone-200 dark:hover:bg-[#1F3028] border border-stone-200 dark:border-[#24352C] rounded-lg transition-colors disabled:opacity-50"
+            >
+              <span
+                className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                  allFilteredSelected || someFilteredSelected
+                    ? 'bg-[#0F5C43] border-[#0F5C43] text-white dark:bg-[#10B981] dark:border-[#10B981] dark:text-[#042419]'
+                    : 'bg-white dark:bg-[#131D18] border-stone-300 dark:border-[#344E41]'
+                }`}
+              >
+                {allFilteredSelected ? (
+                  <Check className="w-3 h-3 stroke-[3]" />
+                ) : someFilteredSelected ? (
+                  <Minus className="w-3 h-3 stroke-[3]" />
+                ) : null}
+              </span>
+              {allFilteredSelected
+                ? isVi
+                  ? 'Bỏ chọn tất cả'
+                  : 'Deselect All'
+                : isVi
+                  ? `Chọn tất cả (${filteredProducts.length})`
+                  : `Select All (${filteredProducts.length})`}
+            </button>
+
+            <span className="text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] font-mono-num">
+              {selectedCount} {isVi ? 'đã chọn' : 'selected'}
+            </span>
+
+            {selectedCount > 0 && (
+              <button
+                type="button"
+                disabled={bulkProcessing}
+                onClick={() => {
+                  setSelectedIds(new Set());
+                  setConfirmBulkDelete(false);
+                }}
+                className="h-10 px-2.5 text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] rounded-lg transition-colors"
+              >
+                {isVi ? 'Bỏ chọn' : 'Clear'}
+              </button>
+            )}
+          </div>
+
+          {/* Right: Change Category + Delete Selected */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <select
+                value={bulkCategory}
+                disabled={bulkProcessing}
+                onChange={(e) => setBulkCategory(e.target.value as ProductCategory)}
+                aria-label={isVi ? 'Danh mục đích' : 'Target category'}
+                className="h-11 min-h-[44px] px-3 text-xs font-medium bg-white dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+              >
+                {CATALOG_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {t.productCategories[cat]}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={selectedCount === 0 || bulkProcessing}
+                onClick={handleBulkReassignCategory}
+                className="inline-flex items-center gap-1.5 h-11 min-h-[44px] px-4 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+              >
+                {bulkProcessing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <FolderInput className="w-3.5 h-3.5" />
+                )}
+                {isVi ? 'Đổi danh mục' : 'Change Category'}
+              </button>
+            </div>
+
+            <div className="h-6 w-px bg-stone-200 dark:bg-[#24352C] hidden sm:block" aria-hidden="true" />
+
+            {confirmBulkDelete ? (
+              <div className="inline-flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={bulkProcessing}
+                  onClick={handleBulkDelete}
+                  className="inline-flex items-center gap-1.5 h-11 min-h-[44px] px-4 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
+                >
+                  {bulkProcessing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  {isVi ? `Xác nhận xóa (${selectedCount})` : `Confirm Delete (${selectedCount})`}
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkProcessing}
+                  onClick={() => setConfirmBulkDelete(false)}
+                  className="h-11 min-h-[44px] px-3 text-xs font-medium text-stone-600 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
+                >
+                  {t.common.cancel}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={selectedCount === 0 || bulkProcessing}
+                onClick={() => setConfirmBulkDelete(true)}
+                className="inline-flex items-center gap-1.5 h-11 min-h-[44px] px-4 text-xs font-semibold text-red-700 dark:text-[#F87171] bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/70 border border-red-200 dark:border-red-500/40 disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {isVi
+                  ? selectedCount > 0
+                    ? `Xóa đã chọn (${selectedCount})`
+                    : 'Xóa đã chọn'
+                  : selectedCount > 0
+                    ? `Delete Selected (${selectedCount})`
+                    : 'Delete Selected'}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
