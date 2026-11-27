@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Edit2,
-  Plus,
   Search,
   Sparkles,
   Trash2,
@@ -421,14 +420,6 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
             }
           />
         </div>
-        <button
-          type="button"
-          onClick={openNew}
-          className="inline-flex items-center gap-2 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4 shrink-0" />
-          <span>{t.expenses.addExpense}</span>
-        </button>
       </div>
 
       {/* 3-Column Summary Strip */}
@@ -603,10 +594,9 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
             <button
               type="button"
               onClick={openNew}
-              className="hidden sm:inline-flex items-center gap-1.5 h-11 px-4 text-xs sm:text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center h-11 px-4 text-xs sm:text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
-              <Plus className="w-4 h-4 shrink-0" />
-              <span>{t.expenses.addExpense}</span>
+              {`+ ${t.expenses.addExpense}`}
             </button>
           </div>
         </div>
@@ -843,8 +833,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                           onClick={() => applyQuickRepeat(preset)}
                           className="h-11 px-3.5 inline-flex items-center gap-2 rounded-full bg-white dark:bg-[#0F1814] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] dark:hover:border-[#10B981] text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
                         >
-                          <Plus className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
-                          <span>{preset.title}</span>
+                          <span>{`+ ${preset.title}`}</span>
                           {preset.amountKhr > 0 && (
                             <span className="font-mono-num text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
                               {formatKhr(preset.amountKhr)}
@@ -1052,10 +1041,9 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                     type="button"
                     disabled={saving || !title.trim()}
                     onClick={() => void submitExpense('add_another')}
-                    className="h-12 px-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-4 inline-flex items-center justify-center text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
                   >
-                    <Plus className="w-4 h-4 shrink-0" />
-                    <span>{isVi ? 'Lưu & Thêm tiếp' : 'Save & Add Another'}</span>
+                    {isVi ? '+ Lưu & Thêm tiếp' : '+ Save & Add Another'}
                   </button>
                 )}
                 <button
@@ -1063,7 +1051,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                   disabled={saving || !title.trim()}
                   className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
                 >
-                  {editing ? t.common.save : isVi ? 'Lưu chi phí' : 'Save Expense'}
+                  {editing ? t.common.save : isVi ? '+ Lưu chi phí' : '+ Save Expense'}
                 </button>
               </div>
             </form>

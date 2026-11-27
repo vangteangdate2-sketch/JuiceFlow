@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
-  ArrowDownCircle,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -13,7 +12,6 @@ import {
   Layers,
   Package,
   PackageCheck,
-  Plus,
   ScanBarcode,
   Search,
   SlidersHorizontal,
@@ -38,7 +36,6 @@ import { type BatchPrepMode, type StockShortage } from '../utils/inventoryEngine
 import { formatBarcodeTypeLabel } from '../utils/barcodeRegistry';
 import {
   getCategoriesForScope,
-  getCategoryBadgeClass,
   getCategoryById,
   getCategoryDisplayName,
   getCategoryDotClass,
@@ -162,6 +159,15 @@ export const InventoryView: React.FC = () => {
     () => getCategoriesForScope(categories, 'inventory'),
     [categories]
   );
+  const productCategories = useMemo(
+    () => getCategoriesForScope(categories, 'product'),
+    [categories]
+  );
+
+  // Expandable row drawer & inline editing across all 3 inventory tiers
+  const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
+  const [editingStockProduct, setEditingStockProduct] = useState<Product | null>(null);
+  const [updatingCategoryKey, setUpdatingCategoryKey] = useState<string | null>(null);
 
   // Main navigation & filtering
   const [activeTab, setActiveTab] = useState<InventoryTab>('all');
@@ -541,11 +547,89 @@ export const InventoryView: React.FC = () => {
       !ingModalOpen &&
       !batchProduct &&
       !adjustModalTarget &&
-      !quickRegisterOpen,
+      !quickRegisterOpen &&
+      !editingStockProduct,
     onScan: (code) => {
       void handleStockInBarcode(code);
     },
   });
+
+  const openEditItem = (item: UnifiedStockItem) => {
+    if (item.sourceIngredient) {
+      openEditIngredient(item.sourceIngredient);
+    } else if (item.sourceProduct) {
+      setEditingStockProduct(item.sourceProduct);
+    }
+  };
+
+  const handleInlineCategoryChange = async (
+    item: UnifiedStockItem,
+    nextCategoryId: string
+  ) => {
+    if (!nextCategoryId || nextCategoryId === item.categoryId) return;
+    const rowKey = `${item.tier}-${item.id}`;
+    setUpdatingCategoryKey(rowKey);
+    try {
+      const nextCat = getCategoryById(nextCategoryId, categories);
+      const nextCatName = getCategoryDisplayName(nextCat, isVi);
+      const itemLabel = isVi ? item.nameVi || item.name : item.name;
+
+      if (item.sourceIngredient) {
+        const ing = item.sourceIngredient;
+        await saveIngredient({
+          id: ing.id,
+          name: ing.name,
+          nameVi: ing.nameVi,
+          categoryId: nextCategoryId,
+          unit: ing.unit,
+          stockQty: ing.stockQty,
+          reorderLevel: ing.reorderLevel,
+          unitCostKhr: ing.unitCostKhr,
+          supplier: ing.supplier,
+          updatedAt: ing.updatedAt,
+        });
+      } else if (item.sourceProduct) {
+        const prod = item.sourceProduct;
+        const res = await saveProduct({
+          id: prod.id,
+          name: prod.name,
+          nameVi: prod.nameVi,
+          brand: prod.brand,
+          productType: prod.productType,
+          category: nextCategoryId,
+          categoryId: nextCategoryId,
+          priceKhr: prod.priceKhr,
+          costPriceKhr: prod.costPriceKhr,
+          markupPercent: prod.markupPercent,
+          manualPriceOverride: prod.manualPriceOverride,
+          imageUrl: prod.imageUrl,
+          active: prod.active,
+          barcode: prod.barcode,
+          packagingBarcodes: prod.packagingBarcodes,
+          stockQty: prod.stockQty,
+          reorderLevel: prod.reorderLevel,
+          unit: prod.unit,
+          supplier: prod.supplier,
+          recipe: prod.recipe,
+          recipeVersion: prod.recipeVersion,
+          variants: prod.variants,
+        });
+        if (!res.ok) {
+          showNotice('err', res.error || (isVi ? 'Không thể đổi danh mục.' : 'Could not update category.'));
+          return;
+        }
+      }
+
+      triggerHighlightItem(item.id);
+      showNoticeToast({
+        message: isVi
+          ? `Đã chuyển "${itemLabel}" sang ${nextCatName}`
+          : `Moved "${itemLabel}" to ${nextCatName}`,
+      });
+    } finally {
+      setUpdatingCategoryKey(null);
+    }
+  };
 
   const openNewIngredient = () => {
     setEditingIng(null);
@@ -957,14 +1041,6 @@ export const InventoryView: React.FC = () => {
             <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
             {isVi ? 'Quét nhập kho' : 'Scan Stock-In'}
           </button>
-          <button
-            type="button"
-            onClick={openNewIngredient}
-            className="h-11 inline-flex items-center gap-2 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4" />
-            {t.inventory.addIngredient}
-          </button>
         </div>
       </div>
 
@@ -1023,10 +1099,9 @@ export const InventoryView: React.FC = () => {
             <button
               type="button"
               onClick={() => setQuickRegisterOpen(true)}
-              className="h-11 inline-flex items-center gap-1.5 px-3.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+              className="h-11 inline-flex items-center justify-center px-3.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
             >
-              <Plus className="w-3.5 h-3.5" />
-              {isVi ? 'Đăng ký sản phẩm' : 'Register Product'}
+              {isVi ? '+ Đăng ký sản phẩm' : '+ Register Product'}
             </button>
             <button
               type="button"
@@ -1177,9 +1252,9 @@ export const InventoryView: React.FC = () => {
                     return (
                       <div
                         key={`attn-${item.tier}-${item.id}`}
-                        className="h-full p-4 rounded-xl border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#0F1814] hover:border-stone-300 dark:hover:border-[#344B3F] transition-colors flex items-center justify-between gap-3.5"
+                        className="h-full p-4 rounded-xl border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#0F1814] hover:border-stone-300 dark:hover:border-[#344B3F] transition-colors flex flex-col justify-between gap-3"
                       >
-                        <div className="min-w-0 flex-1 flex flex-col justify-between gap-2">
+                        <div className="min-w-0 space-y-2">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span
                               className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border whitespace-nowrap shrink-0 ${
@@ -1242,22 +1317,21 @@ export const InventoryView: React.FC = () => {
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => openQuickRestockForItem(item)}
-                          className="h-10 px-3.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
-                        >
-                          <Plus className="w-3.5 h-3.5 shrink-0" />
-                          <span>
+                        <div className="pt-1 flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openQuickRestockForItem(item)}
+                            className="h-11 px-3.5 inline-flex items-center justify-center text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] rounded-lg transition-colors whitespace-nowrap"
+                          >
                             {item.tier === 'prepared_stock'
                               ? isVi
-                                ? 'Pha mẻ'
-                                : 'Restock'
+                                ? '+ Pha mẻ'
+                                : '+ Restock'
                               : isVi
-                                ? 'Nhập thêm'
-                                : 'Restock'}
-                          </span>
-                        </button>
+                                ? '+ Nhập thêm'
+                                : '+ Restock'}
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -1440,10 +1514,9 @@ export const InventoryView: React.FC = () => {
                 <button
                   type="button"
                   onClick={openNewIngredient}
-                  className="hidden sm:inline-flex items-center gap-1.5 h-11 px-4 text-xs sm:text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  className="inline-flex items-center justify-center h-11 px-4 text-xs sm:text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
                 >
-                  <Plus className="w-4 h-4 shrink-0" />
-                  <span>{t.inventory.addIngredient}</span>
+                  {`+ ${t.inventory.addIngredient}`}
                 </button>
               </div>
             ) : (
@@ -1559,185 +1632,318 @@ export const InventoryView: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-stone-100 dark:divide-[#1F3028]">
-                {filteredStockItems.map((item) => {
-                  const tierMeta = getTierMeta(item.tier);
-                  const isOut = item.status === 'out';
-                  const isLow = item.status === 'low';
-                  const stockValueKhr = Math.max(0, item.stockQty) * Math.max(0, item.unitCostKhr);
+              <div>
+                {/* Desktop Column Alignment Header */}
+                <div
+                  aria-hidden="true"
+                  className="hidden lg:grid lg:grid-cols-12 items-center gap-4 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-[#94A39B] bg-stone-50/75 dark:bg-[#18251F]/80 border-b border-stone-200 dark:border-[#24352C]"
+                >
+                  <div className="lg:col-span-4">{isVi ? 'Mặt hàng' : 'Item'}</div>
+                  <div className="lg:col-span-2">{isVi ? 'Giá vốn & Giá trị' : 'Cost & Value'}</div>
+                  <div className="lg:col-span-4">{isVi ? 'Tình trạng tồn kho' : 'Stock Health'}</div>
+                  <div className="lg:col-span-2 text-right">{t.common.actions}</div>
+                </div>
 
-                  const progressBarColor = isOut
-                    ? 'bg-red-600 dark:bg-red-500'
-                    : isLow
-                      ? 'bg-amber-500 dark:bg-amber-400'
-                      : 'bg-emerald-600 dark:bg-[#10B981]';
+                <div className="divide-y divide-stone-100 dark:divide-[#1F3028]">
+                  {filteredStockItems.map((item) => {
+                    const rowKey = `${item.tier}-${item.id}`;
+                    const isExpanded = expandedRowKey === rowKey;
+                    const tierMeta = getTierMeta(item.tier);
+                    const catItem = getCategoryById(item.categoryId, categories);
+                    const isOut = item.status === 'out';
+                    const isLow = item.status === 'low';
+                    const isZeroCost = item.unitCostKhr <= 0;
+                    const stockValueKhr = Math.max(0, item.stockQty) * Math.max(0, item.unitCostKhr);
 
-                  const statusTextClass = isOut
-                    ? 'text-red-700 dark:text-[#F87171]'
-                    : isLow
-                      ? 'text-amber-700 dark:text-amber-300'
-                      : 'text-emerald-700 dark:text-[#34D399]';
+                    const progressBarColor = isOut
+                      ? 'bg-red-600 dark:bg-red-500'
+                      : isLow
+                        ? 'bg-amber-500 dark:bg-amber-400'
+                        : 'bg-emerald-600 dark:bg-[#10B981]';
 
-                  const statusLabel = isOut
-                    ? t.inventory.statusOut
-                    : isLow
-                      ? t.inventory.statusLow
-                      : t.inventory.statusHealthy;
+                    const statusTextClass = isOut
+                      ? 'text-red-700 dark:text-[#F87171]'
+                      : isLow
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-emerald-700 dark:text-[#34D399]';
 
-                  const secondaryParts = [
-                    `${isVi ? 'Giá vốn' : 'Avg'} ${formatKhr(item.unitCostKhr)}`,
-                    `${isVi ? 'Giá trị' : 'Val'} ${formatKhr(stockValueKhr)}`,
-                    item.supplier ? item.supplier : '',
-                    item.barcode ? item.barcode : '',
-                    item.packSummary ? item.packSummary : '',
-                    item.tier === 'prepared_stock' && item.recipeCount !== undefined
-                      ? item.recipeCount > 0
-                        ? isVi
-                          ? `Công thức ${item.recipeCount} NL`
-                          : `${item.recipeCount} recipe ing.`
-                        : isVi
-                          ? 'Nhập trực tiếp'
-                          : 'Direct batch'
-                      : '',
-                    item.isExpiringBatch && item.daysSinceBatchPrep !== null
-                      ? isVi
-                        ? `Mẻ pha cách đây ${item.daysSinceBatchPrep} ngày`
-                        : `Batch prepped ${item.daysSinceBatchPrep}d ago`
-                      : '',
-                  ].filter(Boolean);
+                    const statusLabel = isOut
+                      ? t.inventory.statusOut
+                      : isLow
+                        ? t.inventory.statusLow
+                        : t.inventory.statusHealthy;
 
-                  const isHighlighted = highlightedItemId === item.id;
+                    const isHighlighted = highlightedItemId === item.id;
+                    const baseScopeCategories =
+                      item.tier === 'ingredient' ? inventoryCategories : productCategories;
+                    const selectableCategories = baseScopeCategories.some(
+                      (c) => c.id === item.categoryId
+                    )
+                      ? baseScopeCategories
+                      : [catItem, ...baseScopeCategories];
 
-                  return (
-                    <div
-                      key={`${item.tier}-${item.id}`}
-                      className={`px-4 sm:px-5 py-4 transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
-                        isHighlighted
-                          ? 'bg-emerald-50/90 dark:bg-[#064E3B]/45 ring-2 ring-inset ring-[#10B981]/60'
-                          : 'hover:bg-stone-50/70 dark:hover:bg-[#18251F]/60'
-                      }`}
-                    >
-                      {/* Left: Item Name, Tier Badge, InfoHint & Quiet Metadata */}
-                      <div className="min-w-0 lg:w-[38%] space-y-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <h3 className="text-sm sm:text-[15px] font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
-                            {isVi ? item.nameVi || item.name : item.name}
-                          </h3>
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${tierMeta.badgeClass}`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${tierMeta.dotClass}`}
-                              aria-hidden="true"
-                            />
-                            {tierMeta.label}
-                          </span>
-                          {(() => {
-                            const catItem = getCategoryById(item.categoryId, categories);
-                            return (
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getCategoryBadgeClass(
-                                  catItem
-                                )}`}
-                              >
+                    const packOrBatchDetail =
+                      item.tier === 'prepared_stock'
+                        ? [
+                            item.recipeCount !== undefined
+                              ? item.recipeCount > 0
+                                ? isVi
+                                  ? `Công thức ${item.recipeCount} nguyên liệu`
+                                  : `Recipe (${item.recipeCount} ingredients)`
+                                : isVi
+                                  ? 'Mẻ nhập trực tiếp'
+                                  : 'Direct batch prep'
+                              : '',
+                            item.daysSinceBatchPrep !== null && item.daysSinceBatchPrep !== undefined
+                              ? isVi
+                                ? `Pha cách đây ${item.daysSinceBatchPrep} ngày`
+                                : `Prepped ${item.daysSinceBatchPrep}d ago`
+                              : '',
+                            item.unit,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')
+                        : item.packSummary
+                          ? `${item.packSummary} (${item.unit})`
+                          : item.unit;
+
+                    return (
+                      <div
+                        key={rowKey}
+                        className={`transition-colors ${
+                          isHighlighted
+                            ? 'bg-emerald-50/90 dark:bg-[#064E3B]/45 ring-2 ring-inset ring-[#10B981]/60'
+                            : isExpanded
+                              ? 'bg-stone-50/50 dark:bg-[#16231C]/65'
+                              : 'hover:bg-stone-50/70 dark:hover:bg-[#18251F]/60'
+                        }`}
+                      >
+                        {/* Strict 4-Column Row */}
+                        <div
+                          onClick={(e) => {
+                            if ((e.target as HTMLElement).closest('button, select, input, a')) {
+                              return;
+                            }
+                            setExpandedRowKey((prev) => (prev === rowKey ? null : rowKey));
+                          }}
+                          className="grid grid-cols-1 lg:grid-cols-12 items-center gap-3 lg:gap-4 px-4 sm:px-5 py-3.5 cursor-pointer"
+                        >
+                          {/* Column 1 (lg:col-span-4): Item Identity */}
+                          <div className="lg:col-span-4 min-w-0 flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedRowKey((prev) => (prev === rowKey ? null : rowKey))
+                              }
+                              aria-expanded={isExpanded}
+                              aria-label={
+                                isExpanded
+                                  ? isVi
+                                    ? 'Thu gọn chi tiết'
+                                    : 'Collapse details'
+                                  : isVi
+                                    ? 'Xem chi tiết'
+                                    : 'Expand details'
+                              }
+                              className="w-8 h-8 -ml-1 inline-flex items-center justify-center rounded-lg text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3] hover:bg-stone-200/60 dark:hover:bg-[#1F3028] transition-colors shrink-0"
+                            >
+                              <ChevronDown
+                                className={`w-4 h-4 transition-transform duration-150 ${
+                                  isExpanded ? 'rotate-180' : ''
+                                }`}
+                              />
+                            </button>
+
+                            <div className="min-w-0 flex-1">
+                              <h3 className="text-sm sm:text-[15px] font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
+                                {isVi ? item.nameVi || item.name : item.name}
+                              </h3>
+                              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#94A39B] min-w-0">
                                 <span
-                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${getCategoryDotClass(
+                                  className={`w-2 h-2 rounded-full shrink-0 ${tierMeta.dotClass}`}
+                                  aria-hidden="true"
+                                />
+                                <span className="truncate">{tierMeta.label}</span>
+                                <span aria-hidden="true" className="text-stone-300 dark:text-[#344B3F] shrink-0">
+                                  ·
+                                </span>
+                                <span
+                                  className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(
                                     catItem
                                   )}`}
                                   aria-hidden="true"
                                 />
-                                {getCategoryDisplayName(catItem, isVi)}
+                                <span className="truncate">
+                                  {getCategoryDisplayName(catItem, isVi)}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Column 2 (lg:col-span-2): Cost & Value */}
+                          <div className="lg:col-span-2 min-w-0 pl-9 lg:pl-0 flex items-baseline justify-between lg:block gap-3">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <span
+                                className={`font-mono-num text-xs whitespace-nowrap ${
+                                  isZeroCost
+                                    ? 'text-stone-500 dark:text-[#94A39B]'
+                                    : 'font-semibold text-stone-800 dark:text-[#F1F5F3]'
+                                }`}
+                              >
+                                {isVi ? 'Vốn:' : 'Avg:'} {formatKhr(item.unitCostKhr)}
                               </span>
-                            );
-                          })()}
-                          <InfoHint
-                            compact
-                            label={tierMeta.label}
-                            text={tierMeta.hintText}
-                          />
-                          {item.sourceIngredient && (
+                              {isZeroCost && (
+                                <button
+                                  type="button"
+                                  onClick={() => openEditItem(item)}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:underline whitespace-nowrap"
+                                >
+                                  <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
+                                  <span>{isVi ? 'Đặt giá vốn' : 'Set Cost'}</span>
+                                </button>
+                              )}
+                            </div>
+                            <p className="font-mono-num text-[11px] text-stone-400 dark:text-[#94A39B] lg:mt-0.5 whitespace-nowrap">
+                              {isVi ? 'Giá trị:' : 'Val:'} {formatKhr(stockValueKhr)}
+                            </p>
+                          </div>
+
+                          {/* Column 3 (lg:col-span-4): Stock Health & Bar */}
+                          <div className="lg:col-span-4 min-w-0 pl-9 lg:pl-0 space-y-1.5">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <div className="flex items-baseline gap-1.5 min-w-0">
+                                <span className="font-mono-num text-sm sm:text-[15px] font-bold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
+                                  {formatQty(item.stockQty, item.unit)}
+                                </span>
+                                <span className="font-mono-num text-[11px] text-stone-400 dark:text-[#94A39B] whitespace-nowrap">
+                                  / {isVi ? 'tối thiểu' : 'min'}{' '}
+                                  {formatQty(item.reorderLevel, item.unit)}
+                                </span>
+                              </div>
+                              <span
+                                className={`text-xs font-semibold whitespace-nowrap inline-flex items-center gap-1 ${statusTextClass}`}
+                              >
+                                {item.isExpiringBatch && !isOut && (
+                                  <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                                )}
+                                {statusLabel}
+                              </span>
+                            </div>
+
+                            <div
+                              className="w-full h-1.5 rounded-full bg-stone-100 dark:bg-[#1F3028] overflow-hidden"
+                              role="progressbar"
+                              aria-valuenow={item.progressPct}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-label={`${item.name} stock level`}
+                            >
+                              <div
+                                className={`h-full rounded-full transition-all duration-200 ${progressBarColor}`}
+                                style={{ width: `${item.progressPct}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Column 4 (lg:col-span-2): Clean Touch Actions */}
+                          <div className="lg:col-span-2 pl-9 lg:pl-0 flex items-center justify-end gap-2 shrink-0">
                             <button
                               type="button"
-                              onClick={() => openEditIngredient(item.sourceIngredient!)}
-                              className="w-8 h-8 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
-                              title={t.inventory.editIngredient}
-                              aria-label={t.inventory.editIngredient}
+                              onClick={() => openQuickRestockForItem(item)}
+                              className="flex-1 lg:flex-none h-10 px-3.5 inline-flex items-center justify-center text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] rounded-lg transition-colors whitespace-nowrap"
                             >
-                              <Edit2 className="w-3.5 h-3.5" />
+                              {item.tier === 'prepared_stock'
+                                ? isVi
+                                  ? '+ Pha mẻ'
+                                  : '+ Restock'
+                                : isVi
+                                  ? '+ Nhập thêm'
+                                  : '+ Restock'}
                             </button>
-                          )}
-                        </div>
 
-                        <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate">
-                          {secondaryParts.join(' · ')}
-                        </p>
-                      </div>
+                            <button
+                              type="button"
+                              onClick={() => openAdjustWasteModal(item)}
+                              title={isVi ? 'Điều chỉnh / Hủy hàng' : 'Adjust / Waste'}
+                              aria-label={isVi ? 'Điều chỉnh / Hủy hàng' : 'Adjust / Waste'}
+                              className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-colors shrink-0"
+                            >
+                              <SlidersHorizontal className="w-4 h-4" />
+                            </button>
 
-                      {/* Middle: Visual Stock Level Progress Bar + Remaining Qty & Unit */}
-                      <div className="lg:w-[32%] space-y-1.5">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <div className="flex items-baseline gap-2 min-w-0">
-                            <span className="font-mono-num text-base font-bold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
-                              {formatQty(item.stockQty, item.unit)}
-                            </span>
-                            <span className="font-mono-num text-[11px] text-stone-400 dark:text-[#94A39B] whitespace-nowrap">
-                              / {isVi ? 'tối thiểu' : 'min'}{' '}
-                              {formatQty(item.reorderLevel, item.unit)}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => openEditItem(item)}
+                              title={t.common.edit}
+                              aria-label={t.common.edit}
+                              className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-colors shrink-0"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
                           </div>
-                          <span
-                            className={`text-xs font-semibold whitespace-nowrap inline-flex items-center gap-1 ${statusTextClass}`}
-                          >
-                            {item.isExpiringBatch && !isOut && (
-                              <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                            )}
-                            {statusLabel}
-                          </span>
                         </div>
 
-                        {/* Color-Coded Progress Bar */}
-                        <div
-                          className="w-full h-2.5 rounded-full bg-stone-100 dark:bg-[#1F3028] overflow-hidden"
-                          role="progressbar"
-                          aria-valuenow={item.progressPct}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={`${item.name} stock level`}
-                        >
-                          <div
-                            className={`h-full rounded-full transition-all duration-200 ${progressBarColor}`}
-                            style={{ width: `${item.progressPct}%` }}
-                          />
-                        </div>
-                      </div>
+                        {/* Expandable Detail Bar (Full Metadata + Inline Category Selector) */}
+                        {isExpanded && (
+                          <div className="px-4 sm:px-5 lg:pl-14 py-3.5 bg-stone-50/85 dark:bg-[#0F1814]/85 border-t border-stone-100 dark:border-[#1F3028]">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 items-start lg:items-center text-xs">
+                              <div className="min-w-0">
+                                <p className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
+                                  {isVi ? 'Mã SKU / Mã vạch' : 'SKU / Barcode'}
+                                </p>
+                                <p className="mt-0.5 font-mono-num text-stone-800 dark:text-[#F1F5F3] break-all">
+                                  {item.barcode || '—'}
+                                </p>
+                              </div>
 
-                      {/* Right: Two Clear 44px Touch Action Buttons */}
-                      <div className="flex items-center gap-2 lg:justify-end shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => openQuickRestockForItem(item)}
-                          className="flex-1 sm:flex-none h-11 px-3.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] rounded-lg transition-colors whitespace-nowrap"
-                        >
-                          {item.tier === 'prepared_stock' ? (
-                            <FlaskConical className="w-4 h-4 shrink-0" />
-                          ) : (
-                            <ArrowDownCircle className="w-4 h-4 shrink-0" />
-                          )}
-                          <span>{isVi ? '+ Nhập thêm' : '+ Restock'}</span>
-                        </button>
+                              <div className="min-w-0">
+                                <p className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
+                                  {t.inventory.supplier}
+                                </p>
+                                <p className="mt-0.5 text-stone-800 dark:text-[#F1F5F3] break-words">
+                                  {item.supplier || '—'}
+                                </p>
+                              </div>
 
-                        <button
-                          type="button"
-                          onClick={() => openAdjustWasteModal(item)}
-                          className="flex-1 sm:flex-none h-11 px-3.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
-                        >
-                          <SlidersHorizontal className="w-4 h-4 shrink-0 text-stone-500 dark:text-[#94A39B]" />
-                          <span>{isVi ? 'Điều chỉnh / Hủy' : 'Adjust / Waste'}</span>
-                        </button>
+                              <div className="min-w-0">
+                                <p className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
+                                  {isVi ? 'Quy cách / Đơn vị mẻ' : 'Pack / Batch Unit'}
+                                </p>
+                                <p className="mt-0.5 text-stone-800 dark:text-[#F1F5F3] break-words">
+                                  {packOrBatchDetail}
+                                </p>
+                              </div>
+
+                              <div className="min-w-0">
+                                <label
+                                  htmlFor={`inline-cat-${rowKey}`}
+                                  className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1"
+                                >
+                                  {isVi ? 'Danh mục' : 'Category'}
+                                </label>
+                                <select
+                                  id={`inline-cat-${rowKey}`}
+                                  disabled={updatingCategoryKey === rowKey}
+                                  value={item.categoryId}
+                                  onChange={(e) =>
+                                    void handleInlineCategoryChange(item, e.target.value)
+                                  }
+                                  className="w-full h-10 px-2.5 text-xs font-medium rounded-lg border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                                >
+                                  {selectableCategories.map((cat) => (
+                                    <option key={cat.id} value={cat.id}>
+                                      {getCategoryDisplayName(cat, isVi)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -2046,10 +2252,9 @@ export const InventoryView: React.FC = () => {
                     type="button"
                     disabled={!ingName.trim()}
                     onClick={() => void submitIngredient('add_another')}
-                    className="h-12 px-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-4 inline-flex items-center justify-center text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
                   >
-                    <Plus className="w-4 h-4 shrink-0" />
-                    <span>{isVi ? 'Lưu & Thêm tiếp' : 'Save & Add Another'}</span>
+                    {isVi ? '+ Lưu & Thêm tiếp' : '+ Save & Add Another'}
                   </button>
                 )}
                 <button
@@ -2694,6 +2899,27 @@ export const InventoryView: React.FC = () => {
         onClose={() => setQuickRegisterOpen(false)}
       />
 
+      {/* Edit Packaged / Prepared Stock Product Directly From Inventory */}
+      <ProductFormModal
+        open={Boolean(editingStockProduct)}
+        editingProduct={editingStockProduct}
+        existingProducts={products}
+        barcodeRegistry={barcodeRegistry}
+        ingredients={ingredients}
+        settings={settings}
+        t={t}
+        onSave={saveProduct}
+        onSaved={(savedProd) => {
+          triggerHighlightItem(savedProd.id);
+          const displayName = isVi ? savedProd.nameVi || savedProd.name : savedProd.name;
+          showNotice(
+            'ok',
+            isVi ? `Đã cập nhật "${displayName}".` : `Updated "${displayName}".`
+          );
+        }}
+        onClose={() => setEditingStockProduct(null)}
+      />
+
       {/* Bottom-Right Floating Action Button + Scroll-to-Top Pill */}
       <FloatingActionBar
         label={t.inventory.addIngredient}
@@ -2705,7 +2931,8 @@ export const InventoryView: React.FC = () => {
           Boolean(batchProduct) ||
           Boolean(adjustModalTarget) ||
           scannerOpen ||
-          quickRegisterOpen
+          quickRegisterOpen ||
+          Boolean(editingStockProduct)
         }
       />
     </div>
