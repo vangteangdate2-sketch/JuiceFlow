@@ -21,6 +21,44 @@ export function normalizeBarcodeString(raw: string | null | undefined): string {
 }
 
 /**
+ * Return the normalized barcode along with its EAN-13 <-> UPC-A leading-zero equivalent
+ * (since camera scanners frequently decode 12-digit UPC-A codes as 13-digit EAN-13 with a leading '0').
+ */
+export function getEquivalentBarcodeCodes(raw: string | null | undefined): string[] {
+  const code = normalizeBarcodeString(raw);
+  if (!code) return [];
+  const candidates = [code];
+  if (/^\d{12}$/.test(code)) {
+    candidates.push(`0${code}`);
+  } else if (/^0\d{12}$/.test(code)) {
+    candidates.push(code.slice(1));
+  }
+  return candidates;
+}
+
+/**
+ * Match a search query against one or more item barcodes, supporting both substring matching
+ * and EAN-13 <-> UPC-A leading-zero equivalence.
+ */
+export function matchesBarcodeSearch(
+  barcodes: Array<string | null | undefined>,
+  rawQuery: string
+): boolean {
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) return false;
+  const equivQueries = getEquivalentBarcodeCodes(rawQuery).map((c) => c.toLowerCase());
+  for (const rawBc of barcodes) {
+    if (!rawBc) continue;
+    const bcLower = rawBc.trim().toLowerCase();
+    if (!bcLower) continue;
+    if (bcLower.includes(query)) return true;
+    const equivBc = getEquivalentBarcodeCodes(rawBc).map((c) => c.toLowerCase());
+    if (equivQueries.some((eq) => equivBc.includes(eq))) return true;
+  }
+  return false;
+}
+
+/**
  * Deterministic 64-bit FNV-1a hex hash fallback for ultra-long strings (>60 bytes UTF-8).
  */
 function fnv1aHex64(input: string): string {
@@ -421,72 +459,75 @@ export function resolveFromRegistryAndProducts(
   registry: BarcodeRegistryRecord[],
   products: Product[]
 ): RegistryLookupHit | null {
-  const code = normalizeBarcodeString(rawCode);
-  if (!code) return null;
+  const candidates = getEquivalentBarcodeCodes(rawCode);
+  if (candidates.length === 0) return null;
 
-  const docId = toBarcodeDocId(code);
   const prodMap = new Map(products.map((p) => [p.id, p]));
 
-  // 1. Check Barcode Registry first (exact string match preserving leading zeros)
-  const regRecord = registry.find((r) => r.code === code || r.id === docId);
-  if (regRecord) {
-    const product = prodMap.get(regRecord.productId);
-    if (product) {
-      const variant = regRecord.variantId
-        ? product.variants?.find((v) => v.id === regRecord.variantId)
-        : undefined;
-      return {
-        code,
-        format: regRecord.format || detectBarcodeFormat(code),
-        product,
-        variant,
-        registryRecord: regRecord,
-        unitsPerScan: Math.max(1, Math.round(regRecord.unitsPerScan || 1)),
-        packagingType: regRecord.packagingType,
-        packLabel: regRecord.label,
-      };
-    }
-  }
+  for (const code of candidates) {
+    const docId = toBarcodeDocId(code);
 
-  // 2. Fallback to embedded product fields (ensures 100% continuity for legacy products)
-  for (const product of products) {
-    if (normalizeBarcodeString(product.barcode) === code) {
-      return {
-        code,
-        format: detectBarcodeFormat(code),
-        product,
-        unitsPerScan: 1,
-        packagingType: 'unit',
-        packLabel: product.unit || 'Unit',
-      };
+    // 1. Check Barcode Registry first (exact string match preserving leading zeros)
+    const regRecord = registry.find((r) => r.code === code || r.id === docId);
+    if (regRecord) {
+      const product = prodMap.get(regRecord.productId);
+      if (product) {
+        const variant = regRecord.variantId
+          ? product.variants?.find((v) => v.id === regRecord.variantId)
+          : undefined;
+        return {
+          code,
+          format: regRecord.format || detectBarcodeFormat(code),
+          product,
+          variant,
+          registryRecord: regRecord,
+          unitsPerScan: Math.max(1, Math.round(regRecord.unitsPerScan || 1)),
+          packagingType: regRecord.packagingType,
+          packLabel: regRecord.label,
+        };
+      }
     }
-    const matchedVariant = (product.variants || []).find(
-      (v) => normalizeBarcodeString(v.barcode) === code
-    );
-    if (matchedVariant) {
-      return {
-        code,
-        format: detectBarcodeFormat(code),
-        product,
-        variant: matchedVariant,
-        unitsPerScan: 1,
-        packagingType: 'variant',
-        packLabel: matchedVariant.name,
-      };
-    }
-    const matchedPack = (product.packagingBarcodes || []).find(
-      (pb) => normalizeBarcodeString(pb.barcode) === code
-    );
-    if (matchedPack) {
-      const units = Math.max(1, Math.round(matchedPack.unitsPerPack || 1));
-      return {
-        code,
-        format: detectBarcodeFormat(code),
-        product,
-        unitsPerScan: units,
-        packagingType: inferPackagingType(matchedPack.label || '', units),
-        packLabel: matchedPack.label,
-      };
+
+    // 2. Fallback to embedded product fields (ensures 100% continuity for legacy products)
+    for (const product of products) {
+      if (normalizeBarcodeString(product.barcode) === code) {
+        return {
+          code,
+          format: detectBarcodeFormat(code),
+          product,
+          unitsPerScan: 1,
+          packagingType: 'unit',
+          packLabel: product.unit || 'Unit',
+        };
+      }
+      const matchedVariant = (product.variants || []).find(
+        (v) => normalizeBarcodeString(v.barcode) === code
+      );
+      if (matchedVariant) {
+        return {
+          code,
+          format: detectBarcodeFormat(code),
+          product,
+          variant: matchedVariant,
+          unitsPerScan: 1,
+          packagingType: 'variant',
+          packLabel: matchedVariant.name,
+        };
+      }
+      const matchedPack = (product.packagingBarcodes || []).find(
+        (pb) => normalizeBarcodeString(pb.barcode) === code
+      );
+      if (matchedPack) {
+        const units = Math.max(1, Math.round(matchedPack.unitsPerPack || 1));
+        return {
+          code,
+          format: detectBarcodeFormat(code),
+          product,
+          unitsPerScan: units,
+          packagingType: inferPackagingType(matchedPack.label || '', units),
+          packLabel: matchedPack.label,
+        };
+      }
     }
   }
 

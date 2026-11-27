@@ -9,6 +9,7 @@ import {
   FlaskConical,
   History,
   Layers,
+  Loader2,
   Package,
   PackageCheck,
   PackagePlus,
@@ -34,7 +35,7 @@ import type {
 } from '../types';
 import { calculateRecipeCogs, formatKhr, formatQty, todayIso } from '../utils/format';
 import { type BatchPrepMode, type StockShortage } from '../utils/inventoryEngine';
-import { formatBarcodeTypeLabel } from '../utils/barcodeRegistry';
+import { formatBarcodeTypeLabel, matchesBarcodeSearch } from '../utils/barcodeRegistry';
 import {
   getCategoriesForScope,
   getCategoryById,
@@ -213,8 +214,16 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
   const [feedbackMsg, setFeedbackMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  // Camera barcode scanner & quick-registration for Stock-In
+  // Camera barcode scanner & quick-registration for Stock-In / Catalog Search
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanLookingUp, setScanLookingUp] = useState(false);
+  const [scannedInventoryMatch, setScannedInventoryMatch] = useState<{
+    code: string;
+    format: BarcodeFormat;
+    product: Product;
+    unitsPerScan: number;
+    packLabel?: string;
+  } | null>(null);
   const [unknownStockBarcode, setUnknownStockBarcode] = useState<{
     code: string;
     format: BarcodeFormat;
@@ -579,32 +588,40 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     const cleaned = rawCode.trim();
     if (!cleaned) return;
     setUnknownStockBarcode(null);
+    setScannedInventoryMatch(null);
+    setScanLookingUp(true);
 
-    const res = await lookupBarcode(cleaned);
-    if (!res.found || !res.product) {
-      setUnknownStockBarcode({
-        code: res.code || cleaned,
+    try {
+      const res = await lookupBarcode(cleaned);
+      const effectiveCode = res.code || cleaned;
+
+      // Automatically search the inventory catalog for the scanned barcode
+      setActiveTab('all');
+      setCategoryFilter('all');
+      setStatusFilter('all');
+      setAttentionFilter('none');
+      setSearch(effectiveCode);
+
+      if (!res.found || !res.product) {
+        setUnknownStockBarcode({
+          code: effectiveCode,
+          format: res.format,
+          prefill: res.externalPrefill || null,
+        });
+        return;
+      }
+
+      triggerHighlightItem(res.product.id);
+      setScannedInventoryMatch({
+        code: effectiveCode,
         format: res.format,
-        prefill: res.externalPrefill || null,
+        product: res.product,
+        unitsPerScan: res.unitsPerScan,
+        packLabel: res.packLabel || res.product.packagingBarcodes?.[0]?.label,
       });
-      return;
+    } finally {
+      setScanLookingUp(false);
     }
-    if (res.product.productType === 'PREPARED_TO_ORDER') {
-      showNotice(
-        'err',
-        isVi
-          ? `"${res.product.nameVi || res.product.name}" là món pha chế theo đơn — hãy nhập nguyên liệu ở mục Nguyên liệu thô.`
-          : `"${res.product.name}" is Made-to-Order — restock raw ingredients instead.`
-      );
-      return;
-    }
-
-    const target: StockItemTarget = {
-      ...toTargetFromProduct(res.product),
-      barcodeScanned: res.code,
-      packLabel: res.packLabel || res.product.packagingBarcodes?.[0]?.label,
-    };
-    openPurchaseModal(target, res.unitsPerScan > 1 ? res.unitsPerScan : undefined);
   };
 
   useBarcodeScanner({
@@ -1089,14 +1106,19 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       if (statusFilter === 'healthy' && item.status !== 'healthy') return false;
 
       if (!q) return true;
+      const itemBarcodes = [
+        item.barcode,
+        ...(item.sourceProduct?.packagingBarcodes || []).map((pb) => pb.barcode),
+        ...(item.sourceProduct?.variants || []).map((v) => v.barcode),
+      ];
       return (
         item.name.toLowerCase().includes(q) ||
         item.nameVi.toLowerCase().includes(q) ||
         item.supplier.toLowerCase().includes(q) ||
-        (item.barcode || '').toLowerCase().includes(q)
+        matchesBarcodeSearch(itemBarcodes, search)
       );
     });
-  }, [allUnifiedItems, activeTab, categoryFilter, attentionFilter, statusFilter, q]);
+  }, [allUnifiedItems, activeTab, categoryFilter, attentionFilter, statusFilter, q, search]);
 
   const filteredMovements = useMemo(
     () =>
@@ -1195,11 +1217,16 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
             type="button"
+            disabled={scanLookingUp}
             onClick={() => setScannerOpen(true)}
             className="h-11 inline-flex items-center gap-2 px-4 text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
           >
-            <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
-            {isVi ? 'Quét nhập kho' : 'Scan Stock-In'}
+            {scanLookingUp ? (
+              <Loader2 className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] animate-spin" />
+            ) : (
+              <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
+            )}
+            {isVi ? 'Quét mã vạch' : 'Scan Barcode'}
           </button>
         </div>
       </div>
@@ -1226,6 +1253,102 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </div>
       )}
 
+      {/* Matched Scanned Barcode Banner */}
+      {scannedInventoryMatch && (
+        <div
+          role="status"
+          className="bg-emerald-50 dark:bg-[#064E3B]/75 border border-emerald-200 dark:border-[#10B981]/45 text-emerald-950 dark:text-[#D1FAE5] rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div className="flex items-start gap-2.5 min-w-0">
+            <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">
+                {isVi ? 'Đã tìm thấy' : 'Matched'}:{' '}
+                {isVi
+                  ? scannedInventoryMatch.product.nameVi || scannedInventoryMatch.product.name
+                  : scannedInventoryMatch.product.name}
+              </p>
+              <p className="text-xs opacity-85 mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                <span className="font-mono-num">
+                  {formatBarcodeTypeLabel(scannedInventoryMatch.format)} · {scannedInventoryMatch.code}
+                </span>
+                <span aria-hidden="true">·</span>
+                {scannedInventoryMatch.product.productType === 'PREPARED_TO_ORDER' ? (
+                  <span>
+                    {isVi
+                      ? 'Món pha chế theo đơn — quản lý tồn theo nguyên liệu thô'
+                      : 'Made-to-Order — tracked via raw ingredients'}
+                  </span>
+                ) : (
+                  <span className="font-mono-num">
+                    {isVi ? 'Tồn kho' : 'In stock'}:{' '}
+                    {formatQty(
+                      scannedInventoryMatch.product.stockQty,
+                      scannedInventoryMatch.product.unit || 'pcs'
+                    )}
+                    {scannedInventoryMatch.unitsPerScan > 1
+                      ? ` (${scannedInventoryMatch.packLabel || `${scannedInventoryMatch.unitsPerScan}x pack`})`
+                      : ''}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {scannedInventoryMatch.product.productType !== 'PREPARED_TO_ORDER' && (
+              <button
+                type="button"
+                onClick={() => {
+                  const prod = scannedInventoryMatch.product;
+                  if (prod.productType === 'PREPARED_STOCK') {
+                    openBatchPrepModal(prod);
+                  } else {
+                    const target: StockItemTarget = {
+                      ...toTargetFromProduct(prod),
+                      barcodeScanned: scannedInventoryMatch.code,
+                      packLabel: scannedInventoryMatch.packLabel,
+                    };
+                    openPurchaseModal(
+                      target,
+                      scannedInventoryMatch.unitsPerScan > 1
+                        ? scannedInventoryMatch.unitsPerScan
+                        : undefined
+                    );
+                  }
+                }}
+                className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+              >
+                {scannedInventoryMatch.product.productType === 'PREPARED_STOCK'
+                  ? isVi
+                    ? '+ Pha mẻ'
+                    : '+ Prep Batch'
+                  : isVi
+                    ? '+ Nhập kho'
+                    : '+ Restock'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setEditingStockProduct(scannedInventoryMatch.product)}
+              className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              {isVi ? 'Sửa' : 'Edit'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setScannedInventoryMatch(null);
+                setSearch('');
+              }}
+              className="h-9 px-2.5 inline-flex items-center justify-center text-xs font-semibold rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
+            >
+              {isVi ? 'Xóa tìm' : 'Clear'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Unregistered Stock-In Barcode Prompt */}
       {unknownStockBarcode && (
         <div
@@ -1236,7 +1359,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                {isVi ? 'Mã vạch chưa có trong kho' : 'Unregistered Stock-In Barcode'}:{' '}
+                {isVi ? 'Mã vạch chưa có trong kho' : 'No inventory item matches'}:{' '}
                 <span className="font-mono-num text-[#0F5C43] dark:text-[#34D399]">
                   {unknownStockBarcode.code}
                 </span>{' '}
@@ -1265,7 +1388,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setUnknownStockBarcode(null)}
+              onClick={() => {
+                setUnknownStockBarcode(null);
+                setSearch('');
+              }}
               aria-label={t.common.close}
               className="w-11 h-11 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-lg transition-colors"
             >
@@ -1470,7 +1596,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                if (scannedInventoryMatch) setScannedInventoryMatch(null);
+              }}
               placeholder={
                 activeTab === 'movements'
                   ? isVi
@@ -1480,18 +1609,38 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     ? 'Tìm nguyên liệu, sản phẩm, nhà cung cấp, mã vạch...'
                     : 'Search item name, barcode, or supplier...'
               }
-              className="w-full h-11 pl-10 pr-9 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+              className={`w-full h-11 pl-10 ${search ? 'pr-20' : 'pr-11'} text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]`}
             />
-            {search && (
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setScannedInventoryMatch(null);
+                    setUnknownStockBarcode(null);
+                  }}
+                  className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-md"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setSearch('')}
-                className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] absolute right-1 top-1/2 -translate-y-1/2 rounded-md"
-                aria-label="Clear search"
+                disabled={scanLookingUp}
+                onClick={() => setScannerOpen(true)}
+                title={isVi ? 'Quét mã vạch (EAN-13 / UPC-A)' : 'Scan Barcode (EAN-13 / UPC-A)'}
+                aria-label={isVi ? 'Quét mã vạch' : 'Scan Barcode'}
+                className="w-9 h-9 inline-flex items-center justify-center text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#064E3B]/70 rounded-md transition-colors"
               >
-                <X className="w-3.5 h-3.5" />
+                {scanLookingUp ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ScanBarcode className="w-4 h-4" />
+                )}
               </button>
-            )}
+            </div>
           </div>
 
           {activeTab !== 'movements' ? (
@@ -1537,6 +1686,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   setStatusFilter('all');
                   setAttentionFilter('none');
                   setSearch('');
+                  setScannedInventoryMatch(null);
+                  setUnknownStockBarcode(null);
                 }}
                 className="inline-flex items-center justify-center h-11 px-2.5 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors whitespace-nowrap"
               >
@@ -2997,14 +3148,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </ModalPortal>
       )}
 
-      {/* Camera Barcode Scanner for Stock-In */}
+      {/* Camera Barcode Scanner for Inventory Search & Stock-In */}
       <BarcodeScannerModal
         open={scannerOpen}
-        title={isVi ? 'Quét mã vạch nhập kho' : 'Scan Barcode for Stock-In'}
+        title={isVi ? 'Quét mã vạch kho hàng' : 'Scan Barcode'}
         subtitle={
           isVi
-            ? 'Quét mã lẻ hoặc mã thùng (VD: thùng 24 chai sẽ tự động nhân 24).'
-            : 'Scan a unit or carton barcode (carton barcodes auto-multiply pack quantities).'
+            ? 'Đưa camera vào mã EAN-13 / UPC-A hoặc mã thùng để tự động tìm kiếm trong kho.'
+            : 'Point camera at an EAN-13, UPC-A, or carton barcode to automatically search inventory.'
         }
         onDetected={(code) => {
           void handleStockInBarcode(code);

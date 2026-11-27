@@ -29,11 +29,13 @@ import {
 import { useStore } from '../context/StoreContext';
 import { useUndoToast } from '../context/UndoToastContext';
 import type {
+  BarcodeFormat,
   ExternalBarcodePrefill,
   Ingredient,
   Product,
   ProductType,
 } from '../types';
+import { formatBarcodeTypeLabel, matchesBarcodeSearch } from '../utils/barcodeRegistry';
 import {
   calculateProductCogs,
   calculateRecipeCogs,
@@ -262,6 +264,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [scanLookupOpen, setScanLookupOpen] = useState(false);
   const [scanLookingUp, setScanLookingUp] = useState(false);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
+  const [scannedMatch, setScannedMatch] = useState<{
+    code: string;
+    format: BarcodeFormat;
+    product: Product | null;
+    prefill: ExternalBarcodePrefill | null;
+  } | null>(null);
   const [quickInitialBarcode, setQuickInitialBarcode] = useState<string | null>(null);
   const [quickInitialPrefill, setQuickInitialPrefill] = useState<ExternalBarcodePrefill | null>(
     null
@@ -342,15 +350,16 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         return false;
       }
       if (!q) return true;
-      const packCodes = (p.packagingBarcodes || []).map((pb) => pb.barcode).join(' ');
-      const variantCodes = (p.variants || []).map((v) => v.barcode || '').join(' ');
+      const productBarcodes = [
+        p.barcode,
+        ...(p.packagingBarcodes || []).map((pb) => pb.barcode),
+        ...(p.variants || []).map((v) => v.barcode),
+      ];
       return (
         p.name.toLowerCase().includes(q) ||
         p.nameVi.toLowerCase().includes(q) ||
         (p.brand || '').toLowerCase().includes(q) ||
-        (p.barcode || '').toLowerCase().includes(q) ||
-        packCodes.toLowerCase().includes(q) ||
-        variantCodes.toLowerCase().includes(q)
+        matchesBarcodeSearch(productBarcodes, search)
       );
     });
   }, [products, categories, typeFilter, categoryFilter, search]);
@@ -669,30 +678,46 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     if (!cleaned) return;
     setScanLookingUp(true);
     setScanNotice(null);
+    setScannedMatch(null);
     try {
       const res = await lookupBarcode(cleaned);
+      const effectiveCode = res.code || cleaned;
+
+      // Automatically search the product catalog for the scanned barcode
+      setTypeFilter('ALL');
+      setCategoryFilter('all');
+      setSearch(effectiveCode);
+
       if (res.found && res.product) {
         resetQuickScanSeed();
-        setEditingProduct(res.product);
-        setInitialFocusSection(null);
-        setModalOpen(true);
-        const displayName = isVi ? res.product.nameVi || res.product.name : res.product.name;
-        setScanNotice(
-          isVi
-            ? `Đã tìm thấy "${displayName}" (${res.code}) trong sổ mã vạch JuiceFlow.`
-            : `Found "${displayName}" (${res.code}) in your JuiceFlow registry.`
-        );
+        triggerHighlightProduct(res.product.id);
+        setScannedMatch({
+          code: effectiveCode,
+          format: res.format,
+          product: res.product,
+          prefill: null,
+        });
       } else {
-        setEditingProduct(null);
-        setInitialFocusSection(null);
-        setQuickInitialBarcode(res.code || cleaned);
-        setQuickInitialPrefill(res.externalPrefill || null);
-        setQuickNotFoundExternally(!res.externalPrefill);
-        setModalOpen(true);
+        setScannedMatch({
+          code: effectiveCode,
+          format: res.format,
+          product: null,
+          prefill: res.externalPrefill || null,
+        });
       }
     } finally {
       setScanLookingUp(false);
     }
+  };
+
+  const openRegisterFromScan = () => {
+    if (!scannedMatch) return;
+    setEditingProduct(null);
+    setInitialFocusSection(null);
+    setQuickInitialBarcode(scannedMatch.code);
+    setQuickInitialPrefill(scannedMatch.prefill);
+    setQuickNotFoundExternally(!scannedMatch.prefill);
+    setModalOpen(true);
   };
 
   return (
@@ -754,10 +779,105 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             ) : (
               <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
             )}
-            {isVi ? 'Quét / Tra cứu mã' : 'Scan / Lookup'}
+            {isVi ? 'Quét mã vạch' : 'Scan Barcode'}
           </button>
         </div>
       </div>
+
+      {scannedMatch && (
+        <div
+          role="status"
+          className={`px-4 py-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+            scannedMatch.product
+              ? 'bg-emerald-50 dark:bg-[#064E3B]/75 border-emerald-200 dark:border-[#10B981]/45 text-emerald-950 dark:text-[#D1FAE5]'
+              : 'bg-amber-50 dark:bg-amber-950/35 border-amber-200 dark:border-amber-600/50 text-amber-950 dark:text-amber-100'
+          }`}
+        >
+          <div className="flex items-start gap-2.5 min-w-0">
+            <ScanBarcode
+              className={`w-4 h-4 shrink-0 mt-0.5 ${
+                scannedMatch.product
+                  ? 'text-[#0F5C43] dark:text-[#34D399]'
+                  : 'text-amber-600 dark:text-amber-400'
+              }`}
+            />
+            <div className="min-w-0">
+              {scannedMatch.product ? (
+                <>
+                  <p className="text-sm font-semibold truncate">
+                    {isVi ? 'Đã tìm thấy' : 'Matched'}:{' '}
+                    {isVi
+                      ? scannedMatch.product.nameVi || scannedMatch.product.name
+                      : scannedMatch.product.name}
+                  </p>
+                  <p className="text-xs opacity-85 font-mono-num mt-0.5">
+                    {formatBarcodeTypeLabel(scannedMatch.format)} · {scannedMatch.code}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold">
+                    {isVi ? 'Không tìm thấy sản phẩm cho mã' : 'No catalog item matches'}{' '}
+                    <span className="font-mono-num">{scannedMatch.code}</span>{' '}
+                    <span className="text-xs font-normal opacity-80">
+                      ({formatBarcodeTypeLabel(scannedMatch.format)})
+                    </span>
+                  </p>
+                  <p className="text-xs opacity-85 mt-0.5 truncate">
+                    {scannedMatch.prefill
+                      ? isVi
+                        ? `Gợi ý từ Open Food Facts: ${scannedMatch.prefill.name}${scannedMatch.prefill.brand ? ` · ${scannedMatch.prefill.brand}` : ''}`
+                        : `Found externally: ${scannedMatch.prefill.name}${scannedMatch.prefill.brand ? ` · ${scannedMatch.prefill.brand}` : ''}`
+                      : isVi
+                        ? 'Bạn có thể đăng ký nhanh sản phẩm mới với mã vạch này.'
+                        : 'Register a new product with this barcode to add it to your catalog.'}
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {scannedMatch.product ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => openEdit(scannedMatch.product!)}
+                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  {isVi ? 'Sửa sản phẩm' : 'Edit Product'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLabelProduct(scannedMatch.product!)}
+                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  {isVi ? 'In nhãn' : 'Label'}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={openRegisterFromScan}
+                className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+              >
+                {isVi ? '+ Đăng ký sản phẩm' : '+ Register Product'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setScannedMatch(null);
+                setSearch('');
+              }}
+              className="h-9 px-2.5 inline-flex items-center justify-center text-xs font-semibold rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
+            >
+              {isVi ? 'Xóa tìm' : 'Clear'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {scanNotice && (
         <div
@@ -905,20 +1025,42 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                if (scannedMatch) setScannedMatch(null);
+              }}
               placeholder={isVi ? 'Tìm tên, thương hiệu, mã vạch...' : 'Search name, brand, barcode...'}
-              className="w-full h-11 pl-10 pr-9 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+              className={`w-full h-11 pl-10 ${search ? 'pr-20' : 'pr-11'} text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]`}
             />
-            {search && (
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setScannedMatch(null);
+                  }}
+                  className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-md"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setSearch('')}
-                className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] absolute right-1 top-1/2 -translate-y-1/2 rounded-md"
-                aria-label="Clear search"
+                disabled={scanLookingUp}
+                onClick={() => setScanLookupOpen(true)}
+                title={isVi ? 'Quét mã vạch (EAN-13 / UPC-A)' : 'Scan Barcode (EAN-13 / UPC-A)'}
+                aria-label={isVi ? 'Quét mã vạch' : 'Scan Barcode'}
+                className="w-9 h-9 inline-flex items-center justify-center text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#064E3B]/70 rounded-md transition-colors"
               >
-                <X className="w-3.5 h-3.5" />
+                {scanLookingUp ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ScanBarcode className="w-4 h-4" />
+                )}
               </button>
-            )}
+            </div>
           </div>
 
           <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
@@ -962,6 +1104,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 setCategoryFilter('all');
                 setTypeFilter('ALL');
                 setSearch('');
+                setScannedMatch(null);
               }}
               className="inline-flex items-center justify-center h-11 px-3 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors whitespace-nowrap"
             >
@@ -2107,11 +2250,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       {/* Camera Barcode Scan & Lookup Modal */}
       <BarcodeScannerModal
         open={scanLookupOpen}
-        title={isVi ? 'Quét mã vạch sản phẩm' : 'Scan or Lookup Product Barcode'}
+        title={isVi ? 'Quét mã vạch sản phẩm' : 'Scan Barcode'}
         subtitle={
           isVi
-            ? 'Kiểm tra sổ mã vạch JuiceFlow trước, sau đó tự động gợi ý từ Open Food Facts nếu chưa đăng ký.'
-            : 'Checks JuiceFlow registry first, then prefills from Open Food Facts if unregistered.'
+            ? 'Đưa camera vào mã EAN-13 / UPC-A để tự động tìm kiếm trong danh mục sản phẩm.'
+            : 'Point camera at an EAN-13 or UPC-A barcode to automatically search your product catalog.'
         }
         onDetected={handleScanLookup}
         onClose={() => setScanLookupOpen(false)}
