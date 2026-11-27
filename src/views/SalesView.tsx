@@ -23,6 +23,7 @@ import { useUndoToast } from '../context/UndoToastContext';
 import type {
   BarcodeFormat,
   ExternalBarcodePrefill,
+  Ingredient,
   PaymentMethod,
   Product,
   ProductCategory,
@@ -81,9 +82,17 @@ interface CartEntry {
 
 interface SalesViewProps {
   sidebarCollapsed?: boolean;
+  onRestockExistingProduct?: (product: Product) => void;
+  onEditExistingIngredient?: (ingredient: Ingredient) => void;
+  onRestockExistingIngredient?: (ingredient: Ingredient) => void;
 }
 
-export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }) => {
+export const SalesView: React.FC<SalesViewProps> = ({
+  sidebarCollapsed = false,
+  onRestockExistingProduct,
+  onEditExistingIngredient,
+  onRestockExistingIngredient,
+}) => {
   const {
     settings,
     categories: rawCategories,
@@ -2424,6 +2433,21 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
               : `Registered "${displayName}" — now searchable in POS & Inventory.`
           );
           window.setTimeout(() => setToastMessage(''), 4500);
+        }}
+        onRestockExisting={(prod) => {
+          setQuickRegisterOpen(false);
+          setUnknownBarcodePrompt(null);
+          onRestockExistingProduct?.(prod);
+        }}
+        onEditExistingIngredient={(ing) => {
+          setQuickRegisterOpen(false);
+          setUnknownBarcodePrompt(null);
+          onEditExistingIngredient?.(ing);
+        }}
+        onRestockExistingIngredient={(ing) => {
+          setQuickRegisterOpen(false);
+          setUnknownBarcodePrompt(null);
+          onRestockExistingIngredient?.(ing);
         }}
         onClose={() => setQuickRegisterOpen(false)}
       />

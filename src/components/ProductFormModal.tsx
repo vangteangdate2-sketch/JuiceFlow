@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Barcode,
@@ -15,6 +16,8 @@ import {
   Layers,
   Loader2,
   Package,
+  PackagePlus,
+  Pencil,
   Plus,
   Printer,
   RefreshCw,
@@ -37,7 +40,12 @@ import type {
   RecipeItem,
   WorkspaceSettings,
 } from '../types';
-import { useStore, type SaveProductResult, type StoreContextValue } from '../context/StoreContext';
+import {
+  normalizeName,
+  useStore,
+  type SaveProductResult,
+  type StoreContextValue,
+} from '../context/StoreContext';
 import { useUndoToast } from '../context/UndoToastContext';
 import {
   getCategoriesForScope,
@@ -49,6 +57,7 @@ import {
   computePriceFromMarkup,
   convertUnitQty,
   formatKhr,
+  formatQty,
   formatUsdRef,
   generateId,
   getCompatibleUnits,
@@ -171,6 +180,10 @@ interface ProductFormModalProps {
   t: StoreContextValue['t'];
   onSave: (payload: ProductFormPayload) => Promise<SaveProductResult | void>;
   onSaved?: (product: Product, meta?: { addAnother?: boolean }) => void;
+  onEditExisting?: (product: Product) => void;
+  onRestockExisting?: (product: Product) => void;
+  onEditExistingIngredient?: (ingredient: Ingredient) => void;
+  onRestockExistingIngredient?: (ingredient: Ingredient) => void;
   onClose: () => void;
 }
 
@@ -188,10 +201,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   t,
   onSave,
   onSaved,
+  onEditExisting,
+  onRestockExisting,
+  onEditExistingIngredient,
+  onRestockExistingIngredient,
   onClose,
 }) => {
   const isVi = settings.language === 'vi';
-  const isEditing = Boolean(editingProduct);
+  const [internalEditingProduct, setInternalEditingProduct] = useState<Product | null>(null);
+  const activeEditingProduct = internalEditingProduct ?? editingProduct;
+  const isEditing = Boolean(activeEditingProduct);
   const exchangeRate = settings.posExchangeRate || settings.usdRate || 4000;
   const { showNoticeToast } = useUndoToast();
 
@@ -258,6 +277,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const scrollBodyRef = useRef<HTMLDivElement | null>(null);
   const ingMap = useMemo(() => new Map(ingredients.map((i) => [i.id, i])), [ingredients]);
 
+  // Reset internal switch-to-edit override when modal closes or parent editingProduct changes
+  useEffect(() => {
+    setInternalEditingProduct(null);
+  }, [open, editingProduct]);
+
   // Synchronize form state whenever modal opens or target product changes
   useEffect(() => {
     if (!open) return;
@@ -272,44 +296,46 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setActiveVariantRecipeIdx(0);
     setCurrentStep(initialFocusSection === 'recipe' ? 3 : 1);
 
-    if (editingProduct) {
-      setName(editingProduct.name);
-      setNameVi(editingProduct.nameVi);
-      setBrand(editingProduct.brand || '');
-      setProductType(editingProduct.productType);
-      setCategory(resolveProductCategoryId(editingProduct, allCategories));
-      setCostPriceKhr(String(editingProduct.costPriceKhr ?? 0));
+    if (activeEditingProduct) {
+      setName(activeEditingProduct.name);
+      setNameVi(activeEditingProduct.nameVi);
+      setBrand(activeEditingProduct.brand || '');
+      setProductType(activeEditingProduct.productType);
+      setCategory(resolveProductCategoryId(activeEditingProduct, allCategories));
+      setCostPriceKhr(String(activeEditingProduct.costPriceKhr ?? 0));
       setMarkupPercent(
-        editingProduct.markupPercent !== undefined ? String(editingProduct.markupPercent) : ''
+        activeEditingProduct.markupPercent !== undefined
+          ? String(activeEditingProduct.markupPercent)
+          : ''
       );
-      setManualPriceOverride(Boolean(editingProduct.manualPriceOverride));
-      setPriceKhr(String(editingProduct.priceKhr));
-      setBarcode(editingProduct.barcode || '');
+      setManualPriceOverride(Boolean(activeEditingProduct.manualPriceOverride));
+      setPriceKhr(String(activeEditingProduct.priceKhr));
+      setBarcode(activeEditingProduct.barcode || '');
       setBarcodeSource(undefined);
-      setPackagingBarcodes((editingProduct.packagingBarcodes || []).map((pb) => ({ ...pb })));
-      setStockQty(String(editingProduct.stockQty ?? 0));
-      setReorderLevel(String(editingProduct.reorderLevel ?? 10));
-      setUnit(editingProduct.unit || 'pcs');
-      setSupplier(editingProduct.supplier || '');
-      setImageUrl(editingProduct.imageUrl || '');
-      setActive(editingProduct.active);
+      setPackagingBarcodes((activeEditingProduct.packagingBarcodes || []).map((pb) => ({ ...pb })));
+      setStockQty(String(activeEditingProduct.stockQty ?? 0));
+      setReorderLevel(String(activeEditingProduct.reorderLevel ?? 10));
+      setUnit(activeEditingProduct.unit || 'pcs');
+      setSupplier(activeEditingProduct.supplier || '');
+      setImageUrl(activeEditingProduct.imageUrl || '');
+      setActive(activeEditingProduct.active);
       setPhotoError('');
-      const initialRecipe = (editingProduct.recipe || []).map((r) => ({ ...r }));
+      const initialRecipe = (activeEditingProduct.recipe || []).map((r) => ({ ...r }));
       setRecipe(initialRecipe);
       setVariants(
-        (editingProduct.variants || []).map((v) => ({
+        (activeEditingProduct.variants || []).map((v) => ({
           ...v,
           recipe: (v.recipe || []).map((r) => ({ ...r })),
         }))
       );
 
       const hasDistinctVi = Boolean(
-        editingProduct.nameVi &&
-          editingProduct.nameVi.trim() &&
-          editingProduct.nameVi.trim() !== editingProduct.name.trim()
+        activeEditingProduct.nameVi &&
+          activeEditingProduct.nameVi.trim() &&
+          activeEditingProduct.nameVi.trim() !== activeEditingProduct.name.trim()
       );
-      setShowSecondaryNaming(hasDistinctVi || Boolean(editingProduct.brand));
-      setShowMarkupCalc(editingProduct.markupPercent !== undefined);
+      setShowSecondaryNaming(hasDistinctVi || Boolean(activeEditingProduct.brand));
+      setShowMarkupCalc(activeEditingProduct.markupPercent !== undefined);
       setPrefillBanner('none');
     } else {
       const cleanInitCode = normalizeBarcodeString(initialPrefill?.barcode || initialBarcode || '');
@@ -353,7 +379,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     }
   }, [
     open,
-    editingProduct,
+    activeEditingProduct,
     initialBarcode,
     initialPrefill,
     initialNotFoundExternally,
@@ -393,8 +419,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     () =>
       findDuplicateBarcodeConflicts(
         {
-          id: editingProduct?.id,
-          name: name.trim() || editingProduct?.name || 'This product',
+          id: activeEditingProduct?.id,
+          name: name.trim() || activeEditingProduct?.name || 'This product',
           barcode,
           variants: productType === 'PREPARED_TO_ORDER' ? variants : [],
           packagingBarcodes,
@@ -402,7 +428,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         existingProducts,
         barcodeRegistry
       ),
-    [editingProduct, name, barcode, productType, variants, packagingBarcodes, existingProducts, barcodeRegistry]
+    [
+      activeEditingProduct,
+      name,
+      barcode,
+      productType,
+      variants,
+      packagingBarcodes,
+      existingProducts,
+      barcodeRegistry,
+    ]
   );
 
   const unitBarcodeConflicts = useMemo(() => {
@@ -410,6 +445,57 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     if (!cleanUnit) return [];
     return barcodeConflicts.filter((c) => c.code === cleanUnit);
   }, [barcode, barcodeConflicts]);
+
+  // Real-time canonical normalized-name & barcode duplicate guard
+  const duplicateGuard = useMemo<
+    | { kind: 'product'; product: Product; reason: 'name' | 'barcode'; matchedCode?: string }
+    | { kind: 'ingredient'; ingredient: Ingredient; reason: 'name' }
+    | null
+  >(() => {
+    const normInput = normalizeName(name);
+    if (normInput && active) {
+      const matchedProduct = existingProducts.find(
+        (p) =>
+          p.id !== activeEditingProduct?.id &&
+          p.active &&
+          normalizeName(p.name) === normInput
+      );
+      if (matchedProduct) {
+        return { kind: 'product', product: matchedProduct, reason: 'name' };
+      }
+      if (productType !== 'PREPARED_TO_ORDER') {
+        const matchedIng = ingredients.find((i) => normalizeName(i.name) === normInput);
+        if (matchedIng) {
+          return { kind: 'ingredient', ingredient: matchedIng, reason: 'name' };
+        }
+      }
+    }
+
+    const externalBarcodeConflict = unitBarcodeConflicts.find((c) => !c.isInternalDuplicate);
+    if (externalBarcodeConflict) {
+      const matchedProduct = existingProducts.find(
+        (p) => p.id === externalBarcodeConflict.existingProductId
+      );
+      if (matchedProduct) {
+        return {
+          kind: 'product',
+          product: matchedProduct,
+          reason: 'barcode',
+          matchedCode: externalBarcodeConflict.code,
+        };
+      }
+    }
+
+    return null;
+  }, [
+    name,
+    active,
+    productType,
+    existingProducts,
+    ingredients,
+    activeEditingProduct,
+    unitBarcodeConflicts,
+  ]);
 
   const detectedUnitFormat = useMemo(
     () => (barcode.trim() ? detectBarcodeFormat(barcode) : null),
@@ -516,6 +602,19 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       if (!category) {
         return isVi ? 'Vui lòng chọn danh mục sản phẩm.' : 'Please select a product category.';
       }
+      if (duplicateGuard) {
+        const existingName =
+          duplicateGuard.kind === 'product'
+            ? isVi
+              ? duplicateGuard.product.nameVi || duplicateGuard.product.name
+              : duplicateGuard.product.name
+            : isVi
+              ? duplicateGuard.ingredient.nameVi || duplicateGuard.ingredient.name
+              : duplicateGuard.ingredient.name;
+        return isVi
+          ? `"${existingName}" đã tồn tại. Hãy chỉnh sửa hoặc nhập thêm kho cho mục này.`
+          : `"${existingName}" already exists. Edit or restock the existing item instead.`;
+      }
       if (unitBarcodeConflicts.length > 0) {
         const first = unitBarcodeConflicts[0];
         return first.isInternalDuplicate
@@ -574,8 +673,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setStepError('');
     setSaveError('');
 
-    // When editing an existing product, allow jumping freely to any step
+    // When editing an existing product, allow jumping freely unless a duplicate conflict exists
     if (isEditing) {
+      if (duplicateGuard) {
+        setStepError(validateStep(1) || '');
+        return;
+      }
       setCurrentStep(targetStep);
       return;
     }
@@ -601,7 +704,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const handleNextStep = () => {
     setStepError('');
     setSaveError('');
-    if (!isEditing) {
+    if (!isEditing || duplicateGuard) {
       const err = validateStep(currentStep);
       if (err) {
         setStepError(err);
@@ -610,6 +713,45 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     }
     if (currentStep < 3) {
       setCurrentStep((prev) => (prev + 1) as WizardStep);
+    }
+  };
+
+  const handleSwitchToEditExisting = () => {
+    if (!duplicateGuard) return;
+    if (duplicateGuard.kind === 'product') {
+      const target = duplicateGuard.product;
+      if (onEditExisting) {
+        onEditExisting(target);
+      } else {
+        setInternalEditingProduct(target);
+      }
+      setStepError('');
+      setSaveError('');
+      showNoticeToast({
+        message: isVi
+          ? `Đã chuyển sang chỉnh sửa "${target.nameVi || target.name}"`
+          : `Switched to editing "${target.name}"`,
+        detail:
+          target.productType === 'PREPARED_TO_ORDER'
+            ? isVi
+              ? 'Mở Bước 2 nếu bạn muốn thêm kích cỡ mới cho món này.'
+              : 'Open Step 2 to add or update size variants.'
+            : undefined,
+      });
+    } else if (onEditExistingIngredient) {
+      onClose();
+      onEditExistingIngredient(duplicateGuard.ingredient);
+    }
+  };
+
+  const handleRestockExisting = () => {
+    if (!duplicateGuard) return;
+    if (duplicateGuard.kind === 'product' && onRestockExisting) {
+      onClose();
+      onRestockExisting(duplicateGuard.product);
+    } else if (duplicateGuard.kind === 'ingredient' && onRestockExistingIngredient) {
+      onClose();
+      onRestockExistingIngredient(duplicateGuard.ingredient);
     }
   };
 
@@ -769,7 +911,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setSaving(true);
     try {
       const result = await onSave({
-        id: editingProduct?.id,
+        id: activeEditingProduct?.id,
         name: trimmedName,
         nameVi: nameVi.trim() || trimmedName,
         brand: brand.trim(),
@@ -1439,6 +1581,102 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             )}
                           </div>
                         </div>
+
+                        {/* Live Duplicate Protection Warning Banner */}
+                        {duplicateGuard && (
+                          <div
+                            role="alert"
+                            className="p-3.5 rounded-xl border border-amber-300/90 dark:border-amber-500/45 bg-amber-50/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 space-y-2.5 animate-fade-in"
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                              <div className="min-w-0 flex-1 space-y-0.5">
+                                <p className="text-xs sm:text-[13px] font-bold text-amber-950 dark:text-amber-100">
+                                  {isVi
+                                    ? `"${
+                                        duplicateGuard.kind === 'product'
+                                          ? duplicateGuard.product.nameVi || duplicateGuard.product.name
+                                          : duplicateGuard.ingredient.nameVi || duplicateGuard.ingredient.name
+                                      }" đã tồn tại`
+                                    : `"${
+                                        duplicateGuard.kind === 'product'
+                                          ? duplicateGuard.product.name
+                                          : duplicateGuard.ingredient.name
+                                      }" already exists`}
+                                </p>
+                                <p className="text-[11px] text-amber-900/85 dark:text-amber-200/85 leading-relaxed">
+                                  {duplicateGuard.kind === 'product' ? (
+                                    duplicateGuard.reason === 'barcode' ? (
+                                      isVi ? (
+                                        `Mã vạch ${duplicateGuard.matchedCode} đã gắn cho sản phẩm này. Hãy chỉnh sửa hoặc nhập thêm kho thay vì tạo trùng.`
+                                      ) : (
+                                        `Barcode ${duplicateGuard.matchedCode} is already assigned to this item. Edit or restock it instead of creating a duplicate.`
+                                      )
+                                    ) : duplicateGuard.product.productType === 'PREPARED_TO_ORDER' ? (
+                                      isVi ? (
+                                        `${t.productTypes[duplicateGuard.product.productType]}${
+                                          duplicateGuard.product.variants.length > 0
+                                            ? ` · ${duplicateGuard.product.variants.length} kích cỡ`
+                                            : ''
+                                        } — Muốn thêm cỡ mới? Hãy chỉnh sửa sản phẩm hiện có thay vì tạo trùng.`
+                                      ) : (
+                                        `${t.productTypes[duplicateGuard.product.productType]}${
+                                          duplicateGuard.product.variants.length > 0
+                                            ? ` · ${duplicateGuard.product.variants.length} size variants`
+                                            : ''
+                                        } — Adding a new size? Edit the existing item instead of duplicating.`
+                                      )
+                                    ) : isVi ? (
+                                      `${t.productTypes[duplicateGuard.product.productType]} · Hiện còn ${formatQty(
+                                        duplicateGuard.product.stockQty,
+                                        duplicateGuard.product.unit
+                                      )} — Chỉnh sửa hoặc nhập thêm kho để không bị tách tồn kho.`
+                                    ) : (
+                                      `${t.productTypes[duplicateGuard.product.productType]} · Currently ${formatQty(
+                                        duplicateGuard.product.stockQty,
+                                        duplicateGuard.product.unit
+                                      )} in stock — Edit or restock the existing record so stock stays unified.`
+                                    )
+                                  ) : isVi ? (
+                                    `Nguyên liệu trong kho · Hiện còn ${formatQty(
+                                      duplicateGuard.ingredient.stockQty,
+                                      duplicateGuard.ingredient.unit
+                                    )} — Chỉnh sửa hoặc nhập thêm kho cho mục này.`
+                                  ) : (
+                                    `Raw Ingredient in inventory · Currently ${formatQty(
+                                      duplicateGuard.ingredient.stockQty,
+                                      duplicateGuard.ingredient.unit
+                                    )} — Edit or restock the existing record instead.`
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 pl-6">
+                              {(duplicateGuard.kind === 'product' || Boolean(onEditExistingIngredient)) && (
+                                <button
+                                  type="button"
+                                  onClick={handleSwitchToEditExisting}
+                                  className="h-10 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  {isVi ? 'Chỉnh sửa mục này' : 'Edit Existing Item'}
+                                </button>
+                              )}
+                              {((duplicateGuard.kind === 'product' && Boolean(onRestockExisting)) ||
+                                (duplicateGuard.kind === 'ingredient' &&
+                                  Boolean(onRestockExistingIngredient))) && (
+                                <button
+                                  type="button"
+                                  onClick={handleRestockExisting}
+                                  className="h-10 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-950 dark:text-amber-100 bg-white dark:bg-[#18251F] border border-amber-300 dark:border-amber-500/50 hover:bg-amber-100/70 dark:hover:bg-[#1F3028] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
+                                >
+                                  <PackagePlus className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
+                                  {isVi ? 'Nhập kho mục này' : 'Restock Existing'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Item Type Selector */}
                         <div className="pt-1">
@@ -2920,7 +3158,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 {isEditing && currentStep < 3 && (
                   <button
                     type="button"
-                    disabled={saving || barcodeConflicts.length > 0}
+                    disabled={saving || barcodeConflicts.length > 0 || Boolean(duplicateGuard)}
                     onClick={() => void handleSaveProduct('close')}
                     className="h-12 px-4 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
                   >
@@ -2931,8 +3169,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 {currentStep === 1 && (
                   <button
                     type="button"
+                    disabled={Boolean(duplicateGuard)}
                     onClick={handleNextStep}
-                    className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap"
                   >
                     <span>{isVi ? 'Tiếp: Giá bán' : 'Next: Pricing'}</span>
                     <ArrowRight className="w-4 h-4" />
@@ -2942,8 +3181,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 {currentStep === 2 && (
                   <button
                     type="button"
+                    disabled={Boolean(duplicateGuard)}
                     onClick={handleNextStep}
-                    className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap"
                   >
                     <span>{isVi ? 'Tiếp: Công thức & Kho' : 'Next: Recipe & Stock'}</span>
                     <ArrowRight className="w-4 h-4" />
@@ -2955,7 +3195,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     {!isEditing && (
                       <button
                         type="button"
-                        disabled={saving || barcodeConflicts.length > 0}
+                        disabled={saving || barcodeConflicts.length > 0 || Boolean(duplicateGuard)}
                         onClick={() => void handleSaveProduct('add_another')}
                         className="h-12 px-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
                       >
@@ -2965,7 +3205,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     )}
                     <button
                       type="button"
-                      disabled={saving || barcodeConflicts.length > 0}
+                      disabled={saving || barcodeConflicts.length > 0 || Boolean(duplicateGuard)}
                       onClick={() => void handleSaveProduct('close')}
                       className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
                     >

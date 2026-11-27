@@ -85,11 +85,15 @@ import {
 import {
   BUSINESS_TIMEZONE,
   clampNumber,
+  convertUnitQty,
   generateId,
   generateInviteCode,
+  normalizeName,
   sanitizeString,
   todayIso,
 } from '../utils/format';
+
+export { normalizeName };
 import {
   buildAdjustmentPlan,
   buildBatchPreparationPlan,
@@ -342,6 +346,169 @@ export interface SaveProductResult {
   error?: string;
 }
 
+export interface SaveIngredientResult {
+  ok: boolean;
+  id?: string;
+  ingredient?: Ingredient;
+  error?: string;
+}
+
+export interface DuplicateGroupInfo {
+  normalizedName: string;
+  displayName: string;
+  kind: 'product' | 'ingredient';
+  count: number;
+  primaryId: string;
+  duplicateIds: string[];
+  totalStockQty: number;
+  unit: string;
+}
+
+export interface DuplicateAuditSummary {
+  productGroups: DuplicateGroupInfo[];
+  ingredientGroups: DuplicateGroupInfo[];
+  totalDuplicateRecords: number;
+  totalGroups: number;
+}
+
+export interface MergeDuplicatesResult {
+  ok: boolean;
+  mergedProductGroups: number;
+  removedProducts: number;
+  mergedIngredientGroups: number;
+  removedIngredients: number;
+  updatedRecipes: number;
+  mergedItems: string[];
+  error?: string;
+}
+
+function scorePrimaryProduct(p: Product): number {
+  let score = 0;
+  if (normalizeBarcodeString(p.barcode || '').length > 0) score += 120;
+  if ((p.packagingBarcodes?.length ?? 0) > 0) score += 20;
+  if ((Number(p.costPriceKhr) || 0) > 0) score += 80;
+  if ((Number(p.priceKhr) || 0) > 0) score += 25;
+  if ((p.variants?.length ?? 0) > 0) score += 20;
+  if ((p.recipe?.length ?? 0) > 0) score += 15;
+  if ((Number(p.stockQty) || 0) > 0) score += 10;
+  if (p.imageUrl && p.imageUrl.trim().length > 0) score += 5;
+  if (p.supplier && p.supplier.trim().length > 0) score += 3;
+  return score;
+}
+
+function scorePrimaryIngredient(ing: Ingredient, recipeRefCounts: Map<string, number>): number {
+  let score = 0;
+  if ((Number(ing.unitCostKhr) || 0) > 0) score += 100;
+  score += Math.min(60, (recipeRefCounts.get(ing.id) ?? 0) * 15);
+  if ((Number(ing.stockQty) || 0) > 0) score += 15;
+  if (ing.supplier && ing.supplier.trim().length > 0) score += 5;
+  return score;
+}
+
+export function detectDuplicateItems(
+  products: Product[],
+  ingredients: Ingredient[]
+): DuplicateAuditSummary {
+  const recipeRefCounts = new Map<string, number>();
+  for (const p of products) {
+    for (const r of p.recipe || []) {
+      recipeRefCounts.set(r.ingredientId, (recipeRefCounts.get(r.ingredientId) ?? 0) + 1);
+    }
+    for (const v of p.variants || []) {
+      for (const r of v.recipe || []) {
+        recipeRefCounts.set(r.ingredientId, (recipeRefCounts.get(r.ingredientId) ?? 0) + 1);
+      }
+    }
+  }
+
+  const prodBuckets = new Map<string, Product[]>();
+  for (const p of products) {
+    if (!p.active) continue;
+    const key = normalizeName(p.name);
+    if (!key) continue;
+    const arr = prodBuckets.get(key) || [];
+    arr.push(p);
+    prodBuckets.set(key, arr);
+  }
+
+  const productGroups: DuplicateGroupInfo[] = [];
+  for (const [normName, list] of prodBuckets.entries()) {
+    if (list.length <= 1) continue;
+    const sorted = [...list].sort((a, b) => {
+      const diff = scorePrimaryProduct(b) - scorePrimaryProduct(a);
+      if (diff !== 0) return diff;
+      return String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id));
+    });
+    const [primary, ...dups] = sorted;
+    const totalStockQty =
+      primary.productType === 'PREPARED_TO_ORDER'
+        ? 0
+        : Math.round(
+            sorted.reduce((sum, item) => sum + (Number(item.stockQty) || 0), 0) * 10000
+          ) / 10000;
+    productGroups.push({
+      normalizedName: normName,
+      displayName: primary.name,
+      kind: 'product',
+      count: sorted.length,
+      primaryId: primary.id,
+      duplicateIds: dups.map((d) => d.id),
+      totalStockQty,
+      unit: primary.unit || 'pcs',
+    });
+  }
+
+  const ingBuckets = new Map<string, Ingredient[]>();
+  for (const ing of ingredients) {
+    const key = normalizeName(ing.name);
+    if (!key) continue;
+    const arr = ingBuckets.get(key) || [];
+    arr.push(ing);
+    ingBuckets.set(key, arr);
+  }
+
+  const ingredientGroups: DuplicateGroupInfo[] = [];
+  for (const [normName, list] of ingBuckets.entries()) {
+    if (list.length <= 1) continue;
+    const sorted = [...list].sort((a, b) => {
+      const diff =
+        scorePrimaryIngredient(b, recipeRefCounts) - scorePrimaryIngredient(a, recipeRefCounts);
+      if (diff !== 0) return diff;
+      return String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id));
+    });
+    const [primary, ...dups] = sorted;
+    const totalStockQty =
+      Math.round(
+        sorted.reduce(
+          (sum, item) =>
+            sum + convertUnitQty(Number(item.stockQty) || 0, item.unit, primary.unit),
+          0
+        ) * 10000
+      ) / 10000;
+    ingredientGroups.push({
+      normalizedName: normName,
+      displayName: primary.name,
+      kind: 'ingredient',
+      count: sorted.length,
+      primaryId: primary.id,
+      duplicateIds: dups.map((d) => d.id),
+      totalStockQty,
+      unit: primary.unit,
+    });
+  }
+
+  const totalDuplicateRecords =
+    productGroups.reduce((sum, g) => sum + g.duplicateIds.length, 0) +
+    ingredientGroups.reduce((sum, g) => sum + g.duplicateIds.length, 0);
+
+  return {
+    productGroups,
+    ingredientGroups,
+    totalDuplicateRecords,
+    totalGroups: productGroups.length + ingredientGroups.length,
+  };
+}
+
 export interface RecordPurchaseInput {
   ingredientId: string;
   addedQty: number;
@@ -472,8 +639,11 @@ export interface StoreContextValue {
     rawCode: string,
     options?: { skipExternal?: boolean }
   ) => Promise<BarcodeResolutionResult>;
-  saveIngredient: (ingredient: Omit<Ingredient, 'id'> & { id?: string }) => Promise<string>;
+  saveIngredient: (
+    ingredient: Omit<Ingredient, 'id'> & { id?: string }
+  ) => Promise<SaveIngredientResult>;
   deleteIngredient: (ingredientId: string) => Promise<void>;
+  mergeDuplicateItems: () => Promise<MergeDuplicatesResult>;
   recordIngredientPurchase: (input: RecordPurchaseInput) => Promise<OperationResult>;
   recordStockPurchase: (input: RecordStockPurchaseInput) => Promise<OperationResult>;
   recordOpeningStock: (input: RecordOpeningStockInput) => Promise<OperationResult>;
@@ -1419,6 +1589,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const cur = latestRef.current;
       const existingProd = isEdit ? cur.products.find((p) => p.id === id) : undefined;
 
+      // Enforce canonical normalized name uniqueness across active products (and stock-tracked inventory)
+      const normName = normalizeName(productInput.name);
+      if (!normName) {
+        return { ok: false, error: 'Product name is required.' };
+      }
+      if (productInput.active !== false) {
+        const dupProduct = cur.products.find(
+          (p) => p.id !== id && p.active && normalizeName(p.name) === normName
+        );
+        if (dupProduct) {
+          return {
+            ok: false,
+            error: `"${dupProduct.name}" already exists in the product catalog. Edit or restock the existing item instead.`,
+          };
+        }
+        if (productInput.productType !== 'PREPARED_TO_ORDER') {
+          const dupIngredient = cur.ingredients.find(
+            (i) => normalizeName(i.name) === normName
+          );
+          if (dupIngredient) {
+            return {
+              ok: false,
+              error: `"${dupIngredient.name}" already exists in inventory. Edit or restock the existing item instead.`,
+            };
+          }
+        }
+      }
+
       // Prevent duplicate active barcode assignments across products, variants, and cartons
       const conflicts = findDuplicateBarcodeConflicts(
         {
@@ -1917,9 +2115,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 
   const saveIngredient = useCallback(
-    async (input: Omit<Ingredient, 'id'> & { id?: string }) => {
+    async (input: Omit<Ingredient, 'id'> & { id?: string }): Promise<SaveIngredientResult> => {
       const isEdit = Boolean(input.id);
       const id = input.id || generateId('ing');
+      const cur = latestRef.current;
+
+      // Enforce canonical normalized name uniqueness across inventory items
+      const normName = normalizeName(input.name);
+      if (!normName) {
+        return { ok: false, error: 'Ingredient name is required.' };
+      }
+      const dupIngredient = cur.ingredients.find(
+        (i) => i.id !== id && normalizeName(i.name) === normName
+      );
+      if (dupIngredient) {
+        return {
+          ok: false,
+          error: `"${dupIngredient.name}" already exists in inventory. Edit or restock the existing item instead.`,
+        };
+      }
+      const dupStockProduct = cur.products.find(
+        (p) =>
+          p.active &&
+          p.productType !== 'PREPARED_TO_ORDER' &&
+          normalizeName(p.name) === normName
+      );
+      if (dupStockProduct) {
+        return {
+          ok: false,
+          error: `"${dupStockProduct.name}" already exists in inventory. Edit or restock the existing item instead.`,
+        };
+      }
+
       const safeCategoryId =
         typeof input.categoryId === 'string' && input.categoryId.trim().length > 0
           ? sanitizeString(input.categoryId, 64)
@@ -1975,10 +2202,435 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           handleFirestoreError(err, isEdit ? OperationType.UPDATE : OperationType.CREATE, path);
         }
       }
-      return id;
+      return { ok: true, id, ingredient: clean };
     },
     [user, cloudWorkspaceId, activeMemberUids]
   );
+
+  // One-click safe legacy duplicate cleanup:
+  // Merges duplicate active products & ingredients sharing the same normalizedName into the
+  // primary record (preferring valid barcode & cost), repoints recipes, preserves all historical sales & Financial Reports.
+  const mergeDuplicateItems = useCallback(async (): Promise<MergeDuplicatesResult> => {
+    const cur = latestRef.current;
+    const audit = detectDuplicateItems(cur.products, cur.ingredients);
+
+    if (audit.totalDuplicateRecords === 0) {
+      return {
+        ok: true,
+        mergedProductGroups: 0,
+        removedProducts: 0,
+        mergedIngredientGroups: 0,
+        removedIngredients: 0,
+        updatedRecipes: 0,
+        mergedItems: [],
+      };
+    }
+
+    const nowIso = new Date().toISOString();
+    const ingMap = new Map(cur.ingredients.map((i) => [i.id, { ...i }]));
+    const prodMap = new Map(cur.products.map((p) => [p.id, normalizeProduct({ ...p })]));
+
+    const removedIngredientIds = new Set<string>();
+    const ingredientRemap = new Map<string, { primaryId: string; fromUnit: Ingredient['unit']; toUnit: Ingredient['unit'] }>();
+    const updatedIngredients = new Map<string, Ingredient>();
+    const mergedItems: string[] = [];
+
+    // 1. Merge duplicate ingredients
+    for (const group of audit.ingredientGroups) {
+      const primary = ingMap.get(group.primaryId);
+      if (!primary) continue;
+      const dups = group.duplicateIds
+        .map((id) => ingMap.get(id))
+        .filter((i): i is Ingredient => Boolean(i));
+      if (dups.length === 0) continue;
+
+      let combinedStock = Number(primary.stockQty) || 0;
+      let weightedCostNum =
+        combinedStock > 0 && primary.unitCostKhr > 0
+          ? combinedStock * primary.unitCostKhr
+          : 0;
+      let weightedCostDen =
+        combinedStock > 0 && primary.unitCostKhr > 0 ? combinedStock : 0;
+      let bestCost = Number(primary.unitCostKhr) || 0;
+      let bestReorder = Number(primary.reorderLevel) || 0;
+      let bestSupplier = primary.supplier || '';
+      let bestNameVi = primary.nameVi || primary.name;
+
+      for (const dup of dups) {
+        const convertedStock = convertUnitQty(Number(dup.stockQty) || 0, dup.unit, primary.unit);
+        combinedStock = Math.round((combinedStock + convertedStock) * 10000) / 10000;
+
+        // Convert duplicate unit cost into primary unit if compatible
+        const oneDupInPrimary = convertUnitQty(1, dup.unit, primary.unit);
+        const dupCostPerPrimaryUnit =
+          oneDupInPrimary > 0 && dup.unitCostKhr > 0
+            ? dup.unitCostKhr / oneDupInPrimary
+            : dup.unitCostKhr;
+
+        if (convertedStock > 0 && dupCostPerPrimaryUnit > 0) {
+          weightedCostNum += convertedStock * dupCostPerPrimaryUnit;
+          weightedCostDen += convertedStock;
+        }
+        if (bestCost <= 0 && dupCostPerPrimaryUnit > 0) {
+          bestCost = Math.round(dupCostPerPrimaryUnit * 100) / 100;
+        }
+        if ((Number(dup.reorderLevel) || 0) > bestReorder) {
+          bestReorder = Number(dup.reorderLevel) || 0;
+        }
+        if (!bestSupplier && dup.supplier) {
+          bestSupplier = dup.supplier;
+        }
+        if ((!bestNameVi || bestNameVi === primary.name) && dup.nameVi && dup.nameVi !== dup.name) {
+          bestNameVi = dup.nameVi;
+        }
+
+        removedIngredientIds.add(dup.id);
+        ingredientRemap.set(dup.id, {
+          primaryId: primary.id,
+          fromUnit: dup.unit,
+          toUnit: primary.unit,
+        });
+      }
+
+      const finalUnitCost =
+        weightedCostDen > 0
+          ? Math.round((weightedCostNum / weightedCostDen) * 100) / 100
+          : bestCost;
+
+      const mergedPrimary: Ingredient = {
+        ...primary,
+        nameVi: bestNameVi,
+        stockQty: clampNumber(combinedStock, -1000000, 100000000),
+        reorderLevel: clampNumber(bestReorder, 0, 100000000),
+        unitCostKhr: clampNumber(finalUnitCost, 0, 100000000),
+        supplier: sanitizeString(bestSupplier, 100),
+        updatedAt: nowIso,
+      };
+      ingMap.set(primary.id, mergedPrimary);
+      updatedIngredients.set(primary.id, mergedPrimary);
+      mergedItems.push(`${mergedPrimary.name} (${dups.length + 1} → 1)`);
+    }
+
+    // 2. Merge duplicate active products
+    const removedProductIds = new Set<string>();
+    const updatedProducts = new Map<string, Product>();
+
+    for (const group of audit.productGroups) {
+      const primary = prodMap.get(group.primaryId);
+      if (!primary) continue;
+      const dups = group.duplicateIds
+        .map((id) => prodMap.get(id))
+        .filter((p): p is Product => Boolean(p));
+      if (dups.length === 0) continue;
+
+      const isStockTracked = primary.productType !== 'PREPARED_TO_ORDER';
+      let combinedStock = isStockTracked ? Number(primary.stockQty) || 0 : 0;
+      let weightedCostNum =
+        isStockTracked && combinedStock > 0 && primary.costPriceKhr > 0
+          ? combinedStock * primary.costPriceKhr
+          : 0;
+      let weightedCostDen =
+        isStockTracked && combinedStock > 0 && primary.costPriceKhr > 0
+          ? combinedStock
+          : 0;
+      let bestCost = Number(primary.costPriceKhr) || 0;
+      let bestPrice = Number(primary.priceKhr) || 0;
+      let bestBarcode = normalizeBarcodeString(primary.barcode || '');
+      let bestSupplier = primary.supplier || '';
+      let bestBrand = primary.brand || '';
+      let bestImageUrl = primary.imageUrl || '';
+      let bestNameVi = primary.nameVi || primary.name;
+      let bestReorder = Number(primary.reorderLevel) || 0;
+      let mergedRecipe = [...(primary.recipe || [])];
+      const mergedPackBarcodes = [...(primary.packagingBarcodes || [])];
+      const seenPackCodes = new Set(
+        mergedPackBarcodes.map((pb) => normalizeBarcodeString(pb.barcode)).filter(Boolean)
+      );
+      if (bestBarcode) seenPackCodes.add(bestBarcode);
+
+      const mergedVariants = [...(primary.variants || [])];
+      const seenVariantNames = new Set(
+        mergedVariants.map((v) => normalizeName(v.name)).filter(Boolean)
+      );
+
+      for (const dup of dups) {
+        if (isStockTracked) {
+          const dupQty = Number(dup.stockQty) || 0;
+          combinedStock = Math.round((combinedStock + dupQty) * 10000) / 10000;
+          if (dupQty > 0 && dup.costPriceKhr > 0) {
+            weightedCostNum += dupQty * dup.costPriceKhr;
+            weightedCostDen += dupQty;
+          }
+        }
+        if (bestCost <= 0 && dup.costPriceKhr > 0) bestCost = dup.costPriceKhr;
+        if (bestPrice <= 0 && dup.priceKhr > 0) bestPrice = dup.priceKhr;
+
+        const dupBarcode = normalizeBarcodeString(dup.barcode || '');
+        if (!bestBarcode && dupBarcode) {
+          bestBarcode = dupBarcode;
+          seenPackCodes.add(dupBarcode);
+        }
+        for (const pb of dup.packagingBarcodes || []) {
+          const code = normalizeBarcodeString(pb.barcode);
+          if (code && !seenPackCodes.has(code) && mergedPackBarcodes.length < 10) {
+            seenPackCodes.add(code);
+            mergedPackBarcodes.push({ ...pb, barcode: code });
+          }
+        }
+        if (primary.productType === 'PREPARED_TO_ORDER') {
+          for (const v of dup.variants || []) {
+            const vKey = normalizeName(v.name);
+            if (vKey && !seenVariantNames.has(vKey) && mergedVariants.length < 10) {
+              seenVariantNames.add(vKey);
+              mergedVariants.push({ ...v });
+            }
+          }
+        }
+        if (mergedRecipe.length === 0 && (dup.recipe?.length ?? 0) > 0) {
+          mergedRecipe = dup.recipe.map((r) => ({ ...r }));
+        }
+        if (!bestSupplier && dup.supplier) bestSupplier = dup.supplier;
+        if (!bestBrand && dup.brand) bestBrand = dup.brand;
+        if (!bestImageUrl && dup.imageUrl) bestImageUrl = dup.imageUrl;
+        if ((!bestNameVi || bestNameVi === primary.name) && dup.nameVi && dup.nameVi !== dup.name) {
+          bestNameVi = dup.nameVi;
+        }
+        if ((Number(dup.reorderLevel) || 0) > bestReorder) {
+          bestReorder = Number(dup.reorderLevel) || 0;
+        }
+
+        removedProductIds.add(dup.id);
+      }
+
+      const finalCost =
+        weightedCostDen > 0 ? Math.round(weightedCostNum / weightedCostDen) : Math.round(bestCost);
+
+      const mergedPrimary = normalizeProduct({
+        ...primary,
+        nameVi: bestNameVi,
+        brand: bestBrand,
+        priceKhr: bestPrice,
+        costPriceKhr: finalCost,
+        barcode: bestBarcode,
+        packagingBarcodes: mergedPackBarcodes,
+        stockQty: isStockTracked ? combinedStock : 0,
+        reorderLevel: isStockTracked ? bestReorder : 0,
+        supplier: bestSupplier,
+        imageUrl: bestImageUrl,
+        recipe: mergedRecipe,
+        variants: mergedVariants,
+        updatedAt: nowIso,
+      });
+      prodMap.set(primary.id, mergedPrimary);
+      updatedProducts.set(primary.id, mergedPrimary);
+      mergedItems.push(`${mergedPrimary.name} (${dups.length + 1} → 1)`);
+    }
+
+    // 3. Repoint product/variant recipes that referenced removed duplicate ingredients
+    let updatedRecipes = 0;
+    const remapRecipeList = (
+      list: Product['recipe']
+    ): { changed: boolean; next: Product['recipe'] } => {
+      if (!list || list.length === 0 || ingredientRemap.size === 0) {
+        return { changed: false, next: list || [] };
+      }
+      let changed = false;
+      const byIng = new Map<string, { ingredientId: string; quantity: number; unit?: Ingredient['unit'] }>();
+      for (const row of list) {
+        const remap = ingredientRemap.get(row.ingredientId);
+        const targetId = remap ? remap.primaryId : row.ingredientId;
+        const targetIng = ingMap.get(targetId);
+        const rowUnit = row.unit || remap?.fromUnit || targetIng?.unit;
+        const targetUnit = targetIng?.unit || rowUnit;
+        const convertedQty =
+          rowUnit && targetUnit ? convertUnitQty(row.quantity, rowUnit, targetUnit) : row.quantity;
+        if (remap) changed = true;
+
+        const existing = byIng.get(targetId);
+        if (existing) {
+          changed = true;
+          existing.quantity = Math.round((existing.quantity + convertedQty) * 10000) / 10000;
+        } else {
+          byIng.set(targetId, {
+            ingredientId: targetId,
+            quantity: Math.round(convertedQty * 10000) / 10000,
+            ...(targetUnit ? { unit: targetUnit } : {}),
+          });
+        }
+      }
+      return { changed, next: Array.from(byIng.values()).slice(0, 25) };
+    };
+
+    if (ingredientRemap.size > 0) {
+      for (const [prodId, prod] of prodMap.entries()) {
+        if (removedProductIds.has(prodId)) continue;
+        const baseRes = remapRecipeList(prod.recipe);
+        let variantsChanged = false;
+        const nextVariants = (prod.variants || []).map((v) => {
+          const vRes = remapRecipeList(v.recipe);
+          if (vRes.changed) variantsChanged = true;
+          return vRes.changed ? { ...v, recipe: vRes.next } : v;
+        });
+        if (baseRes.changed || variantsChanged) {
+          updatedRecipes += 1;
+          const updatedProd = normalizeProduct({
+            ...prod,
+            recipe: baseRes.next,
+            variants: nextVariants,
+            updatedAt: nowIso,
+          });
+          prodMap.set(prodId, updatedProd);
+          updatedProducts.set(prodId, updatedProd);
+        }
+      }
+    }
+
+    const nextIngredients = cur.ingredients
+      .filter((i) => !removedIngredientIds.has(i.id))
+      .map((i) => ingMap.get(i.id) || i);
+    const nextProducts = cur.products
+      .filter((p) => !removedProductIds.has(p.id))
+      .map((p) => prodMap.get(p.id) || p);
+
+    // Rebuild barcode registry cleanly for affected products
+    const affectedProdIds = new Set<string>([
+      ...Array.from(removedProductIds),
+      ...Array.from(updatedProducts.keys()),
+    ]);
+    const removedBarcodeIds = new Set<string>();
+    for (const rec of cur.barcodeRegistry) {
+      if (affectedProdIds.has(rec.productId)) {
+        removedBarcodeIds.add(rec.id);
+      }
+    }
+    const newBarcodeRecords: BarcodeRegistryRecord[] = [];
+    for (const prod of updatedProducts.values()) {
+      if (removedProductIds.has(prod.id)) continue;
+      for (const rec of extractProductBarcodeRecords(prod)) {
+        newBarcodeRecords.push(rec);
+        removedBarcodeIds.delete(rec.id);
+      }
+    }
+    const nextBarcodeIds = new Set(newBarcodeRecords.map((r) => r.id));
+
+    setIngredients(nextIngredients);
+    setProducts(nextProducts);
+    setBarcodeRegistry((prev) => {
+      const kept = prev.filter(
+        (r) => !affectedProdIds.has(r.productId) && !nextBarcodeIds.has(r.id)
+      );
+      return [...newBarcodeRecords, ...kept];
+    });
+
+    if (user && cloudWorkspaceId) {
+      const uids = activeMemberUids();
+      const wsRoot = `workspaces/${cloudWorkspaceId}`;
+      type BatchOp = (batch: ReturnType<typeof writeBatch>) => void;
+      const ops: BatchOp[] = [];
+
+      for (const ing of updatedIngredients.values()) {
+        ops.push((b) =>
+          b.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ing.id), {
+            name: ing.name,
+            nameVi: ing.nameVi,
+            categoryId: ing.categoryId || UNCATEGORIZED_ID,
+            unit: ing.unit,
+            stockQty: ing.stockQty,
+            reorderLevel: ing.reorderLevel,
+            unitCostKhr: ing.unitCostKhr,
+            supplier: ing.supplier,
+            updatedAt: serverTimestamp(),
+          })
+        );
+      }
+      for (const delIngId of removedIngredientIds) {
+        ops.push((b) =>
+          b.delete(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', delIngId))
+        );
+      }
+      for (const prod of updatedProducts.values()) {
+        if (removedProductIds.has(prod.id)) continue;
+        ops.push((b) =>
+          b.update(doc(db, 'workspaces', cloudWorkspaceId, 'products', prod.id), {
+            ...productToFirestoreFields(prod),
+            updatedAt: serverTimestamp(),
+          })
+        );
+      }
+      for (const delProdId of removedProductIds) {
+        ops.push((b) =>
+          b.delete(doc(db, 'workspaces', cloudWorkspaceId, 'products', delProdId))
+        );
+      }
+      for (const delBcId of removedBarcodeIds) {
+        ops.push((b) =>
+          b.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', delBcId))
+        );
+      }
+      const existingRegMap = new Map(cur.barcodeRegistry.map((r) => [r.id, r]));
+      for (const rec of newBarcodeRecords) {
+        const existingRec = existingRegMap.get(rec.id);
+        const bcRef = doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', rec.id);
+        if (existingRec) {
+          ops.push((b) =>
+            b.update(
+              bcRef,
+              stripUndefined({
+                format: rec.format,
+                productId: rec.productId,
+                ...(rec.variantId ? { variantId: sanitizeString(rec.variantId, 64) } : {}),
+                packagingType: rec.packagingType,
+                label: sanitizeString(rec.label || 'Unit', 80),
+                unitsPerScan: clampNumber(Math.round(rec.unitsPerScan || 1), 1, 10000),
+                active: Boolean(rec.active),
+                source: rec.source,
+                updatedAt: serverTimestamp(),
+              })
+            )
+          );
+        } else {
+          ops.push((b) =>
+            b.set(bcRef, barcodeRecordToFirestoreDoc(rec, cloudWorkspaceId, uids, user.uid))
+          );
+        }
+      }
+
+      try {
+        const CHUNK_SIZE = 380;
+        for (let i = 0; i < ops.length; i += CHUNK_SIZE) {
+          const batch = writeBatch(db);
+          for (const op of ops.slice(i, i + CHUNK_SIZE)) {
+            op(batch);
+          }
+          await batch.commit();
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Cloud sync error while merging duplicates.';
+        console.error('[JuiceFlow] mergeDuplicateItems Firestore write error:', err);
+        return {
+          ok: false,
+          mergedProductGroups: audit.productGroups.length,
+          removedProducts: removedProductIds.size,
+          mergedIngredientGroups: audit.ingredientGroups.length,
+          removedIngredients: removedIngredientIds.size,
+          updatedRecipes,
+          mergedItems,
+          error: message,
+        };
+      }
+    }
+
+    return {
+      ok: true,
+      mergedProductGroups: audit.productGroups.length,
+      removedProducts: removedProductIds.size,
+      mergedIngredientGroups: audit.ingredientGroups.length,
+      removedIngredients: removedIngredientIds.size,
+      updatedRecipes,
+      mergedItems,
+    };
+  }, [user, cloudWorkspaceId, activeMemberUids]);
 
   const deleteIngredient = useCallback(
     async (ingredientId: string) => {
@@ -3678,6 +4330,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     lookupBarcode,
     saveIngredient,
     deleteIngredient,
+    mergeDuplicateItems,
     recordIngredientPurchase,
     recordStockPurchase,
     recordOpeningStock,

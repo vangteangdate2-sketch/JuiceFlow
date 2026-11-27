@@ -11,6 +11,8 @@ import {
   Layers,
   Package,
   PackageCheck,
+  PackagePlus,
+  Pencil,
   ScanBarcode,
   Search,
   SlidersHorizontal,
@@ -18,7 +20,7 @@ import {
   Wheat,
   X,
 } from 'lucide-react';
-import { useStore } from '../context/StoreContext';
+import { normalizeName, useStore } from '../context/StoreContext';
 import { useUndoToast } from '../context/UndoToastContext';
 import type {
   BarcodeFormat,
@@ -110,7 +112,21 @@ function computeStockProgressPct(stockQty: number, reorderLevel: number): number
   return Math.min(100, Math.max(6, Math.round((stockQty / fullRef) * 100)));
 }
 
-export const InventoryView: React.FC = () => {
+export interface PendingInventoryTarget {
+  kind: 'product' | 'ingredient';
+  id: string;
+  mode: 'restock' | 'edit';
+}
+
+interface InventoryViewProps {
+  pendingTarget?: PendingInventoryTarget | null;
+  onPendingTargetHandled?: () => void;
+}
+
+export const InventoryView: React.FC<InventoryViewProps> = ({
+  pendingTarget = null,
+  onPendingTargetHandled,
+}) => {
   const {
     settings,
     products,
@@ -221,6 +237,38 @@ export const InventoryView: React.FC = () => {
   const [ingReorder, setIngReorder] = useState('500');
   const [ingCost, setIngCost] = useState('10');
   const [ingSupplier, setIngSupplier] = useState('');
+  const [ingSaveError, setIngSaveError] = useState<string | null>(null);
+
+  // Live canonical duplicate guard for Add/Edit Ingredient modal
+  const ingDuplicateGuard = useMemo(() => {
+    if (!ingModalOpen) return null;
+    const norm = normalizeName(ingName);
+    if (!norm) return null;
+
+    const existingIng = ingredients.find(
+      (i) => i.id !== editingIng?.id && normalizeName(i.name) === norm
+    );
+    if (existingIng) {
+      return {
+        kind: 'ingredient' as const,
+        ingredient: existingIng,
+        displayName: isVi ? existingIng.nameVi || existingIng.name : existingIng.name,
+      };
+    }
+
+    const existingProd = products.find(
+      (p) => p.active && p.productType !== 'PREPARED_TO_ORDER' && normalizeName(p.name) === norm
+    );
+    if (existingProd) {
+      return {
+        kind: 'product' as const,
+        product: existingProd,
+        displayName: isVi ? existingProd.nameVi || existingProd.name : existingProd.name,
+      };
+    }
+
+    return null;
+  }, [ingModalOpen, ingName, ingredients, products, editingIng?.id, isVi]);
 
   // Stock-In / Quick Restock Purchase modal (supports all 3 tiers + pack/carton multiplication)
   const [purchaseTarget, setPurchaseTarget] = useState<StockItemTarget | null>(null);
@@ -595,7 +643,7 @@ export const InventoryView: React.FC = () => {
 
       if (item.sourceIngredient) {
         const ing = item.sourceIngredient;
-        await saveIngredient({
+        const res = await saveIngredient({
           id: ing.id,
           name: ing.name,
           nameVi: ing.nameVi,
@@ -607,6 +655,13 @@ export const InventoryView: React.FC = () => {
           supplier: ing.supplier,
           updatedAt: ing.updatedAt,
         });
+        if (!res.ok) {
+          showNotice(
+            'err',
+            res.error || (isVi ? 'Không thể đổi danh mục.' : 'Could not update category.')
+          );
+          return;
+        }
       } else if (item.sourceProduct) {
         const prod = item.sourceProduct;
         const res = await saveProduct({
@@ -667,6 +722,7 @@ export const InventoryView: React.FC = () => {
     setIngReorder(String(settings.lowStockDefault || 15));
     setIngCost('10');
     setIngSupplier('');
+    setIngSaveError(null);
     setIngModalOpen(true);
     window.requestAnimationFrame(() => ingNameInputRef.current?.focus());
   };
@@ -684,8 +740,53 @@ export const InventoryView: React.FC = () => {
     setIngReorder(String(ing.reorderLevel));
     setIngCost(String(ing.unitCostKhr));
     setIngSupplier(ing.supplier);
+    setIngSaveError(null);
     setIngModalOpen(true);
   };
+
+  // Handle cross-view restock/edit requests (e.g. from ProductFormModal duplicate guard)
+  useEffect(() => {
+    if (!pendingTarget) return;
+    if (pendingTarget.kind === 'ingredient') {
+      const ing = ingredients.find((i) => i.id === pendingTarget.id);
+      if (ing) {
+        setActiveTab('ingredients');
+        triggerHighlightItem(ing.id);
+        if (pendingTarget.mode === 'edit') {
+          openEditIngredient(ing);
+        } else {
+          openPurchaseModal(toTargetFromIngredient(ing));
+        }
+      }
+      onPendingTargetHandled?.();
+      return;
+    }
+
+    const prod = products.find((p) => p.id === pendingTarget.id);
+    if (prod) {
+      triggerHighlightItem(prod.id);
+      if (pendingTarget.mode === 'edit') {
+        setEditingStockProduct(prod);
+      } else if (prod.productType === 'PREPARED_STOCK') {
+        setActiveTab('prepared_stock');
+        openBatchPrepModal(prod);
+      } else if (prod.productType === 'PACKAGED') {
+        setActiveTab('packaged');
+        openPurchaseModal(toTargetFromProduct(prod));
+      } else {
+        setActiveTab('ingredients');
+        const label = isVi ? prod.nameVi || prod.name : prod.name;
+        showNotice(
+          'ok',
+          isVi
+            ? `"${label}" là món pha chế theo đơn — hãy nhập kho các nguyên liệu thô bên dưới.`
+            : `"${label}" is Made-to-Order — restock its raw ingredients below.`
+        );
+      }
+    }
+    onPendingTargetHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingTarget]);
 
   const handleCreateInlineIngCategory = async () => {
     const trimmed = newIngCategoryName.trim();
@@ -718,8 +819,9 @@ export const InventoryView: React.FC = () => {
 
   const submitIngredient = async (mode: 'close' | 'add_another' = 'close') => {
     const trimmedName = ingName.trim();
-    if (!trimmedName) return;
-    const savedId = await saveIngredient({
+    if (!trimmedName || ingDuplicateGuard) return;
+    setIngSaveError(null);
+    const res = await saveIngredient({
       id: editingIng?.id,
       name: trimmedName,
       nameVi: ingNameVi.trim() || trimmedName,
@@ -730,7 +832,14 @@ export const InventoryView: React.FC = () => {
       unitCostKhr: Math.max(0, Number(ingCost) || 0),
       supplier: ingSupplier.trim(),
     });
-    triggerHighlightItem(savedId);
+    if (!res.ok || !res.id) {
+      setIngSaveError(
+        res.error ||
+          (isVi ? 'Không thể lưu nguyên liệu (tên đã tồn tại).' : 'Could not save ingredient.')
+      );
+      return;
+    }
+    triggerHighlightItem(res.id);
 
     if (mode === 'add_another' && !editingIng) {
       showNoticeToast({
@@ -744,6 +853,7 @@ export const InventoryView: React.FC = () => {
       setIngNameVi('');
       setIngStock('0');
       setIngCost('10');
+      setIngSaveError(null);
       window.requestAnimationFrame(() => ingNameInputRef.current?.focus());
       return;
     }
@@ -2004,10 +2114,88 @@ export const InventoryView: React.FC = () => {
                   required
                   maxLength={100}
                   value={ingName}
-                  onChange={(e) => setIngName(e.target.value)}
-                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                  onChange={(e) => {
+                    setIngName(e.target.value);
+                    if (ingSaveError) setIngSaveError(null);
+                  }}
+                  className={`w-full h-11 px-3.5 text-sm border rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 ${
+                    ingDuplicateGuard
+                      ? 'border-amber-400 dark:border-amber-500/70 focus-visible:ring-amber-500'
+                      : 'border-stone-200 dark:border-[#24352C] focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
+                  }`}
                 />
               </div>
+
+              {ingDuplicateGuard && (
+                <div
+                  role="alert"
+                  className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/35 border border-amber-300 dark:border-amber-600/50 space-y-2.5"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-amber-950 dark:text-amber-200">
+                        {isVi
+                          ? `"${ingDuplicateGuard.displayName}" đã tồn tại`
+                          : `"${ingDuplicateGuard.displayName}" already exists`}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-amber-800 dark:text-amber-300/90 leading-relaxed">
+                        {ingDuplicateGuard.kind === 'ingredient'
+                          ? isVi
+                            ? `Đang có trong Nguyên liệu thô (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)}). Không thể tạo bản trùng để tránh tách tồn kho.`
+                            : `Found in Raw Ingredients (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)}). Duplicates are blocked so stock stays unified.`
+                          : isVi
+                            ? `Đang có trong Danh mục sản phẩm (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')}). Không thể tạo bản trùng.`
+                            : `Found in Product Catalog (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')}). Duplicates are blocked so stock stays unified.`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pl-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (ingDuplicateGuard.kind === 'ingredient') {
+                          openEditIngredient(ingDuplicateGuard.ingredient);
+                        } else {
+                          setIngModalOpen(false);
+                          setEditingStockProduct(ingDuplicateGuard.product);
+                        }
+                      }}
+                      className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-950 dark:text-amber-100 bg-white dark:bg-[#18251F] border border-amber-300 dark:border-amber-600/60 hover:bg-amber-100/80 dark:hover:bg-amber-900/40 rounded-lg transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      {isVi ? 'Sửa mục hiện có' : 'Edit Existing Item'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIngModalOpen(false);
+                        if (ingDuplicateGuard.kind === 'ingredient') {
+                          openPurchaseModal(toTargetFromIngredient(ingDuplicateGuard.ingredient));
+                        } else if (ingDuplicateGuard.product.productType === 'PREPARED_STOCK') {
+                          openBatchPrepModal(ingDuplicateGuard.product);
+                        } else {
+                          openPurchaseModal(toTargetFromProduct(ingDuplicateGuard.product));
+                        }
+                      }}
+                      className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors"
+                    >
+                      <PackagePlus className="w-3.5 h-3.5" />
+                      {isVi ? 'Nhập thêm tồn kho' : 'Restock Existing'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {ingSaveError && !ingDuplicateGuard && (
+                <div
+                  role="alert"
+                  className="p-3 rounded-lg bg-red-50 dark:bg-red-950/35 border border-red-200 dark:border-red-800/60 text-xs text-red-700 dark:text-red-300 flex items-start gap-2"
+                >
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{ingSaveError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.inventory.ingredientNameVi}
@@ -2185,17 +2373,17 @@ export const InventoryView: React.FC = () => {
                 {!editingIng && (
                   <button
                     type="button"
-                    disabled={!ingName.trim()}
+                    disabled={!ingName.trim() || Boolean(ingDuplicateGuard)}
                     onClick={() => void submitIngredient('add_another')}
-                    className="h-12 px-4 inline-flex items-center justify-center text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-4 inline-flex items-center justify-center text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap"
                   >
                     {isVi ? '+ Lưu & Thêm tiếp' : '+ Save & Add Another'}
                   </button>
                 )}
                 <button
                   type="submit"
-                  disabled={!ingName.trim()}
-                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                  disabled={!ingName.trim() || Boolean(ingDuplicateGuard)}
+                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap"
                 >
                   {t.common.save}
                 </button>
@@ -2853,6 +3041,32 @@ export const InventoryView: React.FC = () => {
             openPurchaseModal(toTargetFromProduct(newProd));
           }
         }}
+        onEditExisting={(prod) => {
+          setQuickRegisterOpen(false);
+          setUnknownStockBarcode(null);
+          setEditingStockProduct(prod);
+        }}
+        onRestockExisting={(prod) => {
+          setQuickRegisterOpen(false);
+          setUnknownStockBarcode(null);
+          if (prod.productType === 'PREPARED_STOCK') {
+            openBatchPrepModal(prod);
+          } else if (prod.productType === 'PACKAGED') {
+            openPurchaseModal(toTargetFromProduct(prod));
+          } else {
+            setActiveTab('ingredients');
+          }
+        }}
+        onEditExistingIngredient={(ing) => {
+          setQuickRegisterOpen(false);
+          setUnknownStockBarcode(null);
+          openEditIngredient(ing);
+        }}
+        onRestockExistingIngredient={(ing) => {
+          setQuickRegisterOpen(false);
+          setUnknownStockBarcode(null);
+          openPurchaseModal(toTargetFromIngredient(ing));
+        }}
         onClose={() => setQuickRegisterOpen(false)}
       />
 
@@ -2873,6 +3087,25 @@ export const InventoryView: React.FC = () => {
             'ok',
             isVi ? `Đã cập nhật "${displayName}".` : `Updated "${displayName}".`
           );
+        }}
+        onEditExisting={(prod) => setEditingStockProduct(prod)}
+        onRestockExisting={(prod) => {
+          setEditingStockProduct(null);
+          if (prod.productType === 'PREPARED_STOCK') {
+            openBatchPrepModal(prod);
+          } else if (prod.productType === 'PACKAGED') {
+            openPurchaseModal(toTargetFromProduct(prod));
+          } else {
+            setActiveTab('ingredients');
+          }
+        }}
+        onEditExistingIngredient={(ing) => {
+          setEditingStockProduct(null);
+          openEditIngredient(ing);
+        }}
+        onRestockExistingIngredient={(ing) => {
+          setEditingStockProduct(null);
+          openPurchaseModal(toTargetFromIngredient(ing));
         }}
         onClose={() => setEditingStockProduct(null)}
       />

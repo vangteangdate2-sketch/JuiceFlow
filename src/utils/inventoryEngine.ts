@@ -25,6 +25,7 @@ import {
   calculateRecipeCogs,
   convertUnitQty,
   generateId,
+  normalizeName,
   sanitizeString,
   todayIso,
 } from './format';
@@ -2045,6 +2046,15 @@ export function computeFinancialReport(params: {
   };
 
   const prodLookup = new Map(params.products.map((p) => [p.id, p]));
+  const prodByCanonicalName = new Map<string, Product>();
+  for (const p of params.products) {
+    const key = normalizeName(p.name);
+    if (!key) continue;
+    const existingCanonical = prodByCanonicalName.get(key);
+    if (!existingCanonical || (!existingCanonical.active && p.active)) {
+      prodByCanonicalName.set(key, p);
+    }
+  }
   const productPerfMap = new Map<string, ProductProfitRow>();
   const categoryPerfMap = new Map<string, CategoryProfitRow>();
 
@@ -2159,12 +2169,19 @@ export function computeFinancialReport(params: {
       const netQty = Math.max(0, item.quantity - retQty);
       unitsSoldNet += netQty;
 
-      const existing = productPerfMap.get(item.productId) || {
-        productId: item.productId,
+      const resolvedProd =
+        prodLookup.get(item.productId) ||
+        prodByCanonicalName.get(normalizeName(item.productName));
+      const canonicalPerfKey =
+        normalizeName(resolvedProd?.name || item.productName) || item.productId;
+
+      const existing = productPerfMap.get(canonicalPerfKey) || {
+        productId: resolvedProd?.id || item.productId,
         categoryId: catId,
-        name: item.productName,
-        nameVi: item.productNameVi,
-        productType: item.productType || prodLookup.get(item.productId)?.productType || 'PREPARED_TO_ORDER',
+        name: resolvedProd?.name || item.productName,
+        nameVi: resolvedProd?.nameVi || item.productNameVi,
+        productType:
+          item.productType || resolvedProd?.productType || 'PREPARED_TO_ORDER',
         netQty: 0,
         returnedQty: 0,
         netRevenueKhr: 0,
@@ -2181,7 +2198,7 @@ export function computeFinancialReport(params: {
         existing.netRevenueKhr > 0
           ? Math.round((existing.grossProfitKhr / existing.netRevenueKhr) * 100)
           : 0;
-      productPerfMap.set(item.productId, existing);
+      productPerfMap.set(canonicalPerfKey, existing);
     }
   }
 

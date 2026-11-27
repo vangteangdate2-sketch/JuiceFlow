@@ -33,12 +33,12 @@ import { ModalPortal } from './components/ModalPortal';
 import { DashboardView } from './views/DashboardView';
 import { SalesView } from './views/SalesView';
 import { ProductsView } from './views/ProductsView';
-import { InventoryView } from './views/InventoryView';
+import { InventoryView, type PendingInventoryTarget } from './views/InventoryView';
 import { ExpensesView } from './views/ExpensesView';
 import { ReportsView } from './views/ReportsView';
 import { SettingsView } from './views/SettingsView';
 import { loadSecurityConfig, saveSecurityConfig } from './lib/biometric';
-import type { AppTab, BiometricSecurityConfig } from './types';
+import type { AppTab, BiometricSecurityConfig, Ingredient, Product } from './types';
 
 const NAV_ITEMS: { id: AppTab; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'dashboard', icon: LayoutDashboard },
@@ -115,6 +115,8 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
   });
   const [justRefreshed, setJustRefreshed] = useState(false);
   const [pendingAction, setPendingAction] = useState<'add_expense' | 'add_product' | null>(null);
+  const [pendingInventoryTarget, setPendingInventoryTarget] =
+    useState<PendingInventoryTarget | null>(null);
   const [security, setSecurity] = useState<BiometricSecurityConfig>(() => loadSecurityConfig());
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     const cfg = loadSecurityConfig();
@@ -537,14 +539,47 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
           >
             <div key={activeTab} className="animate-view-enter">
               {activeTab === 'dashboard' && <DashboardView onNavigate={navigate} />}
-              {activeTab === 'sales' && <SalesView sidebarCollapsed={sidebarCollapsed} />}
+              {activeTab === 'sales' && (
+                <SalesView
+                  sidebarCollapsed={sidebarCollapsed}
+                  onRestockExistingProduct={(prod: Product) => {
+                    setPendingInventoryTarget({ kind: 'product', id: prod.id, mode: 'restock' });
+                    setActiveTab('inventory');
+                  }}
+                  onEditExistingIngredient={(ing: Ingredient) => {
+                    setPendingInventoryTarget({ kind: 'ingredient', id: ing.id, mode: 'edit' });
+                    setActiveTab('inventory');
+                  }}
+                  onRestockExistingIngredient={(ing: Ingredient) => {
+                    setPendingInventoryTarget({ kind: 'ingredient', id: ing.id, mode: 'restock' });
+                    setActiveTab('inventory');
+                  }}
+                />
+              )}
               {activeTab === 'products' && (
                 <ProductsView
                   autoOpenAdd={pendingAction === 'add_product'}
                   onAutoOpenHandled={() => setPendingAction(null)}
+                  onRestockExistingProduct={(prod: Product) => {
+                    setPendingInventoryTarget({ kind: 'product', id: prod.id, mode: 'restock' });
+                    setActiveTab('inventory');
+                  }}
+                  onEditExistingIngredient={(ing: Ingredient) => {
+                    setPendingInventoryTarget({ kind: 'ingredient', id: ing.id, mode: 'edit' });
+                    setActiveTab('inventory');
+                  }}
+                  onRestockExistingIngredient={(ing: Ingredient) => {
+                    setPendingInventoryTarget({ kind: 'ingredient', id: ing.id, mode: 'restock' });
+                    setActiveTab('inventory');
+                  }}
                 />
               )}
-              {activeTab === 'inventory' && <InventoryView />}
+              {activeTab === 'inventory' && (
+                <InventoryView
+                  pendingTarget={pendingInventoryTarget}
+                  onPendingTargetHandled={() => setPendingInventoryTarget(null)}
+                />
+              )}
               {activeTab === 'expenses' && (
                 <ExpensesView
                   autoOpenAdd={pendingAction === 'add_expense'}

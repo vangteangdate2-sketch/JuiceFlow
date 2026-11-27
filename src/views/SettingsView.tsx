@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Banknote,
   Building2,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   ChevronsDownUp,
@@ -12,10 +14,12 @@ import {
   Download,
   ExternalLink,
   Fingerprint,
+  GitMerge,
   Globe,
   HelpCircle,
   KeyRound,
   Link2,
+  Loader2,
   Lock,
   LogOut,
   Pencil,
@@ -29,7 +33,11 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { useStore } from '../context/StoreContext';
+import {
+  detectDuplicateItems,
+  useStore,
+  type MergeDuplicatesResult,
+} from '../context/StoreContext';
 import { useHints } from '../context/HintsContext';
 import type { BiometricSecurityConfig, CategoryColorKey, CategoryScope } from '../types';
 import {
@@ -146,6 +154,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     exportJsonBackup,
     importJsonBackup,
     resetDemoData,
+    mergeDuplicateItems,
   } = useStore();
 
   const isVi = settings.language === 'vi';
@@ -254,10 +263,70 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [pinInput, setPinInput] = useState('');
   const [bioMessage, setBioMessage] = useState('');
 
-  // Backup / Reset
+  // Backup / Reset & Duplicate Maintenance
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [backupNotice, setBackupNotice] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [mergingDuplicates, setMergingDuplicates] = useState(false);
+  const [mergeFeedback, setMergeFeedback] = useState<{
+    type: 'ok' | 'err';
+    text: string;
+    details?: string[];
+  } | null>(null);
+
+  const duplicateAudit = useMemo(
+    () => detectDuplicateItems(products, ingredients),
+    [products, ingredients]
+  );
+
+  const handleMergeDuplicates = async () => {
+    if (mergingDuplicates) return;
+    setMergingDuplicates(true);
+    setMergeFeedback(null);
+    try {
+      const res: MergeDuplicatesResult = await mergeDuplicateItems();
+      if (!res.ok) {
+        setMergeFeedback({
+          type: 'err',
+          text:
+            res.error ||
+            (isVi
+              ? 'Không thể gộp các mục trùng lặp lúc này.'
+              : 'Could not merge duplicate items right now.'),
+        });
+        return;
+      }
+      const totalRemoved = res.removedProducts + res.removedIngredients;
+      if (totalRemoved === 0) {
+        setMergeFeedback({
+          type: 'ok',
+          text: isVi
+            ? 'Không tìm thấy mục trùng lặp nào — Danh mục và Kho hàng đã sạch.'
+            : 'No duplicate items found — your catalog and inventory are already clean.',
+        });
+      } else {
+        setMergeFeedback({
+          type: 'ok',
+          text: isVi
+            ? `Đã gộp ${totalRemoved} bản ghi trùng lặp (${res.mergedProductGroups} nhóm sản phẩm, ${res.mergedIngredientGroups} nhóm nguyên liệu${
+                res.updatedRecipes > 0 ? `, cập nhật ${res.updatedRecipes} công thức` : ''
+              }). Lịch sử bán hàng và Báo cáo tài chính vẫn được giữ nguyên.`
+            : `Merged ${totalRemoved} duplicate ${
+                totalRemoved === 1 ? 'record' : 'records'
+              } (${res.mergedProductGroups} product ${
+                res.mergedProductGroups === 1 ? 'group' : 'groups'
+              }, ${res.mergedIngredientGroups} ingredient ${
+                res.mergedIngredientGroups === 1 ? 'group' : 'groups'
+              }${
+                res.updatedRecipes > 0 ? `, ${res.updatedRecipes} recipes updated` : ''
+              }). Historical sales and Financial Reports remain 100% intact.`,
+          details: res.mergedItems.slice(0, 6),
+        });
+      }
+    } finally {
+      setMergingDuplicates(false);
+    }
+  };
 
   const isHintVisible = useCallback(
     (hintId: string) => hintOverrides[hintId] ?? showHints,
@@ -2367,6 +2436,108 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     {backupNotice}
                   </p>
                 )}
+
+                {/* Data & Maintenance: Legacy Duplicate Cleanup */}
+                <div className="mt-4 pt-4 border-t border-stone-200/80 dark:border-[#24352C] space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                          {isVi
+                            ? 'Dữ liệu & Bảo trì — Gộp mục trùng lặp'
+                            : 'Data & Maintenance — Duplicate Protection'}
+                        </h4>
+                        {duplicateAudit.totalDuplicateRecords === 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-[#064E3B] text-[#0F5C43] dark:text-[#6EE7B7] border border-emerald-200/80 dark:border-[#10B981]/40">
+                            <CheckCircle2 className="w-3 h-3" />
+                            {isVi ? 'Không có trùng lặp' : 'All Clean'}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-500/40">
+                            <AlertTriangle className="w-3 h-3" />
+                            {isVi
+                              ? `${duplicateAudit.totalDuplicateRecords} bản ghi trùng (${duplicateAudit.totalGroups} nhóm)`
+                              : `${duplicateAudit.totalDuplicateRecords} duplicate ${
+                                  duplicateAudit.totalDuplicateRecords === 1 ? 'record' : 'records'
+                                } (${duplicateAudit.totalGroups} ${
+                                  duplicateAudit.totalGroups === 1 ? 'group' : 'groups'
+                                })`}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-stone-500 dark:text-[#94A39B] leading-relaxed">
+                        {isVi
+                          ? 'Phát hiện sản phẩm hoặc nguyên liệu trùng tên chuẩn hóa (bỏ qua khoảng trắng/chữ hoa), gộp tồn kho vào bản ghi chính (ưu tiên có giá vốn/mã vạch) và giữ nguyên 100% doanh số lịch sử.'
+                          : 'Detects products or inventory items sharing the same normalized name, merges stock into the primary record (preferring valid cost & barcode), and preserves all historical sales and Financial Reports.'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={mergingDuplicates}
+                      onClick={() => void handleMergeDuplicates()}
+                      className={`h-11 inline-flex items-center justify-center gap-2 px-4 text-sm font-semibold rounded-lg whitespace-nowrap shrink-0 transition-all duration-150 active:scale-[0.97] disabled:opacity-50 ${
+                        duplicateAudit.totalDuplicateRecords > 0
+                          ? 'text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399]'
+                          : 'text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
+                      }`}
+                    >
+                      {mergingDuplicates ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <GitMerge className="w-4 h-4" />
+                      )}
+                      {mergingDuplicates
+                        ? isVi
+                          ? 'Đang gộp...'
+                          : 'Merging...'
+                        : isVi
+                          ? 'Gộp mục trùng lặp'
+                          : 'Merge Duplicate Items'}
+                    </button>
+                  </div>
+
+                  {duplicateAudit.totalGroups > 0 && (
+                    <div className="p-3 rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-500/35 space-y-1.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-200">
+                        {isVi ? 'Nhóm trùng lặp được phát hiện:' : 'Detected Duplicate Groups:'}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[...duplicateAudit.productGroups, ...duplicateAudit.ingredientGroups]
+                          .slice(0, 8)
+                          .map((grp) => (
+                            <span
+                              key={`${grp.kind}-${grp.normalizedName}`}
+                              className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-white dark:bg-[#18251F] border border-amber-200 dark:border-amber-500/35 text-stone-800 dark:text-[#F1F5F3]"
+                            >
+                              <span className="font-semibold">{grp.displayName}</span>
+                              <span className="font-mono-num text-[11px] text-amber-800 dark:text-amber-300">
+                                ×{grp.count}
+                              </span>
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {mergeFeedback && (
+                    <div
+                      role="status"
+                      className={`p-3 rounded-lg border text-xs space-y-1 ${
+                        mergeFeedback.type === 'ok'
+                          ? 'bg-emerald-50/80 dark:bg-[#064E3B]/50 border-emerald-200 dark:border-[#10B981]/40 text-emerald-950 dark:text-[#D1FAE5]'
+                          : 'bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-500/40 text-red-800 dark:text-red-200'
+                      }`}
+                    >
+                      <p className="font-semibold">{mergeFeedback.text}</p>
+                      {mergeFeedback.details && mergeFeedback.details.length > 0 && (
+                        <p className="text-[11px] opacity-90">
+                          {mergeFeedback.details.join(' · ')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

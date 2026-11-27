@@ -30,6 +30,7 @@ import { useStore } from '../context/StoreContext';
 import { useUndoToast } from '../context/UndoToastContext';
 import type {
   ExternalBarcodePrefill,
+  Ingredient,
   Product,
   ProductType,
 } from '../types';
@@ -70,11 +71,17 @@ function hasLinkedRecipe(product: Product): boolean {
 interface ProductsViewProps {
   autoOpenAdd?: boolean;
   onAutoOpenHandled?: () => void;
+  onRestockExistingProduct?: (product: Product) => void;
+  onEditExistingIngredient?: (ingredient: Ingredient) => void;
+  onRestockExistingIngredient?: (ingredient: Ingredient) => void;
 }
 
 export const ProductsView: React.FC<ProductsViewProps> = ({
   autoOpenAdd = false,
   onAutoOpenHandled,
+  onRestockExistingProduct,
+  onEditExistingIngredient,
+  onRestockExistingIngredient,
 }) => {
   const {
     settings,
@@ -2067,6 +2074,29 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         initialFocusSection={initialFocusSection}
         onSave={saveProduct}
         onSaved={(savedProd) => triggerHighlightProduct(savedProd.id)}
+        onEditExisting={(prod) => {
+          setEditingProduct(prod);
+          setInitialFocusSection(null);
+          resetQuickScanSeed();
+        }}
+        onRestockExisting={(prod) => {
+          setModalOpen(false);
+          setInitialFocusSection(null);
+          resetQuickScanSeed();
+          onRestockExistingProduct?.(prod);
+        }}
+        onEditExistingIngredient={(ing) => {
+          setModalOpen(false);
+          setInitialFocusSection(null);
+          resetQuickScanSeed();
+          onEditExistingIngredient?.(ing);
+        }}
+        onRestockExistingIngredient={(ing) => {
+          setModalOpen(false);
+          setInitialFocusSection(null);
+          resetQuickScanSeed();
+          onRestockExistingIngredient?.(ing);
+        }}
         onClose={() => {
           setModalOpen(false);
           setInitialFocusSection(null);

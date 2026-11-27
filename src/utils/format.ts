@@ -113,6 +113,18 @@ export function sanitizeString(value: string, maxLength: number): string {
   return String(value ?? '').trim().slice(0, maxLength);
 }
 
+/**
+ * Canonical item name normalization for duplicate protection:
+ * trims surrounding whitespace, collapses internal whitespace runs to a single space,
+ * and lowercases so "  Coca-Cola   Can 330ml " and "coca-cola can 330ml" match identically.
+ */
+export function normalizeName(name: string): string {
+  return String(name ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
 export function clampNumber(value: number, min: number, max: number): number {
   const n = Number(value);
   if (!Number.isFinite(n)) return min;
