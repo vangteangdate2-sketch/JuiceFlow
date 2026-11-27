@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { useUndoToast } from '../context/UndoToastContext';
 import type {
   BarcodeFormat,
   ExternalBarcodePrefill,
@@ -50,6 +51,7 @@ import { useFilterVisibility } from '../hooks/useFilterVisibility';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { CategoryFilterPills } from '../components/CategoryFilterPills';
+import { FloatingActionBar } from '../components/FloatingActionBar';
 import { InfoHint } from '../components/InfoHint';
 
 const NEW_CATEGORY_OPTION_VALUE = '__new_category__';
@@ -132,6 +134,29 @@ export const InventoryView: React.FC = () => {
   } = useStore();
   const isVi = settings.language === 'vi';
   const today = todayIso();
+  const { showNoticeToast } = useUndoToast();
+  const ingNameInputRef = useRef<HTMLInputElement | null>(null);
+  const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
+
+  const triggerHighlightItem = (id: string) => {
+    setHighlightedItemId(id);
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightedItemId((prev) => (prev === id ? null : prev));
+      highlightTimerRef.current = null;
+    }, 2800);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current !== null) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
+    };
+  }, []);
 
   const inventoryCategories = useMemo(
     () => getCategoriesForScope(categories, 'inventory'),
@@ -540,6 +565,7 @@ export const InventoryView: React.FC = () => {
     setIngCost('10');
     setIngSupplier('');
     setIngModalOpen(true);
+    window.requestAnimationFrame(() => ingNameInputRef.current?.focus());
   };
 
   const openEditIngredient = (ing: Ingredient) => {
@@ -587,13 +613,13 @@ export const InventoryView: React.FC = () => {
     }
   };
 
-  const handleSaveIngredient = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!ingName.trim()) return;
-    await saveIngredient({
+  const submitIngredient = async (mode: 'close' | 'add_another' = 'close') => {
+    const trimmedName = ingName.trim();
+    if (!trimmedName) return;
+    const savedId = await saveIngredient({
       id: editingIng?.id,
-      name: ingName.trim(),
-      nameVi: ingNameVi.trim() || ingName.trim(),
+      name: trimmedName,
+      nameVi: ingNameVi.trim() || trimmedName,
       categoryId: ingCategoryId || UNCATEGORIZED_ID,
       unit: ingUnit,
       stockQty: Number(ingStock) || 0,
@@ -601,18 +627,52 @@ export const InventoryView: React.FC = () => {
       unitCostKhr: Math.max(0, Number(ingCost) || 0),
       supplier: ingSupplier.trim(),
     });
+    triggerHighlightItem(savedId);
+
+    if (mode === 'add_another' && !editingIng) {
+      showNoticeToast({
+        message: isVi ? `Đã thêm "${trimmedName}"` : `Saved "${trimmedName}"`,
+        detail: isVi
+          ? 'Sẵn sàng thêm nguyên liệu tiếp theo (đã giữ danh mục & đơn vị).'
+          : 'Ready for next ingredient (category & unit kept).',
+      });
+      // Reset per-item fields while retaining smart defaults (category, unit, reorder level, supplier)
+      setIngName('');
+      setIngNameVi('');
+      setIngStock('0');
+      setIngCost('10');
+      window.requestAnimationFrame(() => ingNameInputRef.current?.focus());
+      return;
+    }
+
     setIngModalOpen(false);
     showNotice(
       'ok',
       editingIng
         ? isVi
-          ? `Đã cập nhật nguyên liệu "${ingName.trim()}".`
-          : `Updated ingredient "${ingName.trim()}".`
+          ? `Đã cập nhật nguyên liệu "${trimmedName}".`
+          : `Updated ingredient "${trimmedName}".`
         : isVi
-          ? `Đã thêm nguyên liệu "${ingName.trim()}".`
-          : `Added ingredient "${ingName.trim()}".`
+          ? `Đã thêm nguyên liệu "${trimmedName}".`
+          : `Added ingredient "${trimmedName}".`
     );
   };
+
+  const handleSaveIngredient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitIngredient('close');
+  };
+
+  useEffect(() => {
+    if (!ingModalOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIngModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [ingModalOpen]);
 
   const handleSavePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1209,11 +1269,9 @@ export const InventoryView: React.FC = () => {
       )}
 
       {/* ================================================================== */}
-      {/* 2. 3-TIER NAVIGATION TABS + ALIGNED SEARCH & STATUS TOOLBAR        */}
+      {/* 2. STICKY 3-TIER NAVIGATION TABS + SEARCH & ACTION TOOLBAR         */}
       {/* ================================================================== */}
-      <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
-        {/* Single-Row Segmented Tabs + Search + Status Filter */}
-        <div className="p-4 border-b border-stone-200 dark:border-[#24352C] space-y-3">
+      <div className="sticky top-16 z-20 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border border-stone-200 dark:border-[#24352C] rounded-xl p-4 space-y-3 shadow-xs">
           {/* Row 1: 3-Tier Navigation Tabs + Secondary Stock History Tab */}
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
             <div className="overflow-x-auto pb-0.5 -mx-1 px-1">
@@ -1378,6 +1436,15 @@ export const InventoryView: React.FC = () => {
                 >
                   {isVi ? 'Đặt lại tất cả' : 'Reset All'}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={openNewIngredient}
+                  className="hidden sm:inline-flex items-center gap-1.5 h-11 px-4 text-xs sm:text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                >
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span>{t.inventory.addIngredient}</span>
+                </button>
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -1462,11 +1529,12 @@ export const InventoryView: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
+      </div>
 
-        {/* ================================================================== */}
-        {/* 3. SCANNABLE STOCK CARDS / ROWS                                    */}
-        {/* ================================================================== */}
+      {/* ================================================================== */}
+      {/* 3. SCANNABLE STOCK CARDS / ROWS                                    */}
+      {/* ================================================================== */}
+      <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
         {activeTab !== 'movements' && (
           <div>
             {filteredStockItems.length === 0 ? (
@@ -1538,10 +1606,16 @@ export const InventoryView: React.FC = () => {
                       : '',
                   ].filter(Boolean);
 
+                  const isHighlighted = highlightedItemId === item.id;
+
                   return (
                     <div
                       key={`${item.tier}-${item.id}`}
-                      className="px-4 sm:px-5 py-4 hover:bg-stone-50/70 dark:hover:bg-[#18251F]/60 transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                      className={`px-4 sm:px-5 py-4 transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+                        isHighlighted
+                          ? 'bg-emerald-50/90 dark:bg-[#064E3B]/45 ring-2 ring-inset ring-[#10B981]/60'
+                          : 'hover:bg-stone-50/70 dark:hover:bg-[#18251F]/60'
+                      }`}
                     >
                       {/* Left: Item Name, Tier Badge, InfoHint & Quiet Metadata */}
                       <div className="min-w-0 lg:w-[38%] space-y-1">
@@ -1758,9 +1832,14 @@ export const InventoryView: React.FC = () => {
       {/* MODAL 1: ADD / EDIT RAW INGREDIENT                                 */}
       {/* ================================================================== */}
       {ingModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
-            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
+        <div
+          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIngModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] flex flex-col bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-t-2xl sm:rounded-xl overflow-hidden shadow-xl">
+            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3 shrink-0">
               <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
                 {editingIng ? t.inventory.editIngredient : t.inventory.addIngredient}
               </h2>
@@ -1773,12 +1852,13 @@ export const InventoryView: React.FC = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <form onSubmit={handleSaveIngredient} className="p-6 space-y-4">
+            <form onSubmit={handleSaveIngredient} className="p-6 space-y-4 overflow-y-auto">
               <div>
                 <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                   {t.inventory.ingredientName}
                 </label>
                 <input
+                  ref={ingNameInputRef}
                   type="text"
                   required
                   maxLength={100}
@@ -1953,17 +2033,29 @@ export const InventoryView: React.FC = () => {
                   className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                 />
               </div>
-              <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex justify-end gap-3">
+              <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex flex-wrap items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIngModalOpen(false)}
-                  className="h-11 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
+                  className="h-12 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
                 >
                   {t.common.cancel}
                 </button>
+                {!editingIng && (
+                  <button
+                    type="button"
+                    disabled={!ingName.trim()}
+                    onClick={() => void submitIngredient('add_another')}
+                    className="h-12 px-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    <Plus className="w-4 h-4 shrink-0" />
+                    <span>{isVi ? 'Lưu & Thêm tiếp' : 'Save & Add Another'}</span>
+                  </button>
+                )}
                 <button
                   type="submit"
-                  className="h-11 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
+                  disabled={!ingName.trim()}
+                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
                 >
                   {t.common.save}
                 </button>
@@ -2600,6 +2692,21 @@ export const InventoryView: React.FC = () => {
           }
         }}
         onClose={() => setQuickRegisterOpen(false)}
+      />
+
+      {/* Bottom-Right Floating Action Button + Scroll-to-Top Pill */}
+      <FloatingActionBar
+        label={t.inventory.addIngredient}
+        topLabel={isVi ? 'Lên đầu' : 'Top'}
+        onAction={openNewIngredient}
+        hidden={
+          ingModalOpen ||
+          Boolean(purchaseTarget) ||
+          Boolean(batchProduct) ||
+          Boolean(adjustModalTarget) ||
+          scannerOpen ||
+          quickRegisterOpen
+        }
       />
     </div>
   );

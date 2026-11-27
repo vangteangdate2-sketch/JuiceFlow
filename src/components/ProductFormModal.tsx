@@ -38,6 +38,7 @@ import type {
   WorkspaceSettings,
 } from '../types';
 import { useStore, type SaveProductResult, type StoreContextValue } from '../context/StoreContext';
+import { useUndoToast } from '../context/UndoToastContext';
 import {
   getCategoriesForScope,
   getCategoryDisplayName,
@@ -168,7 +169,7 @@ interface ProductFormModalProps {
   settings: WorkspaceSettings;
   t: StoreContextValue['t'];
   onSave: (payload: ProductFormPayload) => Promise<SaveProductResult | void>;
-  onSaved?: (product: Product) => void;
+  onSaved?: (product: Product, meta?: { addAnother?: boolean }) => void;
   onClose: () => void;
 }
 
@@ -191,6 +192,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const isVi = settings.language === 'vi';
   const isEditing = Boolean(editingProduct);
   const exchangeRate = settings.posExchangeRate || settings.usdRate || 4000;
+  const { showNoticeToast } = useUndoToast();
 
   // Wizard step navigation
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
@@ -694,7 +696,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     }
   };
 
-  const handleSaveProduct = async () => {
+  const handleSaveProduct = async (mode: 'close' | 'add_another' = 'close') => {
     if (saving) return;
     setSaveError('');
     setStepError('');
@@ -762,12 +764,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       }))
       .filter((pb) => pb.barcode && pb.unitsPerPack >= 1);
 
+    const trimmedName = name.trim();
     setSaving(true);
     try {
       const result = await onSave({
         id: editingProduct?.id,
-        name: name.trim(),
-        nameVi: nameVi.trim() || name.trim(),
+        name: trimmedName,
+        nameVi: nameVi.trim() || trimmedName,
         brand: brand.trim(),
         productType,
         category,
@@ -799,6 +802,40 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       if (result?.product && onSaved) {
         onSaved(result.product);
       }
+
+      if (mode === 'add_another' && !isEditing) {
+        showNoticeToast({
+          message: isVi ? `Đã lưu "${trimmedName}"` : `Saved "${trimmedName}"`,
+          detail: isVi ? 'Sẵn sàng thêm sản phẩm tiếp theo' : 'Ready for next product',
+        });
+        // Reset per-product fields while keeping smart defaults (productType, category, unit, reorderLevel, supplier, active)
+        setName('');
+        setNameVi('');
+        setBrand('');
+        setBarcode('');
+        setBarcodeSource(undefined);
+        setPackagingBarcodes([]);
+        setStockQty('0');
+        setCostPriceKhr('0');
+        setMarkupPercent('');
+        setManualPriceOverride(false);
+        setPriceKhr(productType === 'PACKAGED' ? '' : '8000');
+        setImageUrl(DRINK_IMAGE_PRESETS[0].url);
+        setPhotoError('');
+        setRecipe([]);
+        setVariants([]);
+        setActiveVariantRecipeIdx(0);
+        setShowSecondaryNaming(false);
+        setShowMarkupCalc(false);
+        setPrefillBanner('none');
+        setExternalLookupNote('');
+        setStepError('');
+        setSaveError('');
+        setCurrentStep(1);
+        scrollBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
       onClose();
     } finally {
       setSaving(false);
@@ -810,7 +847,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     if (currentStep < 3) {
       handleNextStep();
     } else {
-      void handleSaveProduct();
+      void handleSaveProduct('close');
     }
   };
 
@@ -2838,7 +2875,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             </div>
 
             {/* Sticky Modal Footer (h-12 touch-friendly navigation & save) */}
-            <div className="shrink-0 border-t border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
+            <div className="shrink-0 border-t border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-2.5">
               {/* Left Action: Cancel (Step 1) or Back (Steps 2 & 3) */}
               <div className="flex items-center gap-2">
                 {currentStep === 1 ? (
@@ -2877,12 +2914,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               </div>
 
               {/* Right Action: Next Step or Save Product */}
-              <div className="flex items-center justify-end gap-2.5">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 {isEditing && currentStep < 3 && (
                   <button
                     type="button"
                     disabled={saving || barcodeConflicts.length > 0}
-                    onClick={() => void handleSaveProduct()}
+                    onClick={() => void handleSaveProduct('close')}
                     className="h-12 px-4 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
                   >
                     {saving ? (isVi ? 'Đang lưu...' : 'Saving...') : isVi ? 'Lưu ngay' : 'Save'}
@@ -2912,23 +2949,36 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 )}
 
                 {currentStep === 3 && (
-                  <button
-                    type="button"
-                    disabled={saving || barcodeConflicts.length > 0}
-                    onClick={() => void handleSaveProduct()}
-                    className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
-                  >
-                    {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                    <span>
-                      {isEditing
-                        ? isVi
-                          ? 'Lưu thay đổi'
-                          : 'Save Product'
-                        : isVi
-                          ? 'Lưu sản phẩm'
-                          : 'Save Product'}
-                    </span>
-                  </button>
+                  <>
+                    {!isEditing && (
+                      <button
+                        type="button"
+                        disabled={saving || barcodeConflicts.length > 0}
+                        onClick={() => void handleSaveProduct('add_another')}
+                        className="h-12 px-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                      >
+                        <Plus className="w-4 h-4 shrink-0" />
+                        <span>{isVi ? 'Lưu & Thêm tiếp' : 'Save & Add Another'}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={saving || barcodeConflicts.length > 0}
+                      onClick={() => void handleSaveProduct('close')}
+                      className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                      <span>
+                        {isEditing
+                          ? isVi
+                            ? 'Lưu thay đổi'
+                            : 'Save Product'
+                          : isVi
+                            ? 'Lưu sản phẩm'
+                            : 'Save Product'}
+                      </span>
+                    </button>
+                  </>
                 )}
               </div>
             </div>

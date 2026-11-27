@@ -56,6 +56,7 @@ import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { BarcodeLabelModal } from '../components/BarcodeLabelModal';
 import { CategoryFilterPills } from '../components/CategoryFilterPills';
 import { InfoHint } from '../components/InfoHint';
+import { FloatingActionBar } from '../components/FloatingActionBar';
 import { useFilterVisibility } from '../hooks/useFilterVisibility';
 
 const VIEW_MODE_STORAGE_KEY = 'juiceflow_products_view_mode';
@@ -120,6 +121,29 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [actionError, setActionError] = useState<string | null>(null);
   const inlinePhotoInputRef = useRef<HTMLInputElement | null>(null);
   const { showUndoToast } = useUndoToast();
+
+  // Brief highlight for newly saved product without disturbing scroll position
+  const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
+
+  const triggerHighlightProduct = (productId: string) => {
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+    setHighlightedProductId(productId);
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightedProductId((prev) => (prev === productId ? null : prev));
+      highlightTimerRef.current = null;
+    }, 2800);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current !== null) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
+    };
+  }, []);
 
   // Barcode Scan / Lookup & Label Studio state
   const [scanLookupOpen, setScanLookupOpen] = useState(false);
@@ -619,14 +643,6 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             )}
             {isVi ? 'Quét / Tra cứu mã' : 'Scan / Lookup'}
           </button>
-          <button
-            type="button"
-            onClick={openNew}
-            className="inline-flex items-center gap-2 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4" />
-            {isVi ? 'Thêm sản phẩm' : 'Add Product'}
-          </button>
         </div>
       </div>
 
@@ -664,8 +680,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         </div>
       )}
 
-      {/* Filter, Category, Search & View Switcher Toolbar (aligned to match InventoryView) */}
-      <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-4 space-y-3">
+      {/* Sticky Filter, Category, Search & Primary CTA Toolbar */}
+      <div className="sticky top-16 z-20 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border border-stone-200 dark:border-[#24352C] rounded-xl p-3.5 sm:p-4 space-y-3 shadow-xs">
         {/* Row 1: Segmented Product-Type Tabs + Right-Aligned Grid/Table Switcher */}
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           <div className="overflow-x-auto pb-0.5 -mx-1 px-1">
@@ -838,6 +854,15 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             >
               {isVi ? 'Đặt lại tất cả' : 'Reset All'}
             </button>
+
+            <button
+              type="button"
+              onClick={openNew}
+              className="inline-flex items-center gap-1.5 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>{isVi ? 'Thêm sản phẩm' : 'Add Product'}</span>
+            </button>
           </div>
         </div>
 
@@ -954,6 +979,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   const isToggling = Boolean(togglingActiveIds[product.id]);
                   const isUploading = uploadingPhotoId === product.id;
                   const isSelected = activeSelectedIds.has(product.id);
+                  const isHighlighted = highlightedProductId === product.id;
 
                   return (
                     <tr
@@ -966,9 +992,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       className={`transition-colors ${
                         selectMode ? 'cursor-pointer' : ''
                       } ${
-                        isSelected
-                          ? 'bg-emerald-50/75 dark:bg-[#064E3B]/35'
-                          : 'hover:bg-stone-50/70 dark:hover:bg-[#18251F]/70'
+                        isHighlighted
+                          ? 'bg-emerald-50/90 dark:bg-[#064E3B]/45 ring-2 ring-inset ring-[#10B981]/60'
+                          : isSelected
+                            ? 'bg-emerald-50/75 dark:bg-[#064E3B]/35'
+                            : 'hover:bg-stone-50/70 dark:hover:bg-[#18251F]/70'
                       }`}
                     >
                       {selectMode && (
@@ -1250,6 +1278,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             const isToggling = Boolean(togglingActiveIds[product.id]);
             const isUploading = uploadingPhotoId === product.id;
             const isSelected = activeSelectedIds.has(product.id);
+            const isHighlighted = highlightedProductId === product.id;
 
             return (
               <div
@@ -1259,12 +1288,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   if ((e.target as HTMLElement).closest('button, select, input, a')) return;
                   toggleSelectItem(product.id);
                 }}
-                className={`group bg-white dark:bg-[#131D18] rounded-xl overflow-hidden flex flex-col justify-between h-full transition-all ${
+                className={`group rounded-xl overflow-hidden flex flex-col justify-between h-full transition-all ${
                   selectMode ? 'cursor-pointer' : ''
                 } ${
-                  isSelected
-                    ? 'border-2 border-[#0F5C43] ring-2 ring-[#0F5C43]/20 dark:border-[#10B981] dark:ring-[#10B981]/25'
-                    : 'border border-stone-200 dark:border-[#24352C]'
+                  isHighlighted
+                    ? 'bg-emerald-50/50 dark:bg-[#064E3B]/30 border-2 border-[#10B981] ring-2 ring-[#10B981]/35'
+                    : isSelected
+                      ? 'bg-white dark:bg-[#131D18] border-2 border-[#0F5C43] ring-2 ring-[#0F5C43]/20 dark:border-[#10B981] dark:ring-[#10B981]/25'
+                      : 'bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C]'
                 }`}
               >
                 <div>
@@ -1835,6 +1866,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         initialNotFoundExternally={quickNotFoundExternally}
         initialFocusSection={initialFocusSection}
         onSave={saveProduct}
+        onSaved={(savedProd) => triggerHighlightProduct(savedProd.id)}
         onClose={() => {
           setModalOpen(false);
           setInitialFocusSection(null);
@@ -1862,6 +1894,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         shopName={settings.name}
         isVi={isVi}
         onClose={() => setLabelProduct(null)}
+      />
+
+      {/* Floating Add Product FAB + Scroll-to-Top Pill */}
+      <FloatingActionBar
+        label={isVi ? 'Thêm sản phẩm' : 'Add Product'}
+        topLabel={isVi ? 'Lên đầu' : 'Top'}
+        onAction={openNew}
+        hidden={modalOpen || scanLookupOpen || Boolean(labelProduct) || selectMode}
       />
     </div>
   );

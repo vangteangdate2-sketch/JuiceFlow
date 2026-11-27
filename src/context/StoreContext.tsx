@@ -472,7 +472,7 @@ export interface StoreContextValue {
     rawCode: string,
     options?: { skipExternal?: boolean }
   ) => Promise<BarcodeResolutionResult>;
-  saveIngredient: (ingredient: Omit<Ingredient, 'id'> & { id?: string }) => Promise<void>;
+  saveIngredient: (ingredient: Omit<Ingredient, 'id'> & { id?: string }) => Promise<string>;
   deleteIngredient: (ingredientId: string) => Promise<void>;
   recordIngredientPurchase: (input: RecordPurchaseInput) => Promise<OperationResult>;
   recordStockPurchase: (input: RecordStockPurchaseInput) => Promise<OperationResult>;
@@ -490,7 +490,7 @@ export interface StoreContextValue {
       linkedIngredientId?: string;
       recordedBy?: string;
     }
-  ) => Promise<void>;
+  ) => Promise<string>;
   deleteExpense: (expenseId: string) => Promise<void>;
   startQuickCloudSync: () => Promise<CloudAuthResult>;
   signInWithGoogle: () => Promise<CloudAuthResult>;
@@ -1975,6 +1975,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           handleFirestoreError(err, isEdit ? OperationType.UPDATE : OperationType.CREATE, path);
         }
       }
+      return id;
     },
     [user, cloudWorkspaceId, activeMemberUids]
   );
@@ -3044,6 +3045,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           handleFirestoreError(err, isEdit ? OperationType.UPDATE : OperationType.CREATE, path);
         }
       }
+      return id;
     },
     [user, cloudWorkspaceId, activeMemberUids]
   );

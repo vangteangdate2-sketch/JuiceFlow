@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { RotateCcw, X } from 'lucide-react';
+import { CheckCircle2, RotateCcw, X } from 'lucide-react';
 import { useStore } from './StoreContext';
 
 export interface UndoToastOptions {
@@ -9,17 +9,24 @@ export interface UndoToastOptions {
   onUndo: () => void | Promise<void>;
 }
 
-interface ActiveUndoToast {
+export interface NoticeToastOptions {
+  message: string;
+  detail?: string;
+  durationMs?: number;
+}
+
+interface ActiveToast {
   id: number;
   message: string;
   detail?: string;
   durationMs: number;
   expiresAt: number;
-  onUndo: () => void | Promise<void>;
+  onUndo?: () => void | Promise<void>;
 }
 
 interface UndoToastContextValue {
   showUndoToast: (options: UndoToastOptions) => void;
+  showNoticeToast: (options: NoticeToastOptions) => void;
   dismissUndoToast: () => void;
 }
 
@@ -29,7 +36,7 @@ export const UndoToastProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { settings, t } = useStore();
   const isVi = settings?.language === 'vi';
 
-  const [toast, setToast] = useState<ActiveUndoToast | null>(null);
+  const [toast, setToast] = useState<ActiveToast | null>(null);
   const [remainingSec, setRemainingSec] = useState(5);
   const [undoing, setUndoing] = useState(false);
 
@@ -77,12 +84,29 @@ export const UndoToastProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [clearTimers]
   );
 
+  const showNoticeToast = useCallback(
+    ({ message, detail, durationMs = 2800 }: NoticeToastOptions) => {
+      clearTimers();
+      const id = ++idCounterRef.current;
+      const expiresAt = Date.now() + durationMs;
+
+      setUndoing(false);
+      setToast({ id, message, detail, durationMs, expiresAt });
+
+      timeoutRef.current = window.setTimeout(() => {
+        clearTimers();
+        setToast((prev) => (prev && prev.id === id ? null : prev));
+      }, durationMs);
+    },
+    [clearTimers]
+  );
+
   useEffect(() => {
     return () => clearTimers();
   }, [clearTimers]);
 
   const handleUndo = async () => {
-    if (!toast || undoing) return;
+    if (!toast || !toast.onUndo || undoing) return;
     const action = toast.onUndo;
     setUndoing(true);
     clearTimers();
@@ -95,33 +119,48 @@ export const UndoToastProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   return (
-    <UndoToastContext.Provider value={{ showUndoToast, dismissUndoToast }}>
+    <UndoToastContext.Provider value={{ showUndoToast, showNoticeToast, dismissUndoToast }}>
       {children}
 
       {toast && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-[84px] lg:bottom-5 right-4 left-4 sm:left-auto sm:min-w-[360px] sm:max-w-md z-50 bg-stone-900 dark:bg-[#18251F] text-white dark:text-[#F1F5F3] border border-stone-700 dark:border-[#344B3F] rounded-xl px-4 py-3 shadow-lg flex items-center justify-between gap-3.5 print:hidden"
+          className="fixed bottom-[84px] lg:bottom-5 right-4 left-4 sm:left-auto sm:min-w-[320px] sm:max-w-md z-[60] bg-stone-900 dark:bg-[#18251F] text-white dark:text-[#F1F5F3] border border-stone-700 dark:border-[#344B3F] rounded-xl px-4 py-3 shadow-xl flex items-center justify-between gap-3.5 print:hidden"
         >
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{toast.message}</p>
-            <p className="text-xs text-stone-400 dark:text-[#94A39B] font-mono-num truncate mt-0.5">
-              {toast.detail ? `${toast.detail} · ` : ''}
-              {isVi ? `Hoàn tác (${remainingSec}s)` : `Undo (${remainingSec}s)`}
-            </p>
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            {!toast.onUndo && (
+              <CheckCircle2 className="w-4 h-4 text-[#34D399] shrink-0" aria-hidden="true" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium truncate">{toast.message}</p>
+              {toast.onUndo ? (
+                <p className="text-xs text-stone-400 dark:text-[#94A39B] font-mono-num truncate mt-0.5">
+                  {toast.detail ? `${toast.detail} · ` : ''}
+                  {isVi ? `Hoàn tác (${remainingSec}s)` : `Undo (${remainingSec}s)`}
+                </p>
+              ) : (
+                toast.detail && (
+                  <p className="text-xs text-stone-400 dark:text-[#94A39B] truncate mt-0.5">
+                    {toast.detail}
+                  </p>
+                )
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => void handleUndo()}
-              disabled={undoing}
-              className="h-11 px-3.5 inline-flex items-center gap-1.5 rounded-lg bg-[#10B981] hover:bg-[#34D399] text-[#042419] text-xs font-bold transition-colors whitespace-nowrap"
-            >
-              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-              <span>{isVi ? 'Hoàn tác' : 'Undo'}</span>
-            </button>
+            {toast.onUndo && (
+              <button
+                type="button"
+                onClick={() => void handleUndo()}
+                disabled={undoing}
+                className="h-11 px-3.5 inline-flex items-center gap-1.5 rounded-lg bg-[#10B981] hover:bg-[#34D399] text-[#042419] text-xs font-bold transition-colors whitespace-nowrap"
+              >
+                <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                <span>{isVi ? 'Hoàn tác' : 'Undo'}</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={dismissUndoToast}
