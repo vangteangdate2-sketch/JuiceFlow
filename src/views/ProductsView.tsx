@@ -43,6 +43,7 @@ import {
   getCategoriesForScope,
   getCategoryById,
   getCategoryDisplayName,
+  getProductTypeBadgeClass,
   resolveProductCategoryId,
   UNCATEGORIZED_ID,
 } from '../utils/categories';
@@ -60,16 +61,6 @@ function hasLinkedRecipe(product: Product): boolean {
     return product.variants.some((v) => v.recipe.length > 0);
   }
   return product.recipe.length > 0;
-}
-
-function getProductTypeBadgeClass(productType: ProductType): string {
-  if (productType === 'PREPARED_TO_ORDER') {
-    return 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-[#064E3B]/60 dark:text-[#6EE7B7] dark:border-[#10B981]/30';
-  }
-  if (productType === 'PREPARED_STOCK') {
-    return 'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-500/35';
-  }
-  return 'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-500/35';
 }
 
 interface ProductsViewProps {

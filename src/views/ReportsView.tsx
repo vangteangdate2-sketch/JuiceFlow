@@ -43,6 +43,7 @@ import {
   getCategoriesForScope,
   getCategoryById,
   getCategoryDisplayName,
+  getProductTypeBadgeClass,
 } from '../utils/categories';
 import { useTheme } from '../hooks/useTheme';
 import { CategoryFilterPills } from '../components/CategoryFilterPills';
@@ -1627,16 +1628,24 @@ export const ReportsView: React.FC = () => {
                         <p className="font-medium text-stone-900 dark:text-[#F1F5F3]">
                           {isVi ? row.nameVi || row.name : row.name}
                         </p>
-                        <p className="text-[11px] text-stone-500 dark:text-[#94A39B]">
-                          {getCategoryDisplayName(
-                            getCategoryById(row.categoryId, categories),
-                            isVi
-                          )}{' '}
-                          · {t.productTypes[row.productType]}
-                          {row.returnedQty > 0
-                            ? ` · ${row.returnedQty} ${isVi ? 'đã trả' : 'returned'}`
-                            : ''}
-                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500 dark:text-[#94A39B]">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
+                              row.productType
+                            )}`}
+                          >
+                            {t.productTypes[row.productType]}
+                          </span>
+                          <span>
+                            {getCategoryDisplayName(
+                              getCategoryById(row.categoryId, categories),
+                              isVi
+                            )}
+                            {row.returnedQty > 0
+                              ? ` · ${row.returnedQty} ${isVi ? 'đã trả' : 'returned'}`
+                              : ''}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-3 px-3 text-right font-mono-num text-stone-700 dark:text-[#D5DFDA]">
                         {row.netQty}

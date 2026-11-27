@@ -1,4 +1,11 @@
-import type { CategoryItem, CategoryScope, Ingredient, Product, SaleItem } from '../types';
+import type {
+  CategoryItem,
+  CategoryScope,
+  Ingredient,
+  Product,
+  ProductType,
+  SaleItem,
+} from '../types';
 
 export const UNCATEGORIZED_ID = 'uncategorized';
 
@@ -258,4 +265,49 @@ export function resolveSaleItemCategoryId(
     return item.categoryId;
   }
   return UNCATEGORIZED_ID;
+}
+
+/**
+ * Unified color-coded pill styling for ProductType across POS, Products, Inventory, and Reports:
+ * - PREPARED_TO_ORDER (Made-to-Order): Emerald
+ * - PACKAGED (Packaged Goods): Sky Blue
+ * - PREPARED_STOCK (Prepared Stock / Batch): Purple
+ */
+export function getProductTypeBadgeClass(productType: ProductType): string {
+  if (productType === 'PREPARED_TO_ORDER') {
+    return 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-[#064E3B]/60 dark:text-[#6EE7B7] dark:border-[#10B981]/30';
+  }
+  if (productType === 'PREPARED_STOCK') {
+    return 'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-500/35';
+  }
+  return 'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-500/35';
+}
+
+export function getProductTypeDotClass(productType: ProductType): string {
+  if (productType === 'PREPARED_TO_ORDER') {
+    return 'bg-emerald-600 dark:bg-[#10B981]';
+  }
+  if (productType === 'PREPARED_STOCK') {
+    return 'bg-purple-600 dark:bg-purple-400';
+  }
+  return 'bg-sky-600 dark:bg-sky-400';
+}
+
+export function getProductTypeFilterPillClass(
+  productType: 'ALL' | ProductType,
+  active: boolean
+): string {
+  if (!active) {
+    return 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]';
+  }
+  if (productType === 'PREPARED_TO_ORDER') {
+    return 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/50 font-semibold';
+  }
+  if (productType === 'PREPARED_STOCK') {
+    return 'bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/75 dark:text-purple-200 dark:border-purple-400/50 font-semibold';
+  }
+  if (productType === 'PACKAGED') {
+    return 'bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950/75 dark:text-sky-200 dark:border-sky-400/50 font-semibold';
+  }
+  return 'bg-[#E6F2ED] text-[#0D5C3E] border-[#0D5C3E]/30 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/45 font-semibold';
 }

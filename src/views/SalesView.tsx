@@ -58,7 +58,13 @@ import { BarcodeScanner, type BarcodeScanSource } from '../components/BarcodeSca
 import { ReceiptModal } from '../components/ReceiptModal';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { CategoryFilterPills } from '../components/CategoryFilterPills';
-import { getCategoriesForScope, resolveProductCategoryId } from '../utils/categories';
+import {
+  getCategoriesForScope,
+  getProductTypeBadgeClass,
+  getProductTypeDotClass,
+  getProductTypeFilterPillClass,
+  resolveProductCategoryId,
+} from '../utils/categories';
 
 interface CartEntry {
   key: string; // `${productId}::${variantId || ''}`
@@ -875,27 +881,38 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       allLabel={t.common.all}
                     />
 
-                    {/* Row 2: Unified Soft-Green Item Type Pills (h-11 = 44px) */}
+                    {/* Row 2: Color-Coded Item Type Pills matching Inventory & Products (h-11 = 44px) */}
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="text-[11px] font-semibold text-stone-500 dark:text-[#94A39B] w-16 shrink-0">
                         {isVi ? 'Loại hàng' : 'Item Type'}
                       </span>
                       <div className="flex flex-nowrap items-center gap-2 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {(['ALL', 'PREPARED_TO_ORDER', 'PACKAGED', 'PREPARED_STOCK'] as const).map(
-                          (pt) => (
-                            <button
-                              key={pt}
-                              type="button"
-                              onClick={() => setTypeFilter(pt)}
-                              className={`h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${
-                                typeFilter === pt
-                                  ? 'bg-[#E6F2ED] text-[#0D5C3E] border-[#0D5C3E]/30 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/45 font-semibold'
-                                  : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
-                              }`}
-                            >
-                              {pt === 'ALL' ? t.common.all : t.productTypes[pt]}
-                            </button>
-                          )
+                          (pt) => {
+                            const active = typeFilter === pt;
+                            return (
+                              <button
+                                key={pt}
+                                type="button"
+                                onClick={() => setTypeFilter(pt)}
+                                aria-pressed={active}
+                                className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${getProductTypeFilterPillClass(
+                                  pt,
+                                  active
+                                )}`}
+                              >
+                                {pt !== 'ALL' && (
+                                  <span
+                                    className={`w-2 h-2 rounded-full shrink-0 ${getProductTypeDotClass(
+                                      pt
+                                    )}`}
+                                    aria-hidden="true"
+                                  />
+                                )}
+                                <span>{pt === 'ALL' ? t.common.all : t.productTypes[pt]}</span>
+                              </button>
+                            );
+                          }
                         )}
                       </div>
                     </div>
@@ -992,10 +1009,20 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                       </div>
                       <div className="p-3">
                         <div className="flex items-center justify-between gap-2 text-[11px]">
-                          <span className="text-stone-500 dark:text-[#94A39B] truncate">
-                            {t.productTypes[product.productType] || product.productType}
-                            {hasMultiVariants ? ` · ${productVariants.length} sizes` : ''}
-                          </span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
+                                product.productType
+                              )}`}
+                            >
+                              {t.productTypes[product.productType] || product.productType}
+                            </span>
+                            {hasMultiVariants && (
+                              <span className="text-stone-500 dark:text-[#94A39B] truncate">
+                                {productVariants.length} {isVi ? 'cỡ' : 'sizes'}
+                              </span>
+                            )}
+                          </div>
                           {atStockLimit ? (
                             <span className="font-mono-num font-semibold text-amber-700 dark:text-amber-400 shrink-0">
                               {isVi ? 'Đạt giới hạn' : 'Max limit'}
