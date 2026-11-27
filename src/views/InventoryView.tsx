@@ -1002,18 +1002,18 @@ export const InventoryView: React.FC = () => {
           aria-label={isVi ? 'Cần xử lý hôm nay' : 'Needs Attention Today'}
           className="needs-attention-container bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden"
         >
-          {/* Collapsible Strip Header */}
-          <div className="px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3 bg-stone-50/80 dark:bg-[#16231C] border-b border-stone-200 dark:border-[#24352C]">
+          {/* Collapsible Strip Header (aligned with DashboardView Needs Restock header) */}
+          <div className="px-5 py-3.5 border-b border-stone-200 dark:border-[#24352C] flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => setAttentionExpanded((prev) => !prev)}
               aria-expanded={attentionExpanded}
-              className="min-h-[44px] inline-flex items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981] rounded-lg pr-2"
+              className="min-h-[44px] inline-flex items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981] rounded-lg pr-2"
             >
               <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <span className="font-display text-sm sm:text-base font-bold text-stone-900 dark:text-[#F1F5F3]">
+              <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3]">
                 {isVi ? 'Cần xử lý hôm nay' : 'Needs Attention Today'}
-              </span>
+              </h2>
               <span className="font-mono-num text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200">
                 {attentionItems.combined.length}
               </span>
@@ -1089,17 +1089,17 @@ export const InventoryView: React.FC = () => {
             )}
           </div>
 
-          {/* Priority Action Cards — Unified Grid matching DashboardView Needs Restock */}
+          {/* Priority Action Cards — Uniform Grid matching DashboardView Needs Restock */}
           {attentionExpanded && (
             <div className="p-4 sm:p-5">
               {visibleAttentionItems.length === 0 ? (
-                <p className="text-xs text-stone-500 dark:text-[#94A39B] py-3 text-center">
+                <p className="text-xs text-stone-500 dark:text-[#94A39B] py-4 text-center">
                   {isVi
                     ? 'Không có mặt hàng nào trong nhóm cảnh báo này.'
                     : 'No items in this alert bucket right now.'}
                 </p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch">
                   {visibleAttentionItems.map((item) => {
                     const tierMeta = getTierMeta(item.tier);
                     const isOut = item.status === 'out';
@@ -1117,12 +1117,12 @@ export const InventoryView: React.FC = () => {
                     return (
                       <div
                         key={`attn-${item.tier}-${item.id}`}
-                        className="p-4 rounded-xl border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#0F1814] hover:border-stone-300 dark:hover:border-[#344B3F] transition-colors flex items-center justify-between gap-3.5"
+                        className="h-full p-4 rounded-xl border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#0F1814] hover:border-stone-300 dark:hover:border-[#344B3F] transition-colors flex items-center justify-between gap-3.5"
                       >
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="min-w-0 flex-1 flex flex-col justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
                             <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
+                              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border whitespace-nowrap shrink-0 ${
                                 isOut
                                   ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/70 dark:text-red-200 dark:border-red-500/40'
                                   : isPreparedBucket
@@ -1168,7 +1168,7 @@ export const InventoryView: React.FC = () => {
                               >
                                 {formatQty(item.stockQty, item.unit)}
                               </strong>
-                              <span className="text-[11px] text-stone-400 dark:text-[#94A39B]">
+                              <span className="text-[11px] text-stone-400 dark:text-[#94A39B] whitespace-nowrap">
                                 {isVi ? 'tối thiểu' : 'min'}{' '}
                                 {formatQty(item.reorderLevel, item.unit)}
                               </span>

@@ -15,16 +15,16 @@ export const CATEGORY_COLOR_OPTIONS: {
   label: string;
   labelVi: string;
 }[] = [
-  { key: 'emerald', label: 'Emerald', labelVi: 'Xanh ngọc' },
-  { key: 'amber', label: 'Amber', labelVi: 'Vàng hổ phách' },
-  { key: 'sky', label: 'Blue', labelVi: 'Xanh dương' },
-  { key: 'teal', label: 'Teal', labelVi: 'Xanh cổ vịt' },
-  { key: 'indigo', label: 'Indigo', labelVi: 'Chàm' },
-  { key: 'orange', label: 'Orange', labelVi: 'Cam' },
-  { key: 'purple', label: 'Purple', labelVi: 'Tím' },
-  { key: 'lime', label: 'Lime', labelVi: 'Xanh chanh' },
-  { key: 'rose', label: 'Rose', labelVi: 'Hồng đỏ' },
-  { key: 'stone', label: 'Neutral', labelVi: 'Xám' },
+  { key: 'emerald', label: 'Fresh Emerald', labelVi: 'Xanh ngọc tươi' },
+  { key: 'amber', label: 'Mango Amber', labelVi: 'Vàng xoài' },
+  { key: 'sky', label: 'Iced Blue', labelVi: 'Xanh dương mát' },
+  { key: 'teal', label: 'Mint Teal', labelVi: 'Xanh bạc hà' },
+  { key: 'indigo', label: 'Berry Indigo', labelVi: 'Tím chàm' },
+  { key: 'orange', label: 'Citrus Orange', labelVi: 'Cam tươi' },
+  { key: 'purple', label: 'Dragonfruit Purple', labelVi: 'Tím thanh long' },
+  { key: 'lime', label: 'Matcha Lime', labelVi: 'Xanh matcha' },
+  { key: 'rose', label: 'Hibiscus Rose', labelVi: 'Hồng dâm bụt' },
+  { key: 'stone', label: 'Stone Neutral', labelVi: 'Xám trung tính' },
 ];
 
 const VALID_COLORS = new Set<CategoryColorKey>(CATEGORY_COLOR_OPTIONS.map((c) => c.key));
