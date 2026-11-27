@@ -15,6 +15,7 @@ import {
   LayoutGrid,
   Loader2,
   Minus,
+  MoreVertical,
   Package,
   Plus,
   QrCode,
@@ -112,6 +113,100 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [initialFocusSection, setInitialFocusSection] = useState<'recipe' | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [expandedCardIds, setExpandedCardIds] = useState<Set<string>>(() => new Set());
+
+  // Floating row action popover state (Table View)
+  const [openMenuProductId, setOpenMenuProductId] = useState<string | null>(null);
+  const [menuCoords, setMenuCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    right: number;
+    placement: 'down' | 'up';
+  } | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const closeRowActionMenu = () => {
+    setOpenMenuProductId(null);
+    setMenuCoords(null);
+  };
+
+  const toggleRowActionMenu = (productId: string, triggerEl: HTMLButtonElement) => {
+    if (openMenuProductId === productId) {
+      closeRowActionMenu();
+      return;
+    }
+    const rect = triggerEl.getBoundingClientRect();
+    const estimatedMenuHeight = 164;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placement: 'down' | 'up' =
+      spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight ? 'up' : 'down';
+    const right = Math.max(12, window.innerWidth - rect.right);
+
+    setOpenMenuProductId(productId);
+    setMenuCoords(
+      placement === 'down'
+        ? { top: rect.bottom + 6, right, placement }
+        : { bottom: window.innerHeight - rect.top + 6, right, placement }
+    );
+  };
+
+  const activeMenuProduct = useMemo(
+    () => (openMenuProductId ? products.find((p) => p.id === openMenuProductId) || null : null),
+    [openMenuProductId, products]
+  );
+
+  useEffect(() => {
+    if (!openMenuProductId) return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (actionMenuRef.current?.contains(target)) return;
+      if (target.closest('[data-row-menu-trigger="true"]')) return;
+      closeRowActionMenu();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeRowActionMenu();
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      closeRowActionMenu();
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown, { passive: true });
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [openMenuProductId]);
+
+  useEffect(() => {
+    closeRowActionMenu();
+  }, [viewMode]);
+
+  const handleMenuDeleteProduct = async (product: Product) => {
+    closeRowActionMenu();
+    const displayName = isVi ? product.nameVi || product.name : product.name;
+    await deleteProduct(product.id);
+    showUndoToast({
+      message: isVi ? `Đã xóa "${displayName}"` : `Deleted "${displayName}"`,
+      detail: isVi ? 'Sản phẩm đã xóa khỏi danh mục' : 'Removed from product catalog',
+      onUndo: async () => {
+        await saveProduct(product);
+        triggerHighlightProduct(product.id);
+      },
+    });
+  };
 
   const toggleCardDetails = (productId: string) => {
     setExpandedCardIds((prev) => {
@@ -738,7 +833,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     role="tab"
                     aria-selected={active}
                     onClick={() => setTypeFilter(tab.id)}
-                    className={`h-11 px-3.5 inline-flex items-center gap-2 text-xs sm:text-sm font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                    className={`h-11 px-3.5 inline-flex items-center gap-2 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap shrink-0 ${
                       active
                         ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                         : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -770,7 +865,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               onClick={() => handleSetViewMode('grid')}
               aria-pressed={viewMode === 'grid'}
               title={isVi ? 'Xem dạng lưới' : 'Grid view'}
-              className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors whitespace-nowrap ${
+              className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap ${
                 viewMode === 'grid'
                   ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                   : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -784,7 +879,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               onClick={() => handleSetViewMode('table')}
               aria-pressed={viewMode === 'table'}
               title={isVi ? 'Xem dạng bảng' : 'Table view'}
-              className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors whitespace-nowrap ${
+              className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap ${
                 viewMode === 'table'
                   ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                   : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -909,9 +1004,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           </p>
         </div>
       ) : viewMode === 'table' ? (
-        /* 5-COLUMN ALIGNED TABLE VIEW WITH PINNED ACTIONS */
-        <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
+        /* 5-COLUMN ALIGNED TABLE VIEW WITH COMPACT FLOATING ROW MENU */
+        <div className="w-full max-w-full bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+          <div className="w-full overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50 dark:bg-[#18251F]">
@@ -959,8 +1054,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   <th className="px-2.5 py-3 font-medium text-right whitespace-nowrap">
                     {isVi ? 'Giá & Biên lãi' : 'Price & Margin'}
                   </th>
-                  <th className="px-2.5 py-3 pr-3.5 font-medium w-px whitespace-nowrap text-right sticky right-0 z-10 bg-stone-50 dark:bg-[#18251F] border-l border-stone-200 dark:border-[#24352C]">
-                    {t.common.actions}
+                  <th className="w-14 px-2.5 py-3 pr-3.5 font-medium text-right whitespace-nowrap">
+                    <span className="sr-only">{t.common.actions}</span>
                   </th>
                 </tr>
               </thead>
@@ -984,15 +1079,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   const isUploading = uploadingPhotoId === product.id;
                   const isSelected = activeSelectedIds.has(product.id);
                   const isHighlighted = highlightedProductId === product.id;
+                  const isMenuOpen = openMenuProductId === product.id;
                   const catItem = getCategoryById(
                     resolveProductCategoryId(product, categories),
                     categories
                   );
-                  const stickyCellBg = isHighlighted
-                    ? 'bg-emerald-50 dark:bg-[#0D382B]'
-                    : isSelected
-                      ? 'bg-emerald-50 dark:bg-[#0B2E23]'
-                      : 'bg-white dark:bg-[#131D18] group-hover/row:bg-stone-50 dark:group-hover/row:bg-[#18251F]';
 
                   return (
                     <tr
@@ -1009,7 +1100,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           ? 'bg-emerald-50 dark:bg-[#0D382B] ring-2 ring-inset ring-[#10B981]/60'
                           : isSelected
                             ? 'bg-emerald-50 dark:bg-[#0B2E23]'
-                            : 'bg-white dark:bg-[#131D18] hover:bg-stone-50 dark:hover:bg-[#18251F]'
+                            : isMenuOpen
+                              ? 'bg-stone-50 dark:bg-[#18251F]'
+                              : 'bg-white dark:bg-[#131D18] hover:bg-stone-50 dark:hover:bg-[#18251F]'
                       }`}
                     >
                       {selectMode && (
@@ -1044,7 +1137,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
 
                       {/* Col 1: Product Thumbnail + Name + SKU */}
                       <td className="px-2.5 py-3 pl-3.5">
-                        <div className="flex items-center gap-2.5 min-w-[180px]">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-stone-200/80 dark:border-[#24352C]">
                             <ProductPhoto
                               src={product.imageUrl}
@@ -1071,12 +1164,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           </div>
                           <div className="min-w-0">
                             <p
-                              className="font-semibold text-stone-900 dark:text-[#F1F5F3] truncate max-w-[200px]"
+                              className="font-semibold text-stone-900 dark:text-[#F1F5F3] truncate max-w-[165px] sm:max-w-[200px] xl:max-w-[240px]"
                               title={displayName}
                             >
                               {displayName}
                             </p>
-                            <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate max-w-[200px]">
+                            <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate max-w-[165px] sm:max-w-[200px] xl:max-w-[240px]">
                               {[product.brand, product.barcode ? `SKU ${product.barcode}` : '']
                                 .filter(Boolean)
                                 .join(' · ') || '—'}
@@ -1086,18 +1179,18 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       </td>
 
                       {/* Col 2: Clean single-line Type · Category with subtle status dots */}
-                      <td className="px-2.5 py-3 text-xs whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5 text-stone-700 dark:text-[#D5DFDA]">
+                      <td className="px-2.5 py-3 text-xs">
+                        <div className="inline-flex items-center gap-1.5 text-stone-700 dark:text-[#D5DFDA] max-w-[190px] xl:max-w-none">
                           <span
                             className={`w-2 h-2 rounded-full shrink-0 ${getProductTypeDotClass(
                               product.productType
                             )}`}
                             aria-hidden="true"
                           />
-                          <span className="font-medium">
+                          <span className="font-medium truncate">
                             {t.productTypes[product.productType]}
                           </span>
-                          <span className="text-stone-300 dark:text-[#344E41]" aria-hidden="true">
+                          <span className="text-stone-300 dark:text-[#344E41] shrink-0" aria-hidden="true">
                             ·
                           </span>
                           <span
@@ -1106,7 +1199,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                             )}`}
                             aria-hidden="true"
                           />
-                          <span className="text-stone-500 dark:text-[#94A39B]">
+                          <span className="text-stone-500 dark:text-[#94A39B] truncate">
                             {getCategoryDisplayName(catItem, isVi)}
                           </span>
                         </div>
@@ -1180,7 +1273,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* Col 4: Merged Price & Margin Column */}
+                      {/* Col 4: Merged Price & Margin Column (Fully Unblocked) */}
                       <td className="px-2.5 py-3 text-right whitespace-nowrap">
                         <div className="font-mono-num text-sm font-bold text-[#0F5C43] dark:text-[#34D399]">
                           {product.variants && product.variants.length > 1
@@ -1223,63 +1316,30 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* Col 5: Pinned Sticky Actions Column (Edit, Label, Delete) */}
-                      <td
-                        className={`px-2.5 py-3 pr-3.5 w-px whitespace-nowrap text-right sticky right-0 z-10 border-l border-stone-200 dark:border-[#24352C] transition-colors ${stickyCellBg}`}
-                      >
-                        <div className="inline-flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(product)}
-                            className="h-9 px-2.5 text-xs font-medium inline-flex items-center gap-1.5 rounded-lg bg-stone-100 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors whitespace-nowrap"
-                          >
-                            <Edit2 className="w-3.5 h-3.5 shrink-0" />
-                            <span>{t.common.edit}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setLabelProduct(product)}
-                            className="h-9 px-2.5 text-xs font-medium inline-flex items-center gap-1.5 rounded-lg bg-stone-100 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors whitespace-nowrap"
-                          >
-                            <QrCode className="w-3.5 h-3.5 shrink-0" />
-                            <span>{isVi ? 'Nhãn' : 'Label'}</span>
-                          </button>
-
-                          {confirmDeleteId === product.id ? (
-                            <div className="inline-flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await deleteProduct(product.id);
-                                  setConfirmDeleteId(null);
-                                }}
-                                aria-label={t.common.delete}
-                                className="h-9 px-2.5 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors whitespace-nowrap"
-                              >
-                                <Check className="w-3.5 h-3.5 shrink-0" />
-                                <span>{t.common.delete}</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteId(null)}
-                                aria-label={t.common.cancel}
-                                className="w-9 h-9 inline-flex items-center justify-center rounded-full text-stone-500 dark:text-[#94A39B] hover:bg-stone-200/70 dark:hover:bg-[#1F3028] transition-colors"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(product.id)}
-                              className="h-9 px-2.5 text-xs font-medium inline-flex items-center gap-1.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-[#F87171] border border-red-200/80 dark:border-red-500/30 hover:bg-red-100 dark:hover:bg-red-950/70 transition-colors whitespace-nowrap"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                              <span>{t.common.delete}</span>
-                            </button>
-                          )}
-                        </div>
+                      {/* Col 5: Single Compact 40x40 MoreVertical Menu Trigger */}
+                      <td className="w-14 px-2.5 py-3 pr-3.5 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          data-row-menu-trigger="true"
+                          aria-haspopup="menu"
+                          aria-expanded={isMenuOpen}
+                          aria-label={
+                            isVi
+                              ? `Thao tác cho ${displayName}`
+                              : `Actions for ${displayName}`
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRowActionMenu(product.id, e.currentTarget);
+                          }}
+                          className={`w-10 h-10 inline-flex items-center justify-center rounded-xl border transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981] ${
+                            isMenuOpen
+                              ? 'bg-[#E6F2ED] border-[#0F5C43]/40 text-[#0F5C43] dark:bg-[#064E3B] dark:border-[#10B981]/50 dark:text-[#6EE7B7]'
+                              : 'bg-white dark:bg-[#18251F] border-stone-200 dark:border-[#24352C] text-stone-600 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:border-stone-300 dark:hover:border-[#344E41]'
+                          }`}
+                        >
+                          <MoreVertical className="w-4 h-4 shrink-0" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -1323,14 +1383,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   if ((e.target as HTMLElement).closest('button, select, input, a')) return;
                   toggleSelectItem(product.id);
                 }}
-                className={`group rounded-xl overflow-hidden flex flex-col transition-all ${
+                className={`group rounded-xl overflow-hidden flex flex-col transition-all duration-150 ease-out pos-lift ${
                   selectMode ? 'cursor-pointer' : ''
                 } ${
                   isHighlighted
                     ? 'bg-emerald-50/50 dark:bg-[#064E3B]/30 border-2 border-[#10B981] ring-2 ring-[#10B981]/35'
                     : isSelected
                       ? 'bg-white dark:bg-[#131D18] border-2 border-[#0F5C43] ring-2 ring-[#0F5C43]/20 dark:border-[#10B981] dark:ring-[#10B981]/25'
-                      : 'bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C]'
+                      : 'bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-stone-300 dark:hover:border-[#344E41] hover:shadow-xs'
                 }`}
               >
                 {/* Part 1: Top Visual & Top-Right Interactive POS Status Badge */}
@@ -1566,7 +1626,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     </button>
 
                     {isExpanded && (
-                      <div className="mt-2.5 pt-2.5 border-t border-stone-100 dark:border-[#1F3028] space-y-2.5 text-xs">
+                      <div className="mt-2.5 pt-2.5 border-t border-stone-100 dark:border-[#1F3028] space-y-2.5 text-xs animate-drawer-in">
                         {/* Cost, Margin & SKU/Brand Breakdown */}
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between gap-2">
@@ -2035,6 +2095,71 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         isVi={isVi}
         onClose={() => setLabelProduct(null)}
       />
+
+      {/* Floating Row Action Menu Popover (Viewport-Aware, Never Clipped) */}
+      {activeMenuProduct && menuCoords && (
+        <div
+          ref={actionMenuRef}
+          key={activeMenuProduct.id}
+          role="menu"
+          aria-label={
+            isVi
+              ? `Thao tác cho ${activeMenuProduct.nameVi || activeMenuProduct.name}`
+              : `Actions for ${activeMenuProduct.name}`
+          }
+          style={{
+            top: menuCoords.top,
+            bottom: menuCoords.bottom,
+            right: menuCoords.right,
+          }}
+          className={`fixed z-50 min-w-[168px] p-1.5 rounded-xl bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border border-stone-200/90 dark:border-[#24352C] shadow-xl animate-popover ${
+            menuCoords.placement === 'up' ? 'origin-bottom-right' : 'origin-top-right'
+          }`}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const target = activeMenuProduct;
+              closeRowActionMenu();
+              openEdit(target);
+            }}
+            className="w-full h-11 px-3.5 inline-flex items-center gap-2.5 rounded-lg text-sm font-medium text-stone-700 dark:text-[#E2ECE7] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-950 dark:hover:text-white transition-colors"
+          >
+            <Edit2 className="w-4 h-4 text-stone-500 dark:text-[#94A39B] shrink-0" />
+            <span>{t.common.edit}</span>
+          </button>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const target = activeMenuProduct;
+              closeRowActionMenu();
+              setLabelProduct(target);
+            }}
+            className="w-full h-11 px-3.5 inline-flex items-center gap-2.5 rounded-lg text-sm font-medium text-stone-700 dark:text-[#E2ECE7] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-950 dark:hover:text-white transition-colors"
+          >
+            <QrCode className="w-4 h-4 text-stone-500 dark:text-[#94A39B] shrink-0" />
+            <span>{isVi ? 'Nhãn' : 'Label'}</span>
+          </button>
+
+          <div
+            role="separator"
+            className="my-1 border-t border-stone-100 dark:border-[#1F3028]"
+          />
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => void handleMenuDeleteProduct(activeMenuProduct)}
+            className="w-full h-11 px-3.5 inline-flex items-center gap-2.5 rounded-lg text-sm font-medium text-red-700 dark:text-[#F87171] hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors"
+          >
+            <Trash2 className="w-4 h-4 shrink-0" />
+            <span>{t.common.delete}</span>
+          </button>
+        </div>
+      )}
 
       {/* Floating Add Product FAB + Scroll-to-Top Pill */}
       <FloatingActionBar

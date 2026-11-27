@@ -732,7 +732,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       {/* ================================================================== */}
       {formOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-backdrop"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setEditing(null);
@@ -744,7 +744,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="expense-modal-title"
-            className="w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-t-2xl sm:rounded-xl overflow-hidden shadow-2xl"
+            className="w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-t-2xl sm:rounded-xl overflow-hidden shadow-2xl animate-modal"
           >
             {/* Modal Header */}
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex flex-wrap items-center justify-between gap-2 shrink-0">
@@ -768,7 +768,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                   <button
                     type="button"
                     onClick={() => handleScopeChange('business')}
-                    className={`h-9 px-3 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                    className={`h-9 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap ${
                       scope === 'business'
                         ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                         : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -779,7 +779,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                   <button
                     type="button"
                     onClick={() => handleScopeChange('household')}
-                    className={`h-9 px-3 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                    className={`h-9 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap ${
                       scope === 'household'
                         ? 'bg-white dark:bg-amber-500 text-stone-900 dark:text-stone-950 shadow-xs'
                         : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'

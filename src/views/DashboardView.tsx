@@ -1286,11 +1286,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       {/* ================================================================== */}
       {restockTarget && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-backdrop"
           onClick={() => !restockSubmitting && setRestockTarget(null)}
         >
           <div
-            className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-2xl overflow-hidden"
+            className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-2xl overflow-hidden shadow-xl animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">

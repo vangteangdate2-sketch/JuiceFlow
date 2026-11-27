@@ -572,7 +572,7 @@ export const ReportsView: React.FC = () => {
                     role="tab"
                     aria-selected={active}
                     onClick={() => handlePresetChange(key)}
-                    className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                    className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap shrink-0 ${
                       active
                         ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                         : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -602,7 +602,7 @@ export const ReportsView: React.FC = () => {
                   key={grp}
                   type="button"
                   onClick={() => setGrouping(grp)}
-                  className={`h-9 px-3 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                  className={`h-9 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap ${
                     grouping === grp
                       ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                       : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -658,7 +658,7 @@ export const ReportsView: React.FC = () => {
         </div>
 
         {preset === 'custom' && (
-          <div className="flex flex-wrap items-center gap-2.5 text-xs pt-3 border-t border-stone-100 dark:border-[#1F3028]">
+          <div className="flex flex-wrap items-center gap-2.5 text-xs pt-3 border-t border-stone-100 dark:border-[#1F3028] animate-drawer-in">
             <label
               htmlFor="report-from"
               className="font-medium text-stone-500 dark:text-[#94A39B]"

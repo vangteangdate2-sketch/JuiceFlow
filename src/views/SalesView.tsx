@@ -898,7 +898,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                                 type="button"
                                 onClick={() => setTypeFilter(pt)}
                                 aria-pressed={active}
-                                className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${getProductTypeFilterPillClass(
+                                className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors duration-200 ease-out whitespace-nowrap shrink-0 border ${getProductTypeFilterPillClass(
                                   pt,
                                   active
                                 )}`}
@@ -975,7 +975,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                               : 'Stock limit reached in cart'
                             : undefined
                       }
-                      className={`group text-left bg-white dark:bg-[#18251F] rounded-xl overflow-hidden transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
+                      className={`group text-left bg-white dark:bg-[#18251F] rounded-xl overflow-hidden transition-all duration-150 ease-out pos-lift focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
                         outBlocked
                           ? 'opacity-60 grayscale-[40%] dark:opacity-55 dark:grayscale-[50%] border border-stone-200 dark:border-[#24352C] cursor-not-allowed'
                           : qtyInCart > 0
@@ -984,7 +984,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                               }`
                             : atStockLimit
                               ? 'opacity-75 border border-stone-200 dark:border-[#24352C] cursor-not-allowed'
-                              : 'border border-stone-200 dark:border-[#24352C] hover:border-stone-300 dark:hover:border-[#344E41] dark:hover:bg-[#1F3028] hover:shadow-2xs'
+                              : 'border border-stone-200 dark:border-[#24352C] hover:border-stone-300 dark:hover:border-[#344E41] dark:hover:bg-[#1F3028] hover:shadow-xs'
                       }`}
                     >
                       <div className="relative">
@@ -1724,8 +1724,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
       {/* Size Variant Picker Modal */}
       {variantPickerProduct && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 animate-backdrop">
+          <div className="w-full max-w-sm bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl animate-modal">
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between">
               <div>
                 <h3 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3]">
@@ -1800,8 +1800,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
       {/* Order Details & Partial Return Modal */}
       {detailSale && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="w-full max-w-xl bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl my-8 overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 overflow-y-auto animate-backdrop">
+          <div className="w-full max-w-xl bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl my-8 overflow-hidden shadow-xl animate-modal">
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between">
               <div>
                 <h2 className="font-display text-lg font-bold text-stone-900 dark:text-[#F1F5F3]">
@@ -2031,12 +2031,12 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
           aria-modal="true"
           aria-labelledby="cash-payment-modal-title"
           onClick={closeCashModal}
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4 overflow-y-auto animate-backdrop"
         >
           <form
             onSubmit={handleConfirmCashPayment}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-2xl shadow-2xl overflow-hidden my-auto"
+            className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-2xl shadow-2xl overflow-hidden my-auto animate-modal"
           >
             {/* Modal Header */}
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
@@ -2149,7 +2149,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                     type="button"
                     onClick={handleExactKhr}
                     disabled={cartTotal <= 0}
-                    className="h-12 px-4 sm:px-5 text-sm font-bold text-[#0D5C3E] dark:text-[#6EE7B7] bg-[#E6F2ED] dark:bg-[#064E3B] border border-[#0D5C3E]/30 dark:border-[#10B981]/50 hover:bg-[#D5EAE0] dark:hover:bg-[#065F46] disabled:opacity-45 rounded-xl transition-colors whitespace-nowrap shrink-0"
+                    className="h-12 px-4 sm:px-5 text-sm font-bold text-[#0D5C3E] dark:text-[#6EE7B7] bg-[#E6F2ED] dark:bg-[#064E3B] border border-[#0D5C3E]/30 dark:border-[#10B981]/50 hover:bg-[#D5EAE0] dark:hover:bg-[#065F46] disabled:opacity-45 rounded-xl transition-all duration-150 ease-out whitespace-nowrap shrink-0"
                   >
                     {isVi ? 'Đủ tiền' : 'Exact'}
                   </button>
@@ -2173,7 +2173,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                           key={amt}
                           type="button"
                           onClick={() => handleSelectKhrPreset(amt)}
-                          className={`h-12 px-3 text-sm font-mono-num font-bold rounded-xl border transition-colors whitespace-nowrap ${
+                          className={`h-12 px-3 text-sm font-mono-num font-bold rounded-xl border transition-all duration-150 ease-out whitespace-nowrap ${
                             isActivePreset
                               ? 'border-[#0D5C3E] bg-[#E6F2ED] text-[#0D5C3E] dark:border-[#10B981] dark:bg-[#064E3B] dark:text-[#D1FAE5]'
                               : 'border-stone-200 dark:border-[#24352C] bg-stone-50/70 dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028]'
@@ -2214,57 +2214,65 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   />
                 </button>
 
-                {showUsdTender && (
-                  <div className="mt-2 p-3 rounded-xl bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2.5">
-                    <div className="relative">
-                      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-stone-400 dark:text-[#94A39B]">
-                        $
-                      </span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        step="any"
-                        value={cashUsdInput}
-                        onChange={(e) => setCashUsdInput(e.target.value)}
-                        placeholder="0"
-                        aria-label={isVi ? 'Nhận USD ($)' : 'USD Received ($)'}
-                        className="w-full h-11 pl-8 pr-9 text-sm font-mono-num font-bold text-stone-900 dark:text-[#F1F5F3] bg-white dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-lg focus:outline-none focus:border-[#0D5C3E] dark:focus:border-[#10B981]"
-                      />
-                      {cashUsdInput && (
-                        <button
-                          type="button"
-                          onClick={() => setCashUsdInput('')}
-                          aria-label="Clear USD"
-                          className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                <div
+                  className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
+                    showUsdTender
+                      ? 'grid-rows-[1fr] opacity-100 mt-2'
+                      : 'grid-rows-[0fr] opacity-0 pointer-events-none'
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2.5">
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-stone-400 dark:text-[#94A39B]">
+                          $
+                        </span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step="any"
+                          value={cashUsdInput}
+                          onChange={(e) => setCashUsdInput(e.target.value)}
+                          placeholder="0"
+                          aria-label={isVi ? 'Nhận USD ($)' : 'USD Received ($)'}
+                          className="w-full h-11 pl-8 pr-9 text-sm font-mono-num font-bold text-stone-900 dark:text-[#F1F5F3] bg-white dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-lg focus:outline-none focus:border-[#0D5C3E] dark:focus:border-[#10B981]"
+                        />
+                        {cashUsdInput && (
+                          <button
+                            type="button"
+                            onClick={() => setCashUsdInput('')}
+                            aria-label="Clear USD"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[1, 5, 10, 20].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() => handleQuickAddUsd(amt)}
+                            className="h-11 text-xs font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] rounded-lg transition-all duration-150 ease-out"
+                          >
+                            +${amt}
+                          </button>
+                        ))}
+                      </div>
+                      {cashCalc.isMixed && (
+                        <p className="text-[11px] font-mono-num text-stone-600 dark:text-[#94A39B] text-center">
+                          {formatUsdClean(cashCalc.usdReceived)} ({formatKhr(cashCalc.usdEquivalentKhr)}) +{' '}
+                          {formatKhr(cashCalc.khrReceived)} ={' '}
+                          <span className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                            {formatKhr(cashCalc.totalTenderedKhr)}
+                          </span>
+                        </p>
                       )}
                     </div>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {[1, 5, 10, 20].map((amt) => (
-                        <button
-                          key={amt}
-                          type="button"
-                          onClick={() => handleQuickAddUsd(amt)}
-                          className="h-11 text-xs font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] rounded-lg transition-colors"
-                        >
-                          +${amt}
-                        </button>
-                      ))}
-                    </div>
-                    {cashCalc.isMixed && (
-                      <p className="text-[11px] font-mono-num text-stone-600 dark:text-[#94A39B] text-center">
-                        {formatUsdClean(cashCalc.usdReceived)} ({formatKhr(cashCalc.usdEquivalentKhr)}) +{' '}
-                        {formatKhr(cashCalc.khrReceived)} ={' '}
-                        <span className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                          {formatKhr(cashCalc.totalTenderedKhr)}
-                        </span>
-                      </p>
-                    )}
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Live Change Due / Insufficient Cash Feedback */}

@@ -40,7 +40,7 @@ export const CategoryFilterPills: React.FC<CategoryFilterPillsProps> = ({
           type="button"
           onClick={() => onSelect('all')}
           aria-pressed={selectedCategoryId === 'all'}
-          className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${getCategoryFilterPillClass(
+          className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors duration-200 ease-out whitespace-nowrap shrink-0 border ${getCategoryFilterPillClass(
             'ALL',
             selectedCategoryId === 'all'
           )}`}
@@ -55,7 +55,7 @@ export const CategoryFilterPills: React.FC<CategoryFilterPillsProps> = ({
               type="button"
               onClick={() => onSelect(cat.id)}
               aria-pressed={active}
-              className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${getCategoryFilterPillClass(
+              className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors duration-200 ease-out whitespace-nowrap shrink-0 border ${getCategoryFilterPillClass(
                 cat,
                 active
               )}`}

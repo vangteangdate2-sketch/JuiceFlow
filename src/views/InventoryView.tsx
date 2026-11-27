@@ -1168,8 +1168,8 @@ export const InventoryView: React.FC = () => {
       {/* 1. SINGLE-LINE "NEEDS ATTENTION TODAY" ALERT FILTER BAR            */}
       {/* ================================================================== */}
       {attentionItems.combined.length === 0 ? (
-        <div className="needs-attention-container flex items-center">
-          <span className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-[#064E3B]/60 dark:text-[#6EE7B7] dark:border-[#10B981]/35">
+        <div className="needs-attention-container flex items-center animate-drawer-in">
+          <span className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-[#064E3B]/60 dark:text-[#6EE7B7] dark:border-[#10B981]/35 transition-colors duration-200 ease-out">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-[#34D399] shrink-0" />
             <span>{isVi ? 'Tất cả tồn kho ổn định' : 'All Stock Healthy'}</span>
           </span>
@@ -1177,7 +1177,7 @@ export const InventoryView: React.FC = () => {
       ) : (
         <section
           aria-label={isVi ? 'Cần xử lý hôm nay' : 'Needs Attention Today'}
-          className="needs-attention-container min-h-12 py-2.5 px-4 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-500/30 flex flex-wrap items-center justify-between gap-2.5"
+          className="needs-attention-container min-h-12 py-2.5 px-4 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-500/30 flex flex-wrap items-center justify-between gap-2.5 transition-all duration-200 ease-out animate-drawer-in"
         >
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <div className="inline-flex items-center gap-1.5 pr-1 shrink-0">
@@ -1191,7 +1191,7 @@ export const InventoryView: React.FC = () => {
               type="button"
               onClick={() => handleSelectAttentionFilter('all_urgent')}
               aria-pressed={attentionFilter === 'all_urgent'}
-              className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap inline-flex items-center gap-1 ${
+              className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors duration-200 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
                 attentionFilter === 'all_urgent'
                   ? 'border-stone-900 bg-stone-900 text-white dark:border-[#10B981] dark:bg-[#10B981] dark:text-[#042419]'
                   : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
@@ -1206,7 +1206,7 @@ export const InventoryView: React.FC = () => {
                 type="button"
                 onClick={() => handleSelectAttentionFilter('out')}
                 aria-pressed={attentionFilter === 'out'}
-                className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap inline-flex items-center gap-1 ${
+                className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors duration-200 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
                   attentionFilter === 'out'
                     ? 'border-red-600 bg-red-600 text-white dark:border-red-500 dark:bg-red-500 dark:text-white'
                     : 'border-red-200 dark:border-red-500/40 bg-red-50/90 dark:bg-red-950/45 text-red-800 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-950/75'
@@ -1222,7 +1222,7 @@ export const InventoryView: React.FC = () => {
                 type="button"
                 onClick={() => handleSelectAttentionFilter('low')}
                 aria-pressed={attentionFilter === 'low'}
-                className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap inline-flex items-center gap-1 ${
+                className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors duration-200 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
                   attentionFilter === 'low'
                     ? 'border-amber-600 bg-amber-600 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-stone-950'
                     : 'border-amber-200 dark:border-amber-500/40 bg-amber-50/90 dark:bg-amber-950/45 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-950/75'
@@ -1238,7 +1238,7 @@ export const InventoryView: React.FC = () => {
                 type="button"
                 onClick={() => handleSelectAttentionFilter('prepared_attention')}
                 aria-pressed={attentionFilter === 'prepared_attention'}
-                className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors whitespace-nowrap inline-flex items-center gap-1 ${
+                className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors duration-200 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
                   attentionFilter === 'prepared_attention'
                     ? 'border-purple-600 bg-purple-600 text-white dark:border-purple-500 dark:bg-purple-500 dark:text-white'
                     : 'border-purple-200 dark:border-purple-500/40 bg-purple-50/90 dark:bg-purple-950/45 text-purple-900 dark:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-950/75'
@@ -1254,7 +1254,7 @@ export const InventoryView: React.FC = () => {
             <button
               type="button"
               onClick={() => setAttentionFilter('none')}
-              className="h-9 px-3 text-xs font-semibold rounded-full border border-stone-300 dark:border-[#344E41] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors whitespace-nowrap shrink-0"
+              className="h-9 px-3 text-xs font-semibold rounded-full border border-stone-300 dark:border-[#344E41] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors duration-200 ease-out whitespace-nowrap shrink-0"
             >
               {isVi ? 'Hiện tất cả' : 'Show All'}
             </button>
@@ -1311,7 +1311,7 @@ export const InventoryView: React.FC = () => {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`h-10 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                    className={`h-10 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap shrink-0 ${
                       active
                         ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                         : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -1514,7 +1514,7 @@ export const InventoryView: React.FC = () => {
                           setAttentionFilter('none');
                         }}
                         aria-pressed={statusFilter === st && attentionFilter === 'none'}
-                        className={`h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${
+                        className={`h-11 px-4 text-xs font-medium rounded-full transition-colors duration-200 ease-out whitespace-nowrap shrink-0 border ${
                           statusFilter === st && attentionFilter === 'none'
                             ? 'bg-[#E6F2ED] text-[#0D5C3E] border-[#0D5C3E]/30 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/45 font-semibold'
                             : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
@@ -1818,7 +1818,7 @@ export const InventoryView: React.FC = () => {
 
                         {/* Expandable Detail Bar (Full Metadata + Inline Category Selector) */}
                         {isExpanded && (
-                          <div className="px-4 sm:px-5 lg:pl-14 py-3.5 bg-stone-50/85 dark:bg-[#0F1814]/85 border-t border-stone-100 dark:border-[#1F3028]">
+                          <div className="px-4 sm:px-5 lg:pl-14 py-3.5 bg-stone-50/85 dark:bg-[#0F1814]/85 border-t border-stone-100 dark:border-[#1F3028] animate-drawer-in">
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 items-start lg:items-center text-xs">
                               <div className="min-w-0">
                                 <p className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
@@ -1972,12 +1972,12 @@ export const InventoryView: React.FC = () => {
       {/* ================================================================== */}
       {ingModalOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-backdrop"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIngModalOpen(false);
           }}
         >
-          <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] flex flex-col bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-t-2xl sm:rounded-xl overflow-hidden shadow-xl">
+          <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] flex flex-col bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-t-2xl sm:rounded-xl overflow-hidden shadow-xl animate-modal">
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3 shrink-0">
               <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
                 {editingIng ? t.inventory.editIngredient : t.inventory.addIngredient}
@@ -2207,8 +2207,8 @@ export const InventoryView: React.FC = () => {
       {/* MODAL 2: QUICK RESTOCK / PURCHASE STOCK-IN MODAL                   */}
       {/* ================================================================== */}
       {purchaseTarget && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 animate-backdrop">
+          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl animate-modal">
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-1">
@@ -2411,8 +2411,8 @@ export const InventoryView: React.FC = () => {
       {/* MODAL 3: PREPARE BATCH MODAL (PREPARED STOCK)                      */}
       {/* ================================================================== */}
       {batchProduct && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 animate-backdrop">
+          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl animate-modal">
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-1.5">
@@ -2564,8 +2564,8 @@ export const InventoryView: React.FC = () => {
       {/* MODAL 4: UNIFIED ADJUST / WASTE / COUNT / OPENING STOCK MODAL      */}
       {/* ================================================================== */}
       {adjustModalTarget && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl">
+        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 animate-backdrop">
+          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl animate-modal">
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">

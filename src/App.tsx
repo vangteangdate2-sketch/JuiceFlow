@@ -198,10 +198,10 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
   }
 
   return (
-    <div className="min-h-screen bg-[#F6F7F5] text-stone-900 dark:bg-[#0B110E] dark:text-[#F1F5F3] flex flex-col transition-colors duration-150">
+    <div className="min-h-screen w-full overflow-x-clip bg-[#F6F7F5] text-stone-900 dark:bg-[#0B110E] dark:text-[#F1F5F3] flex flex-col transition-colors duration-150">
       <OfflineBanner />
 
-      <div className="flex-1 flex min-w-0">
+      <div className="flex-1 flex w-full min-w-0">
         {/* Desktop / Landscape Collapsible Left Sidebar (lg and up) */}
         <aside
           className={`hidden lg:flex lg:sticky lg:top-0 lg:h-screen lg:shrink-0 bg-white dark:bg-[#131D18] border-r border-stone-200 dark:border-[#24352C] flex-col transition-[width,background-color,border-color] duration-200 print:hidden ${
@@ -266,16 +266,16 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                   onClick={() => navigate(id)}
                   title={sidebarCollapsed ? t.nav[id] : undefined}
                   aria-label={t.nav[id]}
-                  className={`w-full min-h-[44px] h-11 flex items-center gap-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                  className={`w-full min-h-[44px] h-11 flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-200 ease-out whitespace-nowrap ${
                     sidebarCollapsed ? 'px-0 justify-center' : 'px-3.5'
                   } ${
                     isCurrent
-                      ? 'bg-[#0D5C3E] text-white dark:bg-[#10B981] dark:text-[#042419] font-semibold'
+                      ? 'bg-[#0D5C3E] text-white dark:bg-[#10B981] dark:text-[#042419] font-semibold shadow-2xs'
                       : 'text-stone-700 hover:bg-stone-100 hover:text-stone-950 dark:text-[#94A39B] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
                   }`}
                 >
                   <Icon
-                    className={`w-4 h-4 shrink-0 ${
+                    className={`w-4 h-4 shrink-0 transition-colors duration-200 ${
                       isCurrent
                         ? 'text-white dark:text-[#042419]'
                         : 'text-stone-500 dark:text-[#94A39B]'
@@ -358,9 +358,9 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
         </aside>
 
         {/* Main Workspace Viewport */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Clean, Uncluttered Top Bar (64px height, comfortable touch spacing on narrow screens) */}
-          <header className="sticky top-0 z-30 h-16 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-xs border-b border-stone-200 dark:border-[#24352C] px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-3 shrink-0 transition-colors duration-150 print:hidden">
+        <div className="flex-1 flex flex-col w-full min-w-0">
+          {/* Clean, Uncluttered Full-Bleed Top Bar (64px height, comfortable touch spacing on narrow screens) */}
+          <header className="sticky top-0 inset-x-0 w-full z-30 h-16 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-xs border-b border-stone-200 dark:border-[#24352C] px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-3 shrink-0 transition-colors duration-150 print:hidden">
             <div className="flex items-center gap-2 min-w-0">
               {/* Mobile/Tablet brand tap target -> Dashboard */}
               <button
@@ -534,29 +534,31 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                 : 'max-w-[1320px] lg:px-8 pt-6 sm:pt-8 pb-24 lg:pb-8'
             }`}
           >
-            {activeTab === 'dashboard' && <DashboardView onNavigate={navigate} />}
-            {activeTab === 'sales' && <SalesView sidebarCollapsed={sidebarCollapsed} />}
-            {activeTab === 'products' && (
-              <ProductsView
-                autoOpenAdd={pendingAction === 'add_product'}
-                onAutoOpenHandled={() => setPendingAction(null)}
-              />
-            )}
-            {activeTab === 'inventory' && <InventoryView />}
-            {activeTab === 'expenses' && (
-              <ExpensesView
-                autoOpenAdd={pendingAction === 'add_expense'}
-                onAutoOpenHandled={() => setPendingAction(null)}
-              />
-            )}
-            {activeTab === 'reports' && <ReportsView />}
-            {activeTab === 'settings' && (
-              <SettingsView
-                security={security}
-                onUpdateSecurity={handleUpdateSecurity}
-                onLockNow={() => setIsLocked(true)}
-              />
-            )}
+            <div key={activeTab} className="animate-view-enter">
+              {activeTab === 'dashboard' && <DashboardView onNavigate={navigate} />}
+              {activeTab === 'sales' && <SalesView sidebarCollapsed={sidebarCollapsed} />}
+              {activeTab === 'products' && (
+                <ProductsView
+                  autoOpenAdd={pendingAction === 'add_product'}
+                  onAutoOpenHandled={() => setPendingAction(null)}
+                />
+              )}
+              {activeTab === 'inventory' && <InventoryView />}
+              {activeTab === 'expenses' && (
+                <ExpensesView
+                  autoOpenAdd={pendingAction === 'add_expense'}
+                  onAutoOpenHandled={() => setPendingAction(null)}
+                />
+              )}
+              {activeTab === 'reports' && <ReportsView />}
+              {activeTab === 'settings' && (
+                <SettingsView
+                  security={security}
+                  onUpdateSecurity={handleUpdateSecurity}
+                  onLockNow={() => setIsLocked(true)}
+                />
+              )}
+            </div>
           </main>
         </div>
       </div>
@@ -578,14 +580,14 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                 type="button"
                 onClick={() => navigate(id)}
                 aria-current={isCurrent ? 'page' : undefined}
-                className={`min-h-[52px] flex flex-col items-center justify-center gap-1 rounded-xl px-1 transition-colors ${
+                className={`min-h-[52px] flex flex-col items-center justify-center gap-1 rounded-xl px-1 transition-all duration-200 ease-out ${
                   isCurrent
                     ? 'bg-[#E6F2ED] text-[#0D5C3E] dark:bg-[#064E3B] dark:text-[#6EE7B7] font-semibold'
                     : 'text-stone-600 dark:text-[#94A39B] hover:bg-stone-100/80 dark:hover:bg-[#1F3028]'
                 }`}
               >
                 <Icon
-                  className={`w-5 h-5 shrink-0 ${
+                  className={`w-5 h-5 shrink-0 transition-colors duration-200 ${
                     isCurrent
                       ? 'text-[#0D5C3E] dark:text-[#34D399]'
                       : 'text-stone-500 dark:text-[#94A39B]'
@@ -603,14 +605,14 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
             onClick={() => setMoreSheetOpen((prev) => !prev)}
             aria-expanded={moreSheetOpen}
             aria-haspopup="dialog"
-            className={`min-h-[52px] flex flex-col items-center justify-center gap-1 rounded-xl px-1 transition-colors ${
+            className={`min-h-[52px] flex flex-col items-center justify-center gap-1 rounded-xl px-1 transition-all duration-200 ease-out ${
               isMoreTabActive
                 ? 'bg-[#E6F2ED] text-[#0D5C3E] dark:bg-[#064E3B] dark:text-[#6EE7B7] font-semibold'
                 : 'text-stone-600 dark:text-[#94A39B] hover:bg-stone-100/80 dark:hover:bg-[#1F3028]'
             }`}
           >
             <MoreHorizontal
-              className={`w-5 h-5 shrink-0 ${
+              className={`w-5 h-5 shrink-0 transition-colors duration-200 ${
                 isMoreTabActive
                   ? 'text-[#0D5C3E] dark:text-[#34D399]'
                   : 'text-stone-500 dark:text-[#94A39B]'
@@ -629,14 +631,14 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
       {moreSheetOpen && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden print:hidden"
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden print:hidden animate-backdrop"
             onClick={() => setMoreSheetOpen(false)}
           />
           <div
             role="dialog"
             aria-modal="true"
             aria-label={isVi ? 'Menu mở rộng' : 'More navigation and staff options'}
-            className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-white dark:bg-[#131D18] rounded-t-2xl border-t border-stone-200 dark:border-[#24352C] shadow-2xl max-h-[85vh] overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)] print:hidden"
+            className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-white dark:bg-[#131D18] rounded-t-2xl border-t border-stone-200 dark:border-[#24352C] shadow-2xl max-h-[85vh] overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)] print:hidden animate-sheet-up"
           >
             {/* Drag Handle */}
             <div className="flex justify-center pt-2.5 pb-1">

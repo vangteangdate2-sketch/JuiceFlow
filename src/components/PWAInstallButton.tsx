@@ -44,8 +44,8 @@ export const PWAInstallButton: React.FC<{ variant?: 'compact' | 'full' }> = ({
         </button>
 
         {showIOSGuide && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-            <div className="w-full max-w-sm rounded-xl bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] p-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 animate-backdrop">
+            <div className="w-full max-w-sm rounded-xl bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] p-6 animate-modal">
               <div className="flex items-center justify-between gap-4 mb-3">
                 <h3 className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3]">
                   {t.common.iosInstallTitle}

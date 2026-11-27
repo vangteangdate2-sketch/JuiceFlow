@@ -124,9 +124,10 @@ export const UndoToastProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       {toast && (
         <div
+          key={toast.id}
           role="status"
           aria-live="polite"
-          className="fixed bottom-[84px] lg:bottom-5 right-4 left-4 sm:left-auto sm:min-w-[320px] sm:max-w-md z-[60] bg-stone-900 dark:bg-[#18251F] text-white dark:text-[#F1F5F3] border border-stone-700 dark:border-[#344B3F] rounded-xl px-4 py-3 shadow-xl flex items-center justify-between gap-3.5 print:hidden"
+          className="fixed bottom-[84px] lg:bottom-5 right-4 left-4 sm:left-auto sm:min-w-[320px] sm:max-w-md z-[60] bg-stone-900 dark:bg-[#18251F] text-white dark:text-[#F1F5F3] border border-stone-700 dark:border-[#344B3F] rounded-xl px-4 py-3 shadow-xl flex items-center justify-between gap-3.5 print:hidden animate-toast"
         >
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             {!toast.onUndo && (
