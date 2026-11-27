@@ -47,10 +47,10 @@ export const FloatingActionBar: React.FC<FloatingActionBarProps> = ({
         type="button"
         onClick={onAction}
         aria-label={ariaLabel || label}
-        className="pointer-events-auto h-14 px-5 inline-flex items-center gap-2 rounded-full bg-[#0F5C43] hover:bg-[#0B4734] text-white dark:bg-[#10B981] dark:hover:bg-[#34D399] dark:text-[#042419] shadow-lg shadow-emerald-950/20 dark:shadow-black/40 text-sm font-semibold transition-all active:scale-[0.98] whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#0B120E]"
+        title={ariaLabel || label}
+        className="pointer-events-auto w-12 h-12 inline-flex items-center justify-center rounded-full bg-[#0F5C43] hover:bg-[#0B4734] text-white dark:bg-[#10B981] dark:hover:bg-[#34D399] dark:text-[#042419] shadow-lg shadow-emerald-950/20 dark:shadow-black/40 transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#0B120E]"
       >
         <Plus className="w-5 h-5 shrink-0 stroke-[2.5]" />
-        <span>{label}</span>
       </button>
     </div>
   );
