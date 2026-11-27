@@ -45,6 +45,7 @@ import type {
   BarcodeRegistryRecord,
   BarcodeResolutionResult,
   BarcodeSource,
+  CategoryColorKey,
   CategoryItem,
   CategoryScope,
   Expense,
@@ -64,6 +65,8 @@ import {
   DEFAULT_CATEGORIES,
   ensureCategoriesList,
   normalizeCategoryItem,
+  pickNextCategoryColor,
+  resolveCategoryColor,
   resolveIngredientCategoryId,
   resolveProductCategoryId,
   sortCategories,
@@ -445,10 +448,17 @@ export interface StoreContextValue {
     name: string;
     nameVi?: string;
     scope: CategoryScope;
+    color?: CategoryColorKey;
   }) => Promise<CategoryMutationResult>;
   updateCategory: (
     categoryId: string,
-    patch: { name?: string; nameVi?: string; scope?: CategoryScope; sortOrder?: number }
+    patch: {
+      name?: string;
+      nameVi?: string;
+      scope?: CategoryScope;
+      color?: CategoryColorKey;
+      sortOrder?: number;
+    }
   ) => Promise<CategoryMutationResult>;
   deleteCategory: (
     categoryId: string,
@@ -505,6 +515,7 @@ function categoryToFirestoreDoc(
     name: sanitizeString(cat.name, 64) || 'Category',
     nameVi: sanitizeString(cat.nameVi || cat.name, 64),
     scope: cat.scope,
+    color: resolveCategoryColor(cat.id, cat.color),
     sortOrder: clampNumber(Math.round(cat.sortOrder ?? 100), 0, 100000),
     isSystem: Boolean(cat.isSystem || cat.id === UNCATEGORIZED_ID),
     createdBy: createdByUid,
@@ -1246,6 +1257,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               name: typeof d.name === 'string' ? d.name : docSnap.id,
               nameVi: typeof d.nameVi === 'string' ? d.nameVi : undefined,
               scope: d.scope as CategoryScope,
+              color: typeof d.color === 'string' ? (d.color as CategoryColorKey) : undefined,
               sortOrder: Number(d.sortOrder),
               isSystem: Boolean(d.isSystem),
               createdAt: tsToIso(d.createdAt),
@@ -1674,6 +1686,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       name: string;
       nameVi?: string;
       scope: CategoryScope;
+      color?: CategoryColorKey;
     }): Promise<CategoryMutationResult> => {
       const trimmedName = sanitizeString(input.name, 64);
       if (!trimmedName) {
@@ -1691,12 +1704,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .filter((c) => c.id !== UNCATEGORIZED_ID)
         .reduce((max, c) => Math.max(max, c.sortOrder || 0), 0);
 
+      const id = generateId('cat');
       const nowIso = new Date().toISOString();
       const newCat: CategoryItem = {
-        id: generateId('cat'),
+        id,
         name: trimmedName,
         nameVi: sanitizeString(input.nameVi || trimmedName, 64) || trimmedName,
         scope: input.scope,
+        color: input.color
+          ? resolveCategoryColor(id, input.color)
+          : pickNextCategoryColor(cur.categories),
         sortOrder: maxSort + 10,
         isSystem: false,
         createdAt: nowIso,
@@ -1725,7 +1742,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const updateCategory = useCallback(
     async (
       categoryId: string,
-      patch: { name?: string; nameVi?: string; scope?: CategoryScope; sortOrder?: number }
+      patch: {
+        name?: string;
+        nameVi?: string;
+        scope?: CategoryScope;
+        color?: CategoryColorKey;
+        sortOrder?: number;
+      }
     ): Promise<CategoryMutationResult> => {
       const cur = latestRef.current;
       const existingCat = cur.categories.find((c) => c.id === categoryId);
@@ -1756,6 +1779,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           : patch.name !== undefined && existingCat.nameVi === existingCat.name
             ? nextName
             : existingCat.nameVi || nextName;
+      const nextColor: CategoryColorKey =
+        existingCat.id === UNCATEGORIZED_ID
+          ? 'stone'
+          : patch.color !== undefined
+            ? resolveCategoryColor(existingCat.id, patch.color)
+            : resolveCategoryColor(existingCat.id, existingCat.color);
       const nextSortOrder =
         existingCat.id === UNCATEGORIZED_ID
           ? 9999
@@ -1768,6 +1797,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         name: nextName,
         nameVi: nextNameVi,
         scope: nextScope,
+        color: nextColor,
         sortOrder: nextSortOrder,
         updatedAt: new Date().toISOString(),
       };
@@ -1784,6 +1814,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             name: updated.name,
             nameVi: updated.nameVi || updated.name,
             scope: updated.scope,
+            color: updated.color,
             sortOrder: updated.sortOrder,
             updatedAt: serverTimestamp(),
           });
@@ -3454,6 +3485,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   name: typeof d.name === 'string' ? d.name : docSnap.id,
                   nameVi: typeof d.nameVi === 'string' ? d.nameVi : undefined,
                   scope: d.scope as CategoryScope,
+                  color: typeof d.color === 'string' ? (d.color as CategoryColorKey) : undefined,
                   sortOrder: Number(d.sortOrder),
                   isSystem: Boolean(d.isSystem),
                   createdAt: tsToIso(d.createdAt),

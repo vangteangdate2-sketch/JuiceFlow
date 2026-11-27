@@ -300,6 +300,10 @@
         "name": { "type": "string", "minLength": 1, "maxLength": 64 },
         "nameVi": { "type": "string", "maxLength": 64 },
         "scope": { "type": "string", "enum": ["product", "inventory", "both"] },
+        "color": {
+          "type": "string",
+          "enum": ["emerald", "amber", "sky", "teal", "indigo", "purple", "orange", "rose", "lime", "stone"]
+        },
         "sortOrder": { "type": "number" },
         "isSystem": { "type": "boolean" },
         "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },

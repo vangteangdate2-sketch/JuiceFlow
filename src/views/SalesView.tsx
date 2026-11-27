@@ -60,6 +60,10 @@ import { ProductFormModal } from '../components/ProductFormModal';
 import { CategoryFilterPills } from '../components/CategoryFilterPills';
 import {
   getCategoriesForScope,
+  getCategoryBadgeClass,
+  getCategoryById,
+  getCategoryDisplayName,
+  getCategoryDotClass,
   getProductTypeBadgeClass,
   getProductTypeDotClass,
   getProductTypeFilterPillClass,
@@ -1008,15 +1012,42 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                         )}
                       </div>
                       <div className="p-3">
-                        <div className="flex items-center justify-between gap-2 text-[11px]">
-                          <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="flex items-start justify-between gap-2 text-[11px]">
+                          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                             <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
                                 product.productType
                               )}`}
                             >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${getProductTypeDotClass(
+                                  product.productType
+                                )}`}
+                                aria-hidden="true"
+                              />
                               {t.productTypes[product.productType] || product.productType}
                             </span>
+                            {(() => {
+                              const catItem = getCategoryById(
+                                resolveProductCategoryId(product, categories),
+                                categories
+                              );
+                              return (
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${getCategoryBadgeClass(
+                                    catItem
+                                  )}`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${getCategoryDotClass(
+                                      catItem
+                                    )}`}
+                                    aria-hidden="true"
+                                  />
+                                  {getCategoryDisplayName(catItem, isVi)}
+                                </span>
+                              );
+                            })()}
                             {hasMultiVariants && (
                               <span className="text-stone-500 dark:text-[#94A39B] truncate">
                                 {productVariants.length} {isVi ? 'cỡ' : 'sizes'}

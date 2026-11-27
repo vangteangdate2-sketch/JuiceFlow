@@ -1,6 +1,10 @@
 import React from 'react';
 import type { CategoryItem } from '../types';
-import { getCategoryDisplayName } from '../utils/categories';
+import {
+  getCategoryDisplayName,
+  getCategoryDotClass,
+  getCategoryFilterPillClass,
+} from '../utils/categories';
 
 interface CategoryFilterPillsProps {
   categories: CategoryItem[];
@@ -36,13 +40,12 @@ export const CategoryFilterPills: React.FC<CategoryFilterPillsProps> = ({
           type="button"
           onClick={() => onSelect('all')}
           aria-pressed={selectedCategoryId === 'all'}
-          className={`h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${
+          className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${getCategoryFilterPillClass(
+            'ALL',
             selectedCategoryId === 'all'
-              ? 'bg-[#0D5C3E] text-white border-[#0D5C3E] dark:bg-[#10B981] dark:text-[#042419] dark:border-[#10B981] font-semibold'
-              : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
-          }`}
+          )}`}
         >
-          {resolvedAllLabel}
+          <span>{resolvedAllLabel}</span>
         </button>
         {categories.map((cat) => {
           const active = selectedCategoryId === cat.id;
@@ -52,13 +55,16 @@ export const CategoryFilterPills: React.FC<CategoryFilterPillsProps> = ({
               type="button"
               onClick={() => onSelect(cat.id)}
               aria-pressed={active}
-              className={`h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${
+              className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors whitespace-nowrap shrink-0 border ${getCategoryFilterPillClass(
+                cat,
                 active
-                  ? 'bg-[#0D5C3E] text-white border-[#0D5C3E] dark:bg-[#10B981] dark:text-[#042419] dark:border-[#10B981] font-semibold'
-                  : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
-              }`}
+              )}`}
             >
-              {getCategoryDisplayName(cat, isVi)}
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(cat)}`}
+                aria-hidden="true"
+              />
+              <span>{getCategoryDisplayName(cat, isVi)}</span>
             </button>
           );
         })}

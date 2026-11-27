@@ -30,11 +30,24 @@ export type ProductCategory = string;
 
 export type CategoryScope = 'product' | 'inventory' | 'both';
 
+export type CategoryColorKey =
+  | 'emerald'
+  | 'amber'
+  | 'sky'
+  | 'teal'
+  | 'indigo'
+  | 'purple'
+  | 'orange'
+  | 'rose'
+  | 'lime'
+  | 'stone';
+
 export interface CategoryItem {
   id: string;
   name: string;
   nameVi?: string;
   scope: CategoryScope;
+  color?: CategoryColorKey;
   sortOrder: number;
   isSystem?: boolean;
   createdAt?: string;

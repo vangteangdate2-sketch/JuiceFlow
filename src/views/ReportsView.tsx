@@ -41,9 +41,12 @@ import {
 } from '../utils/inventoryEngine';
 import {
   getCategoriesForScope,
+  getCategoryBadgeClass,
   getCategoryById,
   getCategoryDisplayName,
+  getCategoryDotClass,
   getProductTypeBadgeClass,
+  getProductTypeDotClass,
 } from '../utils/categories';
 import { useTheme } from '../hooks/useTheme';
 import { CategoryFilterPills } from '../components/CategoryFilterPills';
@@ -1544,6 +1547,12 @@ export const ReportsView: React.FC = () => {
                         <td className="py-3 px-5">
                           <div className="flex items-center gap-2">
                             <span
+                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${getCategoryDotClass(
+                                getCategoryById(row.categoryId, categories)
+                              )}`}
+                              aria-hidden="true"
+                            />
+                            <span
                               className={`font-semibold ${
                                 isActiveRow
                                   ? 'text-[#0D5C3E] dark:text-[#34D399]'
@@ -1630,21 +1639,41 @@ export const ReportsView: React.FC = () => {
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500 dark:text-[#94A39B]">
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
                               row.productType
                             )}`}
                           >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${getProductTypeDotClass(
+                                row.productType
+                              )}`}
+                              aria-hidden="true"
+                            />
                             {t.productTypes[row.productType]}
                           </span>
-                          <span>
-                            {getCategoryDisplayName(
-                              getCategoryById(row.categoryId, categories),
-                              isVi
-                            )}
-                            {row.returnedQty > 0
-                              ? ` · ${row.returnedQty} ${isVi ? 'đã trả' : 'returned'}`
-                              : ''}
-                          </span>
+                          {(() => {
+                            const catItem = getCategoryById(row.categoryId, categories);
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${getCategoryBadgeClass(
+                                  catItem
+                                )}`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${getCategoryDotClass(
+                                    catItem
+                                  )}`}
+                                  aria-hidden="true"
+                                />
+                                {getCategoryDisplayName(catItem, isVi)}
+                              </span>
+                            );
+                          })()}
+                          {row.returnedQty > 0 && (
+                            <span>
+                              · {row.returnedQty} {isVi ? 'đã trả' : 'returned'}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="py-3 px-3 text-right font-mono-num text-stone-700 dark:text-[#D5DFDA]">

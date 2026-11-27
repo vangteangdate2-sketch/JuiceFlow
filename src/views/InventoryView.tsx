@@ -37,8 +37,10 @@ import { type BatchPrepMode, type StockShortage } from '../utils/inventoryEngine
 import { formatBarcodeTypeLabel } from '../utils/barcodeRegistry';
 import {
   getCategoriesForScope,
+  getCategoryBadgeClass,
   getCategoryById,
   getCategoryDisplayName,
+  getCategoryDotClass,
   resolveIngredientCategoryId,
   resolveProductCategoryId,
   UNCATEGORIZED_ID,
@@ -826,6 +828,7 @@ export const InventoryView: React.FC = () => {
         label: isVi ? 'Nguyên liệu thô' : 'Raw Ingredient',
         badgeClass:
           'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-[#064E3B]/60 dark:text-[#6EE7B7] dark:border-[#10B981]/30',
+        dotClass: 'bg-emerald-600 dark:bg-[#10B981]',
         hintText: isVi
           ? 'Đo theo trọng lượng/thể tích. Tự động trừ theo công thức khi bán món pha chế theo ly hoặc khi pha mẻ.'
           : 'Measured by weight or volume. Automatically deducted via recipe on Made-to-Order POS sales or batch prep.',
@@ -836,6 +839,7 @@ export const InventoryView: React.FC = () => {
         label: isVi ? 'Mẻ pha sẵn' : 'Prepared Batch',
         badgeClass:
           'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-500/35',
+        dotClass: 'bg-purple-600 dark:bg-purple-400',
         hintText: isVi
           ? 'Thành phẩm pha theo mẻ trữ lạnh. Khi bán trên POS sẽ trừ trực tiếp số lượng mẻ sẵn có (không trừ trùng nguyên liệu).'
           : 'Pre-blended bases or bottled chilled batches. Deducts ready units on POS sales without double-deducting raw ingredients.',
@@ -845,6 +849,7 @@ export const InventoryView: React.FC = () => {
       label: isVi ? 'Hàng đóng gói' : 'Packaged Good',
       badgeClass:
         'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-500/35',
+      dotClass: 'bg-sky-600 dark:bg-sky-400',
       hintText: isVi
         ? 'Nước chai, lon, đồ ăn vặt quản lý theo đơn vị hoặc thùng. Trừ trực tiếp số lượng bán tại POS.'
         : 'Bottles, cans, and snacks tracked by unit or carton count. Deducted directly at POS checkout.',
@@ -1547,16 +1552,32 @@ export const InventoryView: React.FC = () => {
                             {isVi ? item.nameVi || item.name : item.name}
                           </h3>
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${tierMeta.badgeClass}`}
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${tierMeta.badgeClass}`}
                           >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${tierMeta.dotClass}`}
+                              aria-hidden="true"
+                            />
                             {tierMeta.label}
                           </span>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-600 border border-stone-200/80 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] whitespace-nowrap">
-                            {getCategoryDisplayName(
-                              getCategoryById(item.categoryId, categories),
-                              isVi
-                            )}
-                          </span>
+                          {(() => {
+                            const catItem = getCategoryById(item.categoryId, categories);
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getCategoryBadgeClass(
+                                  catItem
+                                )}`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${getCategoryDotClass(
+                                    catItem
+                                  )}`}
+                                  aria-hidden="true"
+                                />
+                                {getCategoryDisplayName(catItem, isVi)}
+                              </span>
+                            );
+                          })()}
                           <InfoHint
                             compact
                             label={tierMeta.label}

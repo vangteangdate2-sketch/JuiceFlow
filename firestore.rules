@@ -233,7 +233,7 @@ service cloud.firestore {
           'sortOrder', 'isSystem', 'createdBy', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'workspaceId', 'memberUids', 'name', 'nameVi', 'scope',
+          'workspaceId', 'memberUids', 'name', 'nameVi', 'scope', 'color',
           'sortOrder', 'isSystem', 'createdBy', 'createdAt', 'updatedAt'
         ])
         && data.workspaceId == workspaceId
@@ -241,6 +241,7 @@ service cloud.firestore {
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 64
         && data.nameVi is string && data.nameVi.size() <= 64
         && data.scope is string && data.scope in ['product', 'inventory', 'both']
+        && (!('color' in data) || (data.color is string && data.color in ['emerald', 'amber', 'sky', 'teal', 'indigo', 'purple', 'orange', 'rose', 'lime', 'stone']))
         && data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 100000
         && data.isSystem is bool
         && isValidId(data.createdBy)
@@ -770,7 +771,7 @@ service cloud.firestore {
           && isWorkspaceMember(workspaceId)
           && (
             incoming().diff(existing()).affectedKeys().hasOnly([
-              'name', 'nameVi', 'scope', 'sortOrder', 'updatedAt'
+              'name', 'nameVi', 'scope', 'color', 'sortOrder', 'updatedAt'
             ]) ||
             (
               incoming().memberUids.hasAll(existing().memberUids)

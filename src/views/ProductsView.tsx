@@ -41,9 +41,12 @@ import {
 import { compressImageBlobToDataUrl } from '../utils/image';
 import {
   getCategoriesForScope,
+  getCategoryBadgeClass,
   getCategoryById,
   getCategoryDisplayName,
+  getCategoryDotClass,
   getProductTypeBadgeClass,
+  getProductTypeDotClass,
   resolveProductCategoryId,
   UNCATEGORIZED_ID,
 } from '../utils/categories';
@@ -1043,21 +1046,39 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       <td className="py-3 px-3 text-xs whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
                               product.productType
                             )}`}
                           >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${getProductTypeDotClass(
+                                product.productType
+                              )}`}
+                              aria-hidden="true"
+                            />
                             {t.productTypes[product.productType]}
                           </span>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-600 border border-stone-200/80 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] whitespace-nowrap">
-                            {getCategoryDisplayName(
-                              getCategoryById(
-                                resolveProductCategoryId(product, categories),
-                                categories
-                              ),
-                              isVi
-                            )}
-                          </span>
+                          {(() => {
+                            const catItem = getCategoryById(
+                              resolveProductCategoryId(product, categories),
+                              categories
+                            );
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getCategoryBadgeClass(
+                                  catItem
+                                )}`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${getCategoryDotClass(
+                                    catItem
+                                  )}`}
+                                  aria-hidden="true"
+                                />
+                                {getCategoryDisplayName(catItem, isVi)}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </td>
 
@@ -1361,21 +1382,39 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         {/* Color-coded Item Type & Category badges (matching InventoryView) */}
                         <p className="flex flex-wrap items-center gap-1.5 text-xs">
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
                               product.productType
                             )}`}
                           >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${getProductTypeDotClass(
+                                product.productType
+                              )}`}
+                              aria-hidden="true"
+                            />
                             {t.productTypes[product.productType]}
                           </span>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-600 border border-stone-200/80 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] whitespace-nowrap">
-                            {getCategoryDisplayName(
-                              getCategoryById(
-                                resolveProductCategoryId(product, categories),
-                                categories
-                              ),
-                              isVi
-                            )}
-                          </span>
+                          {(() => {
+                            const catItem = getCategoryById(
+                              resolveProductCategoryId(product, categories),
+                              categories
+                            );
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getCategoryBadgeClass(
+                                  catItem
+                                )}`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${getCategoryDotClass(
+                                    catItem
+                                  )}`}
+                                  aria-hidden="true"
+                                />
+                                {getCategoryDisplayName(catItem, isVi)}
+                              </span>
+                            );
+                          })()}
                         </p>
                         <h3 className="mt-1 font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                           {displayName}

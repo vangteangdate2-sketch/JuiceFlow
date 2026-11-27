@@ -31,9 +31,14 @@ import {
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { useHints } from '../context/HintsContext';
-import type { BiometricSecurityConfig, CategoryScope } from '../types';
+import type { BiometricSecurityConfig, CategoryColorKey, CategoryScope } from '../types';
 import {
+  CATEGORY_COLOR_OPTIONS,
+  getCategoryBadgeClass,
   getCategoryDisplayName,
+  getCategoryDotClass,
+  pickNextCategoryColor,
+  resolveCategoryColor,
   resolveIngredientCategoryId,
   resolveProductCategoryId,
   UNCATEGORIZED_ID,
@@ -210,9 +215,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Category manager state
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryScope, setNewCategoryScope] = useState<CategoryScope>('product');
+  const [newCategoryColor, setNewCategoryColor] = useState<CategoryColorKey>(() =>
+    pickNextCategoryColor(categories)
+  );
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editCatName, setEditCatName] = useState('');
   const [editCatScope, setEditCatScope] = useState<CategoryScope>('product');
+  const [editCatColor, setEditCatColor] = useState<CategoryColorKey>('emerald');
   const [deletingCatId, setDeletingCatId] = useState<string | null>(null);
   const [reassignTargetId, setReassignTargetId] = useState<string>(UNCATEGORIZED_ID);
   const [catBusy, setCatBusy] = useState(false);
@@ -638,12 +647,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       const res = await addCategory({
         name: newCategoryName.trim(),
         scope: newCategoryScope,
+        color: newCategoryColor,
       });
       if (!res.ok) {
         showCategoryFeedback('err', res.error || (isVi ? 'Không thể thêm danh mục.' : 'Could not add category.'));
         return;
       }
       setNewCategoryName('');
+      if (res.category) {
+        setNewCategoryColor(pickNextCategoryColor([...categories, res.category]));
+      }
       showCategoryFeedback(
         'ok',
         isVi
@@ -662,6 +675,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       const res = await updateCategory(catId, {
         name: editCatName.trim(),
         scope: editCatScope,
+        color: editCatColor,
       });
       if (!res.ok) {
         showCategoryFeedback('err', res.error || (isVi ? 'Không thể cập nhật danh mục.' : 'Could not update category.'));
@@ -1453,53 +1467,81 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {openSections.categories && (
             <div className="mt-5 pt-5 border-t border-stone-200 dark:border-[#24352C] space-y-5">
               {/* Add New Category Bar */}
-              <form
-                onSubmit={handleAddCategory}
-                className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2.5"
-              >
-                <div className="flex-1 min-w-0">
-                  <label
-                    htmlFor="new-category-name"
-                    className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+              <form onSubmit={handleAddCategory} className="space-y-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2.5">
+                  <div className="flex-1 min-w-0">
+                    <label
+                      htmlFor="new-category-name"
+                      className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                    >
+                      {isVi ? 'Tên danh mục mới' : 'New Category Name'}
+                    </label>
+                    <input
+                      id="new-category-name"
+                      type="text"
+                      maxLength={64}
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder={isVi ? 'VD: Nước ép Detox, Bánh ngọt...' : 'e.g. Detox Juices, Pastries...'}
+                      className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                    />
+                  </div>
+                  <div className="sm:w-44">
+                    <label
+                      htmlFor="new-category-scope"
+                      className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                    >
+                      {isVi ? 'Áp dụng cho' : 'Scope'}
+                    </label>
+                    <select
+                      id="new-category-scope"
+                      value={newCategoryScope}
+                      onChange={(e) => setNewCategoryScope(e.target.value as CategoryScope)}
+                      className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                    >
+                      <option value="product">{isVi ? 'Sản phẩm & POS' : 'Products & POS'}</option>
+                      <option value="inventory">{isVi ? 'Kho nguyên liệu' : 'Inventory'}</option>
+                      <option value="both">{isVi ? 'Cả hai' : 'Both'}</option>
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!newCategoryName.trim() || catBusy}
+                    className="h-11 px-4 inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap shrink-0"
                   >
-                    {isVi ? 'Tên danh mục mới' : 'New Category Name'}
-                  </label>
-                  <input
-                    id="new-category-name"
-                    type="text"
-                    maxLength={64}
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder={isVi ? 'VD: Nước ép Detox, Bánh ngọt...' : 'e.g. Detox Juices, Pastries...'}
-                    className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
-                  />
+                    <Plus className="w-4 h-4" />
+                    {isVi ? 'Thêm danh mục' : 'Add Category'}
+                  </button>
                 </div>
-                <div className="sm:w-44">
-                  <label
-                    htmlFor="new-category-scope"
-                    className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
-                  >
-                    {isVi ? 'Áp dụng cho' : 'Scope'}
-                  </label>
-                  <select
-                    id="new-category-scope"
-                    value={newCategoryScope}
-                    onChange={(e) => setNewCategoryScope(e.target.value as CategoryScope)}
-                    className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
-                  >
-                    <option value="product">{isVi ? 'Sản phẩm & POS' : 'Products & POS'}</option>
-                    <option value="inventory">{isVi ? 'Kho nguyên liệu' : 'Inventory'}</option>
-                    <option value="both">{isVi ? 'Cả hai' : 'Both'}</option>
-                  </select>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-stone-600 dark:text-[#94A39B] mr-1">
+                    {isVi ? 'Màu nhận diện:' : 'Color Tag:'}
+                  </span>
+                  {CATEGORY_COLOR_OPTIONS.map((opt) => {
+                    const selected = newCategoryColor === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setNewCategoryColor(opt.key)}
+                        aria-label={isVi ? opt.labelVi : opt.label}
+                        aria-pressed={selected}
+                        title={isVi ? opt.labelVi : opt.label}
+                        className={`w-8 h-8 rounded-full inline-flex items-center justify-center border transition-all ${
+                          selected
+                            ? 'border-stone-900 dark:border-white scale-105 ring-2 ring-stone-900/15 dark:ring-white/25'
+                            : 'border-stone-200 dark:border-[#24352C] hover:border-stone-400 dark:hover:border-[#344E41]'
+                        }`}
+                      >
+                        <span
+                          className={`w-4 h-4 rounded-full ${getCategoryDotClass(opt.key)}`}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    );
+                  })}
                 </div>
-                <button
-                  type="submit"
-                  disabled={!newCategoryName.trim() || catBusy}
-                  className="h-11 px-4 inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  {isVi ? 'Thêm danh mục' : 'Add Category'}
-                </button>
               </form>
 
               {catFeedback && (
@@ -1539,57 +1581,97 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       className="p-3.5 bg-white dark:bg-[#131D18] hover:bg-stone-50/70 dark:hover:bg-[#16221C] transition-colors"
                     >
                       {isEditing ? (
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                          <input
-                            type="text"
-                            maxLength={64}
-                            value={editCatName}
-                            onChange={(e) => setEditCatName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                void handleSaveEditCategory(cat.id);
-                              } else if (e.key === 'Escape') {
-                                setEditingCatId(null);
-                              }
-                            }}
-                            autoFocus
-                            className="flex-1 h-11 px-3 text-sm border border-[#0D5C3E] dark:border-[#10B981] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
-                          />
-                          {!isSystem && (
-                            <select
-                              value={editCatScope}
-                              onChange={(e) => setEditCatScope(e.target.value as CategoryScope)}
-                              className="sm:w-40 h-11 px-3 text-xs font-medium border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                            >
-                              <option value="product">{isVi ? 'Sản phẩm & POS' : 'Products & POS'}</option>
-                              <option value="inventory">{isVi ? 'Kho nguyên liệu' : 'Inventory'}</option>
-                              <option value="both">{isVi ? 'Cả hai' : 'Both'}</option>
-                            </select>
-                          )}
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              disabled={!editCatName.trim() || catBusy}
-                              onClick={() => void handleSaveEditCategory(cat.id)}
-                              className="h-11 px-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              {t.common.save}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingCatId(null)}
-                              className="h-11 px-3 inline-flex items-center justify-center text-xs font-medium text-stone-600 dark:text-[#94A39B] bg-stone-100 dark:bg-[#18251F] hover:bg-stone-200 dark:hover:bg-[#1F3028] rounded-lg"
-                            >
-                              {t.common.cancel}
-                            </button>
+                        <div className="space-y-3">
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                            <input
+                              type="text"
+                              maxLength={64}
+                              value={editCatName}
+                              onChange={(e) => setEditCatName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  void handleSaveEditCategory(cat.id);
+                                } else if (e.key === 'Escape') {
+                                  setEditingCatId(null);
+                                }
+                              }}
+                              autoFocus
+                              className="flex-1 h-11 px-3 text-sm border border-[#0D5C3E] dark:border-[#10B981] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                            />
+                            {!isSystem && (
+                              <select
+                                value={editCatScope}
+                                onChange={(e) => setEditCatScope(e.target.value as CategoryScope)}
+                                className="sm:w-40 h-11 px-3 text-xs font-medium border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
+                              >
+                                <option value="product">{isVi ? 'Sản phẩm & POS' : 'Products & POS'}</option>
+                                <option value="inventory">{isVi ? 'Kho nguyên liệu' : 'Inventory'}</option>
+                                <option value="both">{isVi ? 'Cả hai' : 'Both'}</option>
+                              </select>
+                            )}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                disabled={!editCatName.trim() || catBusy}
+                                onClick={() => void handleSaveEditCategory(cat.id)}
+                                className="h-11 px-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                {t.common.save}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingCatId(null)}
+                                className="h-11 px-3 inline-flex items-center justify-center text-xs font-medium text-stone-600 dark:text-[#94A39B] bg-stone-100 dark:bg-[#18251F] hover:bg-stone-200 dark:hover:bg-[#1F3028] rounded-lg"
+                              >
+                                {t.common.cancel}
+                              </button>
+                            </div>
                           </div>
+                          {!isSystem && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-semibold text-stone-600 dark:text-[#94A39B] mr-1">
+                                {isVi ? 'Màu:' : 'Color:'}
+                              </span>
+                              {CATEGORY_COLOR_OPTIONS.map((opt) => {
+                                const selected = editCatColor === opt.key;
+                                return (
+                                  <button
+                                    key={opt.key}
+                                    type="button"
+                                    onClick={() => setEditCatColor(opt.key)}
+                                    aria-label={isVi ? opt.labelVi : opt.label}
+                                    aria-pressed={selected}
+                                    title={isVi ? opt.labelVi : opt.label}
+                                    className={`w-8 h-8 rounded-full inline-flex items-center justify-center border transition-all ${
+                                      selected
+                                        ? 'border-stone-900 dark:border-white scale-105 ring-2 ring-stone-900/15 dark:ring-white/25'
+                                        : 'border-stone-200 dark:border-[#24352C] hover:border-stone-400 dark:hover:border-[#344E41]'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`w-4 h-4 rounded-full ${getCategoryDotClass(opt.key)}`}
+                                      aria-hidden="true"
+                                    />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="flex items-center justify-between gap-3 flex-wrap">
                           <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
-                            <span className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap ${getCategoryBadgeClass(
+                                cat
+                              )}`}
+                            >
+                              <span
+                                className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(cat)}`}
+                                aria-hidden="true"
+                              />
                               {getCategoryDisplayName(cat, isVi)}
                             </span>
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-700 dark:bg-[#18251F] dark:text-[#94A39B] border border-stone-200/80 dark:border-[#24352C]">
@@ -1627,12 +1709,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 setEditingCatId(cat.id);
                                 setEditCatName(cat.name);
                                 setEditCatScope(cat.scope);
+                                setEditCatColor(resolveCategoryColor(cat.id, cat.color));
                               }}
                               aria-label={isVi ? `Sửa ${cat.name}` : `Edit ${cat.name}`}
                               className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-medium text-stone-700 dark:text-[#D5DFDA] bg-stone-100/80 dark:bg-[#18251F] hover:bg-stone-200/80 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                             >
                               <Pencil className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">{isVi ? 'Đổi tên' : 'Edit'}</span>
+                              <span className="hidden sm:inline">{isVi ? 'Sửa' : 'Edit'}</span>
                             </button>
                             {!isSystem && (
                               <button
