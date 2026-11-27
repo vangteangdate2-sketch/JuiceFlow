@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Camera, Keyboard, ScanBarcode, X } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { ModalPortal } from './ModalPortal';
 
 interface BarcodeScannerModalProps {
   open: boolean;
@@ -151,8 +152,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 animate-backdrop">
-      <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl shadow-xl overflow-hidden animate-modal">
+    <ModalPortal>
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop">
+        <div className="w-full max-w-md bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl shadow-2xl overflow-hidden animate-modal">
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 dark:border-[#24352C]">
           <div className="flex items-center gap-2.5">
             <ScanBarcode className="w-5 h-5 text-[#0F5C43] dark:text-[#34D399]" />
@@ -212,7 +214,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </div>
           </form>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 };

@@ -29,6 +29,7 @@ import { useTheme } from './hooks/useTheme';
 import { BiometricLockScreen } from './components/BiometricLockScreen';
 import { OfflineBanner, SyncStatusPill } from './components/OfflineBanner';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { ModalPortal } from './components/ModalPortal';
 import { DashboardView } from './views/DashboardView';
 import { SalesView } from './views/SalesView';
 import { ProductsView } from './views/ProductsView';
@@ -629,16 +630,16 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
       {/* SLIDE-UP "MORE" SHEET (Dashboard, Expenses, Settings, Staff)       */}
       {/* ================================================================== */}
       {moreSheetOpen && (
-        <>
+        <ModalPortal>
           <div
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden print:hidden animate-backdrop"
+            className="fixed inset-0 z-40 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 lg:hidden print:hidden animate-backdrop"
             onClick={() => setMoreSheetOpen(false)}
           />
           <div
             role="dialog"
             aria-modal="true"
             aria-label={isVi ? 'Menu mở rộng' : 'More navigation and staff options'}
-            className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-white dark:bg-[#131D18] rounded-t-2xl border-t border-stone-200 dark:border-[#24352C] shadow-2xl max-h-[85vh] overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)] print:hidden animate-sheet-up"
+            className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-white dark:bg-[#111916] rounded-t-2xl border-t border-slate-200/80 dark:border-emerald-950/60 shadow-2xl max-h-[85vh] overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)] print:hidden animate-sheet-up"
           >
             {/* Drag Handle */}
             <div className="flex justify-center pt-2.5 pb-1">
@@ -760,7 +761,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
               )}
             </div>
           </div>
-        </>
+        </ModalPortal>
       )}
     </div>
   );

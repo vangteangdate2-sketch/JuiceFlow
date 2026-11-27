@@ -13,6 +13,7 @@ import { formatKhr, formatUsdRef, todayIso } from '../utils/format';
 import { isLegacyInventoryPurchaseExpense } from '../utils/inventoryEngine';
 import { FloatingActionBar } from '../components/FloatingActionBar';
 import { InfoHint } from '../components/InfoHint';
+import { ModalPortal } from '../components/ModalPortal';
 
 const ALL_CATEGORIES: ExpenseCategory[] = [
   'ingredients',
@@ -731,21 +732,22 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       {/* FOCUSED ADD / EDIT EXPENSE MODAL (Preserves Underlying Scroll)     */}
       {/* ================================================================== */}
       {formOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-backdrop"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setEditing(null);
-              setFormOpen(false);
-            }
-          }}
-        >
+        <ModalPortal>
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="expense-modal-title"
-            className="w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-t-2xl sm:rounded-xl overflow-hidden shadow-2xl animate-modal"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setEditing(null);
+                setFormOpen(false);
+              }
+            }}
           >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="expense-modal-title"
+              className="w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl animate-modal"
+            >
             {/* Modal Header */}
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex flex-wrap items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2 min-w-0">
@@ -1055,8 +1057,9 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                 </button>
               </div>
             </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Bottom-Right Floating Action Button + Scroll-to-Top Pill */}

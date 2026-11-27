@@ -44,6 +44,7 @@ import {
 } from '../utils/format';
 import { computeFinancialReport, type BatchPrepMode } from '../utils/inventoryEngine';
 import { InfoHint } from '../components/InfoHint';
+import { ModalPortal } from '../components/ModalPortal';
 import { useTheme } from '../hooks/useTheme';
 
 export type DashboardQuickAction = 'add_expense' | 'add_product';
@@ -1285,14 +1286,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       {/* INLINE QUICK RESTOCK MODAL (ACT WITHOUT LEAVING DASHBOARD)         */}
       {/* ================================================================== */}
       {restockTarget && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-backdrop"
-          onClick={() => !restockSubmitting && setRestockTarget(null)}
-        >
+        <ModalPortal>
           <div
-            className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-2xl overflow-hidden shadow-xl animate-modal"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
+            onClick={() => !restockSubmitting && setRestockTarget(null)}
           >
+            <div
+              className="w-full max-w-md bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl overflow-hidden shadow-2xl animate-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-[#0F5C43] dark:text-[#34D399]">
@@ -1494,8 +1496,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

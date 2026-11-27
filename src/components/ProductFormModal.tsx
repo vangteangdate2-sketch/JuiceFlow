@@ -62,6 +62,7 @@ import {
   normalizeBarcodeString,
 } from '../utils/barcodeRegistry';
 import { InfoHint } from './InfoHint';
+import { ModalPortal } from './ModalPortal';
 import { compressImageBlobToDataUrl } from '../utils/image';
 import { DRINK_IMAGE_PRESETS } from '../utils/seedData';
 import { ProductPhoto } from './ProductPhoto';
@@ -1151,13 +1152,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-2.5 sm:p-5 animate-backdrop">
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="product-form-modal-title"
-          className="w-full max-w-4xl bg-[#F6F7F5] dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-xl max-h-[92vh] flex flex-col overflow-hidden shadow-xl animate-modal"
-        >
+      <ModalPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-5 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-form-modal-title"
+            className="w-full max-w-4xl bg-[#F6F7F5] dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-modal"
+          >
           {/* Sticky Modal Header + Interactive 3-Step Progress Stepper */}
           <div className="bg-white dark:bg-[#131D18] border-b border-stone-200 dark:border-[#24352C] shrink-0">
             <div className="px-5 sm:px-6 pt-4 pb-3 flex items-center justify-between gap-4">
@@ -2985,6 +2987,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           </form>
         </div>
       </div>
+      </ModalPortal>
 
       {/* Google Drive Photo Browser Modal */}
       <GoogleDrivePickerModal

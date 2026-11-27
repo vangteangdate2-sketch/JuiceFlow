@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Download, X } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useStore } from '../context/StoreContext';
+import { ModalPortal } from './ModalPortal';
 
 export const PWAInstallButton: React.FC<{ variant?: 'compact' | 'full' }> = ({
   variant = 'compact',
@@ -44,8 +45,9 @@ export const PWAInstallButton: React.FC<{ variant?: 'compact' | 'full' }> = ({
         </button>
 
         {showIOSGuide && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 animate-backdrop">
-            <div className="w-full max-w-sm rounded-xl bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] p-6 animate-modal">
+          <ModalPortal>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop">
+              <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 shadow-2xl p-6 animate-modal">
               <div className="flex items-center justify-between gap-4 mb-3">
                 <h3 className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3]">
                   {t.common.iosInstallTitle}
@@ -70,8 +72,9 @@ export const PWAInstallButton: React.FC<{ variant?: 'compact' | 'full' }> = ({
               >
                 {t.common.close}
               </button>
+              </div>
             </div>
-          </div>
+          </ModalPortal>
         )}
       </>
     );

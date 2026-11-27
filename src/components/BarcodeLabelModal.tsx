@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import type { Product } from '../types';
 import { formatKhr } from '../utils/format';
 import { detectBarcodeFormat, formatBarcodeTypeLabel } from '../utils/barcodeRegistry';
+import { ModalPortal } from './ModalPortal';
 
 export type LabelFormat = 'CODE128' | 'QR';
 export type LabelStickerSize = '40x30' | '50x30';
@@ -323,13 +324,14 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
   const copyIndices = Array.from({ length: Math.min(40, Math.max(1, copies)) }, (_, i) => i);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 animate-backdrop print:animate-none">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="barcode-label-modal-title"
-        className="w-full max-w-3xl bg-[#F6F7F5] dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-xl max-h-[92vh] flex flex-col overflow-hidden shadow-xl animate-modal print:animate-none"
-      >
+    <ModalPortal>
+      <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop print:animate-none print:backdrop-blur-none">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="barcode-label-modal-title"
+          className="w-full max-w-3xl bg-[#F6F7F5] dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-modal print:animate-none"
+        >
         {/* Header */}
         <div className="px-6 py-4 bg-white dark:bg-[#131D18] border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-4 shrink-0">
           <div>
@@ -596,7 +598,8 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
             </button>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 };

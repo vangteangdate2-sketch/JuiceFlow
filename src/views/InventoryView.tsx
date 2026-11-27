@@ -49,6 +49,7 @@ import { ProductFormModal } from '../components/ProductFormModal';
 import { CategoryFilterPills } from '../components/CategoryFilterPills';
 import { FloatingActionBar } from '../components/FloatingActionBar';
 import { InfoHint } from '../components/InfoHint';
+import { ModalPortal } from '../components/ModalPortal';
 
 const NEW_CATEGORY_OPTION_VALUE = '__new_category__';
 
@@ -1971,13 +1972,14 @@ export const InventoryView: React.FC = () => {
       {/* MODAL 1: ADD / EDIT RAW INGREDIENT                                 */}
       {/* ================================================================== */}
       {ingModalOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-backdrop"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIngModalOpen(false);
-          }}
-        >
-          <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] flex flex-col bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-t-2xl sm:rounded-xl overflow-hidden shadow-xl animate-modal">
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIngModalOpen(false);
+            }}
+          >
+            <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] flex flex-col bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl animate-modal">
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3 shrink-0">
               <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
                 {editingIng ? t.inventory.editIngredient : t.inventory.addIngredient}
@@ -2199,16 +2201,23 @@ export const InventoryView: React.FC = () => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ================================================================== */}
       {/* MODAL 2: QUICK RESTOCK / PURCHASE STOCK-IN MODAL                   */}
       {/* ================================================================== */}
       {purchaseTarget && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 animate-backdrop">
-          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl animate-modal">
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setPurchaseTarget(null);
+            }}
+          >
+            <div className="w-full max-w-md bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl overflow-hidden shadow-2xl animate-modal">
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-1">
@@ -2403,16 +2412,23 @@ export const InventoryView: React.FC = () => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ================================================================== */}
       {/* MODAL 3: PREPARE BATCH MODAL (PREPARED STOCK)                      */}
       {/* ================================================================== */}
       {batchProduct && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 animate-backdrop">
-          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl animate-modal">
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setBatchProduct(null);
+            }}
+          >
+            <div className="w-full max-w-md bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl overflow-hidden shadow-2xl animate-modal">
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-1.5">
@@ -2556,16 +2572,23 @@ export const InventoryView: React.FC = () => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* ================================================================== */}
       {/* MODAL 4: UNIFIED ADJUST / WASTE / COUNT / OPENING STOCK MODAL      */}
       {/* ================================================================== */}
       {adjustModalTarget && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 animate-backdrop">
-          <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl animate-modal">
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setAdjustModalTarget(null);
+            }}
+          >
+            <div className="w-full max-w-md bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl overflow-hidden shadow-2xl animate-modal">
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
@@ -2781,8 +2804,9 @@ export const InventoryView: React.FC = () => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Camera Barcode Scanner for Stock-In */}

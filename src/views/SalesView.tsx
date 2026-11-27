@@ -58,6 +58,7 @@ import { BarcodeScanner, type BarcodeScanSource } from '../components/BarcodeSca
 import { ReceiptModal } from '../components/ReceiptModal';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { CategoryFilterPills } from '../components/CategoryFilterPills';
+import { ModalPortal } from '../components/ModalPortal';
 import {
   getCategoriesForScope,
   getCategoryBadgeClass,
@@ -1724,8 +1725,14 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
 
       {/* Size Variant Picker Modal */}
       {variantPickerProduct && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 animate-backdrop">
-          <div className="w-full max-w-sm bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden shadow-xl animate-modal">
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setVariantPickerProduct(null);
+            }}
+          >
+            <div className="w-full max-w-sm bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl overflow-hidden shadow-2xl animate-modal">
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between">
               <div>
                 <h3 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3]">
@@ -1794,14 +1801,21 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 );
               })}
             </div>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Order Details & Partial Return Modal */}
       {detailSale && (
-        <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4 overflow-y-auto animate-backdrop">
-          <div className="w-full max-w-xl bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl my-8 overflow-hidden shadow-xl animate-modal">
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setDetailSaleId(null);
+            }}
+          >
+            <div className="w-full max-w-xl bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl my-8 overflow-hidden shadow-2xl animate-modal">
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between">
               <div>
                 <h2 className="font-display text-lg font-bold text-stone-900 dark:text-[#F1F5F3]">
@@ -2020,24 +2034,26 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 {t.common.close}
               </button>
             </div>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Dedicated Cash Payment Modal (Triggered when Cash is selected & Charge is clicked) */}
       {cashModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="cash-payment-modal-title"
-          onClick={closeCashModal}
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4 overflow-y-auto animate-backdrop"
-        >
-          <form
-            onSubmit={handleConfirmCashPayment}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-2xl shadow-2xl overflow-hidden my-auto animate-modal"
+        <ModalPortal>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cash-payment-modal-title"
+            onClick={closeCashModal}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
           >
+            <form
+              onSubmit={handleConfirmCashPayment}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl shadow-2xl overflow-hidden my-auto animate-modal"
+            >
             {/* Modal Header */}
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -2358,8 +2374,9 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 )}
               </button>
             </div>
-          </form>
-        </div>
+            </form>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Printable 58mm / 80mm Receipt Modal */}

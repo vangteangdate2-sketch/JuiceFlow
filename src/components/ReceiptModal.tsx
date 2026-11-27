@@ -3,6 +3,7 @@ import { Banknote, Check, Copy, Printer, X } from 'lucide-react';
 import type { Sale, WorkspaceSettings } from '../types';
 import { formatDateTimeInPhnomPenh, formatKhr, formatUsdRef } from '../utils/format';
 import { formatUsdClean } from '../utils/cashTender';
+import { ModalPortal } from './ModalPortal';
 
 interface ReceiptModalProps {
   sale: Sale | null;
@@ -133,8 +134,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 animate-backdrop print:animate-none print:bg-white print:p-0 print:static">
-      <div className="w-full max-w-md bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-2xl shadow-xl overflow-hidden animate-modal print:animate-none print:border-0 print:shadow-none print:max-w-none print:bg-white print:rounded-none">
+    <ModalPortal>
+      <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop print:animate-none print:backdrop-blur-none print:bg-white print:p-0 print:static">
+        <div className="w-full max-w-md bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl shadow-2xl overflow-hidden animate-modal print:animate-none print:border-0 print:shadow-none print:max-w-none print:bg-white print:rounded-none">
         {/* High-Contrast Change Banner at the Very Top (Cash orders with Change Due > 0) */}
         {changeDueKhr > 0 && (
           <div
@@ -349,7 +351,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
             {isVi ? `In nhiệt (${paperWidth})` : `Print Thermal (${paperWidth})`}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 };
