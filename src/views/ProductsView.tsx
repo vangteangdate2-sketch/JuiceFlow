@@ -41,11 +41,9 @@ import {
 import { compressImageBlobToDataUrl } from '../utils/image';
 import {
   getCategoriesForScope,
-  getCategoryBadgeClass,
   getCategoryById,
   getCategoryDisplayName,
   getCategoryDotClass,
-  getProductTypeBadgeClass,
   getProductTypeDotClass,
   resolveProductCategoryId,
   UNCATEGORIZED_ID,
@@ -113,6 +111,19 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [initialFocusSection, setInitialFocusSection] = useState<'recipe' | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [expandedCardIds, setExpandedCardIds] = useState<Set<string>>(() => new Set());
+
+  const toggleCardDetails = (productId: string) => {
+    setExpandedCardIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
 
   // Quick-action states (inline POS visibility toggle + inline photo upload)
   const [togglingActiveIds, setTogglingActiveIds] = useState<Record<string, boolean>>({});
@@ -898,12 +909,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           </p>
         </div>
       ) : viewMode === 'table' ? (
-        /* COMPACT TABLE VIEW FOR BULK SCANNING */
+        /* 5-COLUMN ALIGNED TABLE VIEW WITH PINNED ACTIONS */
         <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
+                <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50 dark:bg-[#18251F]">
                   {selectMode && (
                     <th className="py-2 pl-3 pr-1 w-12">
                       <button
@@ -936,28 +947,19 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       </button>
                     </th>
                   )}
-                  <th className="py-3 px-4 font-medium">
+                  <th className="px-2.5 py-3 pl-3.5 font-medium">
                     {isVi ? 'Sản phẩm / SKU' : 'Product / SKU'}
                   </th>
-                  <th className="py-3 px-3 font-medium whitespace-nowrap">
-                    {isVi ? 'Phân loại' : 'Type · Category'}
+                  <th className="px-2.5 py-3 font-medium whitespace-nowrap">
+                    {isVi ? 'Loại · Danh mục' : 'Type · Category'}
                   </th>
-                  <th className="py-3 px-3 font-medium whitespace-nowrap">
-                    {isVi ? 'Hiển thị POS' : 'POS Status'}
+                  <th className="px-2.5 py-3 font-medium whitespace-nowrap">
+                    {isVi ? 'POS · Kho / Công thức' : 'Status · Stock'}
                   </th>
-                  <th className="py-3 px-3 font-medium whitespace-nowrap">
-                    {isVi ? 'Kho / Công thức' : 'Stock / Recipe'}
+                  <th className="px-2.5 py-3 font-medium text-right whitespace-nowrap">
+                    {isVi ? 'Giá & Biên lãi' : 'Price & Margin'}
                   </th>
-                  <th className="py-3 px-3 font-medium text-right whitespace-nowrap">
-                    {isVi ? 'Giá bán' : 'Price'}
-                  </th>
-                  <th className="py-3 px-3 font-medium text-right whitespace-nowrap">
-                    {isVi ? 'Giá vốn' : 'Cost'}
-                  </th>
-                  <th className="py-3 px-3 font-medium text-right whitespace-nowrap">
-                    {t.products.grossMargin}
-                  </th>
-                  <th className="py-3 px-4 font-medium text-right whitespace-nowrap">
+                  <th className="px-2.5 py-3 pr-3.5 font-medium w-px whitespace-nowrap text-right sticky right-0 z-10 bg-stone-50 dark:bg-[#18251F] border-l border-stone-200 dark:border-[#24352C]">
                     {t.common.actions}
                   </th>
                 </tr>
@@ -976,10 +978,21 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   const isLowStock = isDirectStock && product.stockQty <= product.reorderLevel;
                   const isUnlinkedRecipe =
                     product.productType === 'PREPARED_TO_ORDER' && !hasLinkedRecipe(product);
+                  const isNegativeMargin = !isUnlinkedRecipe && profit < 0;
+                  const isZeroCost = !isUnlinkedRecipe && cogs <= 0;
                   const isToggling = Boolean(togglingActiveIds[product.id]);
                   const isUploading = uploadingPhotoId === product.id;
                   const isSelected = activeSelectedIds.has(product.id);
                   const isHighlighted = highlightedProductId === product.id;
+                  const catItem = getCategoryById(
+                    resolveProductCategoryId(product, categories),
+                    categories
+                  );
+                  const stickyCellBg = isHighlighted
+                    ? 'bg-emerald-50 dark:bg-[#0D382B]'
+                    : isSelected
+                      ? 'bg-emerald-50 dark:bg-[#0B2E23]'
+                      : 'bg-white dark:bg-[#131D18] group-hover/row:bg-stone-50 dark:group-hover/row:bg-[#18251F]';
 
                   return (
                     <tr
@@ -989,14 +1002,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         if ((e.target as HTMLElement).closest('button, select, input, a')) return;
                         toggleSelectItem(product.id);
                       }}
-                      className={`transition-colors ${
+                      className={`group/row transition-colors ${
                         selectMode ? 'cursor-pointer' : ''
                       } ${
                         isHighlighted
-                          ? 'bg-emerald-50/90 dark:bg-[#064E3B]/45 ring-2 ring-inset ring-[#10B981]/60'
+                          ? 'bg-emerald-50 dark:bg-[#0D382B] ring-2 ring-inset ring-[#10B981]/60'
                           : isSelected
-                            ? 'bg-emerald-50/75 dark:bg-[#064E3B]/35'
-                            : 'hover:bg-stone-50/70 dark:hover:bg-[#18251F]/70'
+                            ? 'bg-emerald-50 dark:bg-[#0B2E23]'
+                            : 'bg-white dark:bg-[#131D18] hover:bg-stone-50 dark:hover:bg-[#18251F]'
                       }`}
                     >
                       {selectMode && (
@@ -1028,15 +1041,16 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           </button>
                         </td>
                       )}
-                      {/* Product Thumbnail + Name + SKU */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3 min-w-[200px]">
-                          <div className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 border border-stone-200/80 dark:border-[#24352C]">
+
+                      {/* Col 1: Product Thumbnail + Name + SKU */}
+                      <td className="px-2.5 py-3 pl-3.5">
+                        <div className="flex items-center gap-2.5 min-w-[180px]">
+                          <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-stone-200/80 dark:border-[#24352C]">
                             <ProductPhoto
                               src={product.imageUrl}
                               alt={displayName}
                               category={product.category}
-                              className="w-11 h-11"
+                              className="w-10 h-10"
                             />
                             {!product.imageUrl && (
                               <button
@@ -1048,19 +1062,22 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                                 className="absolute inset-0 bg-black/25 hover:bg-black/45 flex items-center justify-center text-white transition-colors"
                               >
                                 {isUploading ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                 ) : (
-                                  <Camera className="w-4 h-4" />
+                                  <Camera className="w-3.5 h-3.5" />
                                 )}
                               </button>
                             )}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-stone-900 dark:text-[#F1F5F3] truncate max-w-[220px]">
+                            <p
+                              className="font-semibold text-stone-900 dark:text-[#F1F5F3] truncate max-w-[200px]"
+                              title={displayName}
+                            >
                               {displayName}
                             </p>
-                            <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate max-w-[220px]">
-                              {[product.brand, product.barcode ? `SKU: ${product.barcode}` : '']
+                            <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate max-w-[200px]">
+                              {[product.brand, product.barcode ? `SKU ${product.barcode}` : '']
                                 .filter(Boolean)
                                 .join(' · ') || '—'}
                             </p>
@@ -1068,157 +1085,169 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* Color-coded Type & Category badges (matching InventoryView) */}
-                      <td className="py-3 px-3 text-xs whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
+                      {/* Col 2: Clean single-line Type · Category with subtle status dots */}
+                      <td className="px-2.5 py-3 text-xs whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5 text-stone-700 dark:text-[#D5DFDA]">
                           <span
-                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
+                            className={`w-2 h-2 rounded-full shrink-0 ${getProductTypeDotClass(
                               product.productType
                             )}`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${getProductTypeDotClass(
-                                product.productType
-                              )}`}
-                              aria-hidden="true"
-                            />
+                            aria-hidden="true"
+                          />
+                          <span className="font-medium">
                             {t.productTypes[product.productType]}
                           </span>
-                          {(() => {
-                            const catItem = getCategoryById(
-                              resolveProductCategoryId(product, categories),
-                              categories
-                            );
-                            return (
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getCategoryBadgeClass(
-                                  catItem
-                                )}`}
-                              >
-                                <span
-                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${getCategoryDotClass(
-                                    catItem
-                                  )}`}
-                                  aria-hidden="true"
-                                />
-                                {getCategoryDisplayName(catItem, isVi)}
-                              </span>
-                            );
-                          })()}
+                          <span className="text-stone-300 dark:text-[#344E41]" aria-hidden="true">
+                            ·
+                          </span>
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(
+                              catItem
+                            )}`}
+                            aria-hidden="true"
+                          />
+                          <span className="text-stone-500 dark:text-[#94A39B]">
+                            {getCategoryDisplayName(catItem, isVi)}
+                          </span>
                         </div>
                       </td>
 
-                      {/* Interactive POS Visibility Toggle Pill */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <button
-                          type="button"
-                          disabled={isToggling}
-                          onClick={() => handleTogglePosVisibility(product)}
-                          aria-pressed={product.active}
-                          className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full text-[11px] font-semibold transition-colors ${
-                            product.active
-                              ? 'bg-[#10B981] text-white dark:text-[#042419] hover:bg-[#059669]'
-                              : 'bg-slate-600/90 text-slate-100 hover:bg-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                          }`}
-                        >
-                          {isToggling ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : product.active ? (
-                            <Eye className="w-3 h-3" />
-                          ) : (
-                            <EyeOff className="w-3 h-3" />
-                          )}
-                          {product.active
-                            ? isVi
-                              ? 'Đang bán POS'
-                              : 'POS Active'
-                            : isVi
-                              ? 'Ẩn khỏi POS'
-                              : 'Hidden on POS'}
-                        </button>
-                      </td>
-
-                      {/* Stock or Recipe Status */}
-                      <td className="py-3 px-3 text-xs whitespace-nowrap">
-                        {isDirectStock ? (
-                          <span
-                            className={`font-mono-num font-semibold ${
-                              product.stockQty <= 0
-                                ? 'text-red-700 dark:text-[#F87171]'
-                                : isLowStock
-                                  ? 'text-amber-700 dark:text-amber-300'
-                                  : 'text-emerald-700 dark:text-[#34D399]'
-                            }`}
-                          >
-                            {formatQty(product.stockQty, product.unit)}
-                          </span>
-                        ) : isUnlinkedRecipe ? (
+                      {/* Col 3: POS Visibility Toggle + Stock / Recipe Status */}
+                      <td className="px-2.5 py-3 whitespace-nowrap">
+                        <div className="flex flex-col items-start gap-1">
                           <button
                             type="button"
-                            onClick={() => openEdit(product, 'recipe')}
-                            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-500/40 dark:hover:bg-amber-950/80 transition-colors"
+                            disabled={isToggling}
+                            onClick={() => handleTogglePosVisibility(product)}
+                            aria-pressed={product.active}
+                            className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold transition-colors ${
+                              product.active
+                                ? 'bg-[#10B981]/15 text-[#0F5C43] border border-[#10B981]/35 hover:bg-[#10B981]/25 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/40'
+                                : 'bg-stone-100 text-stone-600 border border-stone-200 hover:bg-stone-200/80 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C]'
+                            }`}
                           >
-                            <Plus className="w-3 h-3" />
-                            {isVi ? 'Gắn nguyên liệu' : 'Link Ingredients'}
+                            {isToggling ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : product.active ? (
+                              <Eye className="w-3 h-3" />
+                            ) : (
+                              <EyeOff className="w-3 h-3" />
+                            )}
+                            {product.active
+                              ? isVi
+                                ? 'Đang bán POS'
+                                : 'POS Active'
+                              : isVi
+                                ? 'Đang ẩn'
+                                : 'Hidden'}
                           </button>
-                        ) : product.variants && product.variants.length > 0 ? (
-                          <span className="text-stone-700 dark:text-[#D5DFDA] font-medium">
-                            {product.variants.length} {isVi ? 'kích cỡ' : 'sizes'}
-                          </span>
-                        ) : (
-                          <span className="text-stone-700 dark:text-[#D5DFDA] font-medium">
-                            {product.recipe.length} {isVi ? 'nguyên liệu' : 'ingredients'}
-                          </span>
-                        )}
+
+                          <div className="text-xs leading-tight">
+                            {isDirectStock ? (
+                              <span
+                                className={`font-mono-num font-semibold ${
+                                  product.stockQty <= 0
+                                    ? 'text-red-600 dark:text-[#F87171]'
+                                    : isLowStock
+                                      ? 'text-amber-700 dark:text-amber-300'
+                                      : 'text-emerald-700 dark:text-[#34D399]'
+                                }`}
+                              >
+                                {formatQty(product.stockQty, product.unit)}{' '}
+                                <span className="font-sans font-normal text-stone-500 dark:text-[#94A39B]">
+                                  {isVi ? 'tồn kho' : 'in stock'}
+                                </span>
+                              </span>
+                            ) : isUnlinkedRecipe ? (
+                              <button
+                                type="button"
+                                onClick={() => openEdit(product, 'recipe')}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:underline"
+                              >
+                                <Plus className="w-3 h-3 shrink-0" />
+                                {isVi ? 'Gắn nguyên liệu' : 'Link Ingredients'}
+                              </button>
+                            ) : product.variants && product.variants.length > 0 ? (
+                              <span className="text-stone-600 dark:text-[#94A39B] font-medium">
+                                {product.variants.length} {isVi ? 'kích cỡ' : 'sizes'}
+                              </span>
+                            ) : (
+                              <span className="text-stone-600 dark:text-[#94A39B] font-medium">
+                                {product.recipe.length} {isVi ? 'nguyên liệu' : 'ingredients'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
-                      {/* Selling Price */}
-                      <td className="py-3 px-3 text-right font-mono-num font-bold text-[#0F5C43] dark:text-[#34D399] whitespace-nowrap">
-                        {product.variants && product.variants.length > 1
-                          ? `${formatKhr(Math.min(...product.variants.map((v) => v.priceKhr)))}+`
-                          : formatKhr(basePrice)}
+                      {/* Col 4: Merged Price & Margin Column */}
+                      <td className="px-2.5 py-3 text-right whitespace-nowrap">
+                        <div className="font-mono-num text-sm font-bold text-[#0F5C43] dark:text-[#34D399]">
+                          {product.variants && product.variants.length > 1
+                            ? `${formatKhr(Math.min(...product.variants.map((v) => v.priceKhr)))}+`
+                            : formatKhr(basePrice)}
+                        </div>
+                        <div className="mt-0.5 text-xs font-mono-num flex items-center justify-end gap-1">
+                          {isUnlinkedRecipe ? (
+                            <span className="inline-flex items-center gap-1 font-sans font-semibold text-amber-700 dark:text-amber-300">
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              {isVi ? 'Chưa gắn công thức' : 'No Recipe Linked'}
+                            </span>
+                          ) : isNegativeMargin ? (
+                            <span className="font-semibold text-red-600 dark:text-[#F87171]">
+                              {isVi ? 'Vốn' : 'Cost'} {formatKhr(cogs)} · {margin}%
+                            </span>
+                          ) : isZeroCost ? (
+                            <>
+                              <span className="font-semibold text-amber-700 dark:text-amber-300">
+                                {isVi ? 'Vốn' : 'Cost'} {formatKhr(0)}
+                              </span>
+                              <span className="text-stone-300 dark:text-[#344E41]" aria-hidden="true">
+                                ·
+                              </span>
+                              <span className="text-stone-500 dark:text-[#94A39B]">{margin}%</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-stone-500 dark:text-[#94A39B]">
+                                {isVi ? 'Vốn' : 'Cost'} {formatKhr(cogs)}
+                              </span>
+                              <span className="text-stone-300 dark:text-[#344E41]" aria-hidden="true">
+                                ·
+                              </span>
+                              <span className="font-semibold text-emerald-700 dark:text-[#34D399]">
+                                {margin}%
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </td>
 
-                      {/* Cost */}
-                      <td className="py-3 px-3 text-right font-mono-num text-xs text-stone-700 dark:text-[#D5DFDA] whitespace-nowrap">
-                        {isUnlinkedRecipe ? '—' : formatKhr(cogs)}
-                      </td>
-
-                      {/* Gross Margin or Missing Recipe Warning */}
-                      <td className="py-3 px-3 text-right whitespace-nowrap">
-                        {isUnlinkedRecipe ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-500/40">
-                            <AlertTriangle className="w-3 h-3 shrink-0" />
-                            {isVi ? 'Chưa gắn công thức' : 'No Recipe Linked'}
-                          </span>
-                        ) : (
-                          <span className="font-mono-num text-xs font-semibold text-emerald-700 dark:text-[#34D399]">
-                            {formatKhr(profit)} ({margin}%)
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
+                      {/* Col 5: Pinned Sticky Actions Column (Edit, Label, Delete) */}
+                      <td
+                        className={`px-2.5 py-3 pr-3.5 w-px whitespace-nowrap text-right sticky right-0 z-10 border-l border-stone-200 dark:border-[#24352C] transition-colors ${stickyCellBg}`}
+                      >
+                        <div className="inline-flex items-center justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => openEdit(product)}
-                            className="h-10 px-3 inline-flex items-center gap-1.5 text-xs font-semibold rounded-full bg-stone-100/90 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors"
+                            className="h-9 px-2.5 text-xs font-medium inline-flex items-center gap-1.5 rounded-lg bg-stone-100 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors whitespace-nowrap"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
-                            {t.common.edit}
+                            <Edit2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>{t.common.edit}</span>
                           </button>
+
                           <button
                             type="button"
                             onClick={() => setLabelProduct(product)}
-                            className="h-10 px-3 inline-flex items-center gap-1.5 text-xs font-semibold rounded-full bg-stone-100/90 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors"
+                            className="h-9 px-2.5 text-xs font-medium inline-flex items-center gap-1.5 rounded-lg bg-stone-100 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors whitespace-nowrap"
                           >
-                            <QrCode className="w-3.5 h-3.5" />
-                            {isVi ? 'In nhãn' : 'Labels'}
+                            <QrCode className="w-3.5 h-3.5 shrink-0" />
+                            <span>{isVi ? 'Nhãn' : 'Label'}</span>
                           </button>
+
                           {confirmDeleteId === product.id ? (
-                            <div className="inline-flex items-center gap-1 ml-1">
+                            <div className="inline-flex items-center gap-1">
                               <button
                                 type="button"
                                 onClick={async () => {
@@ -1226,29 +1255,28 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                                   setConfirmDeleteId(null);
                                 }}
                                 aria-label={t.common.delete}
-                                className="h-10 px-2.5 inline-flex items-center gap-1 text-xs font-semibold rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                className="h-9 px-2.5 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors whitespace-nowrap"
                               >
-                                <Check className="w-3.5 h-3.5" />
-                                {t.common.delete}
+                                <Check className="w-3.5 h-3.5 shrink-0" />
+                                <span>{t.common.delete}</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setConfirmDeleteId(null)}
                                 aria-label={t.common.cancel}
-                                className="w-10 h-10 inline-flex items-center justify-center rounded-full text-stone-500 dark:text-[#94A39B] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors"
+                                className="w-9 h-9 inline-flex items-center justify-center rounded-full text-stone-500 dark:text-[#94A39B] hover:bg-stone-200/70 dark:hover:bg-[#1F3028] transition-colors"
                               >
-                                <X className="w-4 h-4" />
+                                <X className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           ) : (
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteId(product.id)}
-                              aria-label={t.common.delete}
-                              title={t.common.delete}
-                              className="w-10 h-10 ml-1 inline-flex items-center justify-center rounded-full text-stone-400 dark:text-[#94A39B] hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/50 dark:hover:text-[#F87171] transition-colors"
+                              className="h-9 px-2.5 text-xs font-medium inline-flex items-center gap-1.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-[#F87171] border border-red-200/80 dark:border-red-500/30 hover:bg-red-100 dark:hover:bg-red-950/70 transition-colors whitespace-nowrap"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>{t.common.delete}</span>
                             </button>
                           )}
                         </div>
@@ -1261,8 +1289,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           </div>
         </div>
       ) : (
-        /* EQUAL-HEIGHT CARD GRID VIEW */
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        /* CLEAN & CONCISE DETAILS / GRID VIEW */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
           {filteredProducts.map((product) => {
             const firstVariant = product.variants?.[0];
             const cogs = Math.round(calculateProductCogs(product, ingredients, firstVariant));
@@ -1275,10 +1303,17 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             const isLowStock = isDirectStock && product.stockQty <= product.reorderLevel;
             const isUnlinkedRecipe =
               product.productType === 'PREPARED_TO_ORDER' && !hasLinkedRecipe(product);
+            const isNegativeMargin = !isUnlinkedRecipe && profit < 0;
+            const isZeroCost = !isUnlinkedRecipe && cogs <= 0;
             const isToggling = Boolean(togglingActiveIds[product.id]);
             const isUploading = uploadingPhotoId === product.id;
             const isSelected = activeSelectedIds.has(product.id);
             const isHighlighted = highlightedProductId === product.id;
+            const isExpanded = expandedCardIds.has(product.id);
+            const catItem = getCategoryById(
+              resolveProductCategoryId(product, categories),
+              categories
+            );
 
             return (
               <div
@@ -1288,7 +1323,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   if ((e.target as HTMLElement).closest('button, select, input, a')) return;
                   toggleSelectItem(product.id);
                 }}
-                className={`group rounded-xl overflow-hidden flex flex-col justify-between h-full transition-all ${
+                className={`group rounded-xl overflow-hidden flex flex-col transition-all ${
                   selectMode ? 'cursor-pointer' : ''
                 } ${
                   isHighlighted
@@ -1298,391 +1333,496 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       : 'bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C]'
                 }`}
               >
-                <div>
-                  {/* Image Container with Top-Left Interactive POS Toggle, Top-Right Select Checkbox & Inline Photo Upload */}
-                  <div className="relative h-40 w-full overflow-hidden">
-                    <ProductPhoto
-                      src={product.imageUrl}
-                      alt={displayName}
-                      category={product.category}
-                      className="w-full h-40"
-                    />
+                {/* Part 1: Top Visual & Top-Right Interactive POS Status Badge */}
+                <div className="relative h-36 sm:h-40 w-full overflow-hidden shrink-0">
+                  <ProductPhoto
+                    src={product.imageUrl}
+                    alt={displayName}
+                    category={product.category}
+                    className="w-full h-36 sm:h-40"
+                  />
 
-                    {/* Interactive POS Visibility Status Pill (Top-Left) */}
+                  {/* Bulk Selection Checkbox Overlay (Top-Left, visible in Select Mode) */}
+                  {selectMode && (
                     <button
                       type="button"
-                      disabled={isToggling}
-                      onClick={() => handleTogglePosVisibility(product)}
-                      aria-pressed={product.active}
-                      title={
-                        product.active
+                      onClick={() => toggleSelectItem(product.id)}
+                      aria-pressed={isSelected}
+                      aria-label={
+                        isSelected
                           ? isVi
-                            ? 'Bấm để ẩn khỏi màn hình bán hàng POS'
-                            : 'Click to hide from POS screen'
+                            ? `Bỏ chọn ${displayName}`
+                            : `Deselect ${displayName}`
                           : isVi
-                            ? 'Bấm để hiện lại trên màn hình POS'
-                            : 'Click to activate on POS screen'
+                            ? `Chọn ${displayName}`
+                            : `Select ${displayName}`
                       }
-                      className={`absolute top-2.5 left-2.5 z-10 inline-flex items-center gap-1.5 min-h-[32px] px-2.5 py-1 rounded-full text-[11px] font-semibold shadow-sm backdrop-blur-xs transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
-                        product.active
-                          ? 'bg-[#10B981] text-white dark:text-[#042419] hover:bg-[#059669]'
-                          : 'bg-slate-600/90 text-slate-100 hover:bg-slate-700 dark:bg-slate-800/90 dark:text-slate-200 dark:hover:bg-slate-700'
-                      }`}
+                      className="absolute top-1.5 left-1.5 z-10 w-10 h-10 inline-flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                     >
-                      {isToggling ? (
-                        <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-                      ) : product.active ? (
-                        <Eye className="w-3 h-3 shrink-0" />
-                      ) : (
-                        <EyeOff className="w-3 h-3 shrink-0" />
-                      )}
-                      <span>
-                        {product.active
-                          ? isVi
-                            ? 'Đang bán POS'
-                            : 'POS Active'
-                          : isVi
-                            ? 'Ẩn khỏi POS'
-                            : 'Hidden on POS'}
+                      <span
+                        className={`w-6 h-6 rounded-md flex items-center justify-center border-2 shadow-sm transition-colors ${
+                          isSelected
+                            ? 'bg-[#0F5C43] border-[#0F5C43] text-white dark:bg-[#10B981] dark:border-[#10B981] dark:text-[#042419]'
+                            : 'bg-white/95 dark:bg-[#131D18]/95 border-stone-300 dark:border-[#344E41] hover:border-[#0F5C43] dark:hover:border-[#10B981]'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
                       </span>
                     </button>
+                  )}
 
-                    {/* Bulk Selection Checkbox Overlay (Top-Right, visible in Select Mode) */}
-                    {selectMode && (
+                  {/* Compact Interactive POS Status Badge (Top-Right) */}
+                  <button
+                    type="button"
+                    disabled={isToggling}
+                    onClick={() => handleTogglePosVisibility(product)}
+                    aria-pressed={product.active}
+                    title={
+                      product.active
+                        ? isVi
+                          ? 'Bấm để ẩn khỏi màn hình bán hàng POS'
+                          : 'Click to hide from POS screen'
+                        : isVi
+                          ? 'Bấm để hiện lại trên màn hình POS'
+                          : 'Click to activate on POS screen'
+                    }
+                    className={`absolute top-2.5 right-2.5 z-10 inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold shadow-sm backdrop-blur-xs transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                      product.active
+                        ? 'bg-[#10B981] text-white dark:text-[#042419] hover:bg-[#059669]'
+                        : 'bg-stone-800/85 text-stone-100 hover:bg-stone-900 dark:bg-slate-900/90 dark:text-slate-200 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {isToggling ? (
+                      <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                    ) : product.active ? (
+                      <Eye className="w-3 h-3 shrink-0" />
+                    ) : (
+                      <EyeOff className="w-3 h-3 shrink-0" />
+                    )}
+                    <span>
+                      {product.active
+                        ? isVi
+                          ? 'Đang bán POS'
+                          : 'POS Active'
+                        : isVi
+                          ? 'Đang ẩn'
+                          : 'Hidden'}
+                    </span>
+                  </button>
+
+                  {/* Subtle Bottom-Center Inline Photo Upload Trigger when no photo is uploaded */}
+                  {!product.imageUrl && (
+                    <div className="absolute inset-0 flex items-end justify-center pb-2.5 pointer-events-none">
                       <button
                         type="button"
-                        onClick={() => toggleSelectItem(product.id)}
-                        aria-pressed={isSelected}
-                        aria-label={
-                          isSelected
-                            ? isVi
-                              ? `Bỏ chọn ${displayName}`
-                              : `Deselect ${displayName}`
-                            : isVi
-                              ? `Chọn ${displayName}`
-                              : `Select ${displayName}`
-                        }
-                        className="absolute top-1.5 right-1.5 z-10 w-10 h-10 inline-flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                        disabled={isUploading}
+                        onClick={() => triggerInlinePhotoUpload(product)}
+                        className="pointer-events-auto inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold bg-white/92 dark:bg-[#131D18]/92 text-stone-700 dark:text-[#F1F5F3] border border-stone-200/90 dark:border-[#24352C] shadow-xs hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] opacity-95 sm:opacity-85 sm:group-hover:opacity-100 transition-all cursor-pointer"
                       >
-                        <span
-                          className={`w-6 h-6 rounded-md flex items-center justify-center border-2 shadow-sm transition-colors ${
-                            isSelected
-                              ? 'bg-[#0F5C43] border-[#0F5C43] text-white dark:bg-[#10B981] dark:border-[#10B981] dark:text-[#042419]'
-                              : 'bg-white/95 dark:bg-[#131D18]/95 border-stone-300 dark:border-[#344E41] hover:border-[#0F5C43] dark:hover:border-[#10B981]'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-4 h-4 stroke-[3]" />}
+                        {isUploading ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0F5C43] dark:text-[#34D399]" />
+                        ) : (
+                          <Camera className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
+                        )}
+                        <span>
+                          {isUploading
+                            ? isVi
+                              ? 'Đang tải...'
+                              : 'Uploading...'
+                            : isVi
+                              ? '+ Thêm ảnh'
+                              : '+ Add Photo'}
                         </span>
                       </button>
-                    )}
+                    </div>
+                  )}
+                </div>
 
-                    {/* Subtle Centered Inline Photo Upload Trigger when no photo is uploaded */}
-                    {!product.imageUrl && (
-                      <div className="absolute inset-0 flex items-end justify-center pb-3 pointer-events-none">
-                        <button
-                          type="button"
-                          disabled={isUploading}
-                          onClick={() => triggerInlinePhotoUpload(product)}
-                          className="pointer-events-auto inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white/92 dark:bg-[#131D18]/92 text-stone-700 dark:text-[#F1F5F3] border border-stone-200/90 dark:border-[#24352C] shadow-xs hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] opacity-95 sm:opacity-85 sm:group-hover:opacity-100 transition-all cursor-pointer"
-                        >
-                          {isUploading ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0F5C43] dark:text-[#34D399]" />
-                          ) : (
-                            <Camera className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
-                          )}
-                          <span>
-                            {isUploading
-                              ? isVi
-                                ? 'Đang tải...'
-                                : 'Uploading...'
-                              : isVi
-                                ? '+ Thêm ảnh'
-                                : '+ Add Photo'}
-                          </span>
-                        </button>
-                      </div>
-                    )}
+                {/* Part 2: Concise Body */}
+                <div className="p-4 flex flex-col gap-3">
+                  {/* Single-line Product Name + Clean Type · Category subtitle */}
+                  <div className="min-w-0">
+                    <h3
+                      className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3] truncate"
+                      title={displayName}
+                    >
+                      {displayName}
+                    </h3>
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#94A39B] min-w-0">
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${getProductTypeDotClass(
+                          product.productType
+                        )}`}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate font-medium text-stone-700 dark:text-[#D5DFDA]">
+                        {t.productTypes[product.productType]}
+                      </span>
+                      <span className="text-stone-300 dark:text-[#344E41] shrink-0" aria-hidden="true">
+                        ·
+                      </span>
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(catItem)}`}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{getCategoryDisplayName(catItem, isVi)}</span>
+                    </p>
                   </div>
 
-                  {/* Card Body */}
-                  <div className="p-5 pb-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        {/* Color-coded Item Type & Category badges (matching InventoryView) */}
-                        <p className="flex flex-wrap items-center gap-1.5 text-xs">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
-                              product.productType
-                            )}`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${getProductTypeDotClass(
-                                product.productType
-                              )}`}
-                              aria-hidden="true"
-                            />
-                            {t.productTypes[product.productType]}
-                          </span>
-                          {(() => {
-                            const catItem = getCategoryById(
-                              resolveProductCategoryId(product, categories),
-                              categories
-                            );
-                            return (
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getCategoryBadgeClass(
-                                  catItem
-                                )}`}
-                              >
-                                <span
-                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${getCategoryDotClass(
-                                    catItem
-                                  )}`}
-                                  aria-hidden="true"
-                                />
-                                {getCategoryDisplayName(catItem, isVi)}
-                              </span>
-                            );
-                          })()}
-                        </p>
-                        <h3 className="mt-1 font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
-                          {displayName}
-                        </h3>
-                        {(product.brand || product.barcode) && (
-                          <p className="text-xs text-stone-500 dark:text-[#94A39B] mt-0.5 font-mono-num truncate">
-                            {[product.brand, product.barcode ? `SKU: ${product.barcode}` : '']
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-mono-num text-lg font-bold text-[#0F5C43] dark:text-[#34D399] whitespace-nowrap">
-                          {product.variants && product.variants.length > 1
-                            ? `${formatKhr(Math.min(...product.variants.map((v) => v.priceKhr)))}+`
-                            : formatKhr(basePrice)}
-                        </p>
-                        {isDirectStock && (
-                          <p
-                            className={`text-xs font-mono-num font-semibold mt-0.5 ${
-                              product.stockQty <= 0
-                                ? 'text-red-700 dark:text-[#F87171]'
-                                : isLowStock
-                                  ? 'text-amber-700 dark:text-amber-300'
-                                  : 'text-emerald-700 dark:text-[#34D399]'
-                            }`}
-                          >
-                            {formatQty(product.stockQty, product.unit)}
-                          </p>
-                        )}
-                      </div>
+                  {/* Clean 2-Column Metric Row: Price | Margin / Stock */}
+                  <div className="pt-3 border-t border-stone-100 dark:border-[#1F3028] grid grid-cols-[auto_1fr] gap-3 items-end">
+                    <div>
+                      <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
+                        {isVi ? 'Giá bán' : 'Price'}
+                      </span>
+                      <span className="font-mono-num text-base font-bold text-[#0F5C43] dark:text-[#34D399] whitespace-nowrap">
+                        {product.variants && product.variants.length > 1
+                          ? `${formatKhr(Math.min(...product.variants.map((v) => v.priceKhr)))}+`
+                          : formatKhr(basePrice)}
+                      </span>
                     </div>
 
-                    {/* Cost & Margin Row (with No Recipe Linked warning for unlinked Made-to-Order) */}
-                    <div className="mt-4 pt-3 border-t border-stone-100 dark:border-[#1F3028] grid grid-cols-2 gap-3 text-xs items-center">
-                      <div>
-                        <span className="text-stone-500 dark:text-[#94A39B] block">
-                          {product.productType === 'PACKAGED'
-                            ? isVi
-                              ? 'Giá vốn nhập'
-                              : 'Unit Cost'
-                            : t.products.recipeCost}
-                        </span>
-                        <span className="font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                          {isUnlinkedRecipe ? '—' : formatKhr(cogs)}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-stone-500 dark:text-[#94A39B] block">
-                          {t.products.grossMargin}
-                        </span>
-                        {isUnlinkedRecipe ? (
-                          <span className="mt-0.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-500/40">
-                            <AlertTriangle className="w-3 h-3 shrink-0" />
-                            {isVi ? 'Chưa gắn công thức' : 'No Recipe Linked'}
+                    <div className="text-right min-w-0">
+                      <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
+                        {isDirectStock
+                          ? isVi
+                            ? 'Tồn kho'
+                            : 'Stock'
+                          : isVi
+                            ? 'Biên lãi / Công thức'
+                            : 'Margin / Sizes'}
+                      </span>
+                      {isDirectStock ? (
+                        <span
+                          className={`block font-mono-num text-xs font-semibold truncate ${
+                            product.stockQty <= 0
+                              ? 'text-red-600 dark:text-[#F87171]'
+                              : isLowStock
+                                ? 'text-amber-700 dark:text-amber-300'
+                                : 'text-emerald-700 dark:text-[#34D399]'
+                          }`}
+                        >
+                          {formatQty(product.stockQty, product.unit)}{' '}
+                          <span className="font-sans font-normal text-stone-500 dark:text-[#94A39B]">
+                            {isVi ? 'tồn kho' : 'in stock'}
                           </span>
-                        ) : (
-                          <span className="font-mono-num font-semibold text-emerald-700 dark:text-[#34D399]">
-                            {formatKhr(profit)} ({margin}%)
+                        </span>
+                      ) : isUnlinkedRecipe ? (
+                        <button
+                          type="button"
+                          onClick={() => openEdit(product, 'recipe')}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:underline truncate"
+                        >
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>{isVi ? 'Chưa gắn công thức' : 'No recipe linked'}</span>
+                        </button>
+                      ) : (
+                        <span
+                          className={`block font-mono-num text-xs font-semibold truncate ${
+                            isNegativeMargin
+                              ? 'text-red-600 dark:text-[#F87171]'
+                              : isZeroCost
+                                ? 'text-amber-700 dark:text-amber-300'
+                                : 'text-emerald-700 dark:text-[#34D399]'
+                          }`}
+                        >
+                          {margin}% {isVi ? 'lãi' : 'margin'}
+                          <span className="font-sans font-normal text-stone-500 dark:text-[#94A39B]">
+                            {' · '}
+                            {product.variants && product.variants.length > 0
+                              ? `${product.variants.length} ${isVi ? 'cỡ' : 'sizes'}`
+                              : `${product.recipe.length} ${isVi ? 'nguyên liệu' : 'ingr.'}`}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Part 3: Collapsible Secondary Details Toggle & Drawer */}
+                  <div className="pt-2.5 border-t border-stone-100 dark:border-[#1F3028]">
+                    <button
+                      type="button"
+                      onClick={() => toggleCardDetails(product.id)}
+                      aria-expanded={isExpanded}
+                      className="w-full h-8 flex items-center justify-between gap-2 text-xs font-medium text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-colors"
+                    >
+                      <span className="inline-flex items-center gap-1.5 min-w-0 truncate">
+                        <span>{isVi ? 'Chi tiết' : 'Details'}</span>
+                        {!isExpanded && (
+                          <span className="font-mono-num text-[11px] text-stone-400 dark:text-[#94A39B]/80 truncate">
+                            {isUnlinkedRecipe
+                              ? ''
+                              : isZeroCost
+                                ? `· ${isVi ? 'Vốn' : 'Cost'} ${formatKhr(0)}`
+                                : `· ${isVi ? 'Vốn' : 'Cost'} ${formatKhr(cogs)}`}
                           </span>
                         )}
-                      </div>
-                    </div>
+                      </span>
+                      <ChevronDown
+                        className={`w-4 h-4 shrink-0 text-stone-400 dark:text-[#94A39B] transition-transform duration-200 motion-reduce:transition-none ${
+                          isExpanded ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
 
-                    {/* Variants / Packaging / Recipe Summary */}
-                    <div className="mt-4 pt-3 border-t border-stone-100 dark:border-[#1F3028] space-y-2 text-xs">
-                      {product.productType === 'PACKAGED' ? (
-                        <div className="space-y-1 text-stone-600 dark:text-[#94A39B]">
-                          <div className="flex justify-between">
+                    {isExpanded && (
+                      <div className="mt-2.5 pt-2.5 border-t border-stone-100 dark:border-[#1F3028] space-y-2.5 text-xs">
+                        {/* Cost, Margin & SKU/Brand Breakdown */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
                             <span className="text-stone-500 dark:text-[#94A39B]">
-                              {t.inventory.supplier}
+                              {product.productType === 'PACKAGED'
+                                ? isVi
+                                  ? 'Giá vốn nhập'
+                                  : 'Unit Cost'
+                                : t.products.recipeCost}
                             </span>
-                            <span className="font-medium text-stone-800 dark:text-[#F1F5F3]">
-                              {product.supplier || '—'}
+                            <span
+                              className={`font-mono-num font-semibold ${
+                                isZeroCost
+                                  ? 'text-amber-700 dark:text-amber-300'
+                                  : 'text-stone-900 dark:text-[#F1F5F3]'
+                              }`}
+                            >
+                              {isUnlinkedRecipe ? '—' : formatKhr(cogs)}
                             </span>
                           </div>
-                          {product.packagingBarcodes && product.packagingBarcodes.length > 0 && (
-                            <div className="pt-1 space-y-0.5">
+
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-stone-500 dark:text-[#94A39B]">
+                              {t.products.grossMargin}
+                            </span>
+                            {isUnlinkedRecipe ? (
+                              <span className="font-semibold text-amber-700 dark:text-amber-300">
+                                {isVi ? 'Chưa gắn công thức' : 'No Recipe Linked'}
+                              </span>
+                            ) : (
+                              <span
+                                className={`font-mono-num font-semibold ${
+                                  isNegativeMargin
+                                    ? 'text-red-600 dark:text-[#F87171]'
+                                    : 'text-emerald-700 dark:text-[#34D399]'
+                                }`}
+                              >
+                                {formatKhr(profit)} ({margin}%)
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-stone-500 dark:text-[#94A39B] shrink-0">
+                              SKU / Barcode
+                            </span>
+                            <span className="font-mono-num text-right text-stone-800 dark:text-[#D5DFDA] break-all">
+                              {product.barcode || '—'}
+                            </span>
+                          </div>
+
+                          {product.brand && (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-stone-500 dark:text-[#94A39B]">
+                                {isVi ? 'Thương hiệu' : 'Brand'}
+                              </span>
+                              <span className="font-medium text-stone-800 dark:text-[#D5DFDA] truncate">
+                                {product.brand}
+                              </span>
+                            </div>
+                          )}
+
+                          {product.productType === 'PACKAGED' && product.supplier && (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-stone-500 dark:text-[#94A39B]">
+                                {t.inventory.supplier}
+                              </span>
+                              <span className="font-medium text-stone-800 dark:text-[#D5DFDA] truncate">
+                                {product.supplier}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Pack / Case Barcodes (Packaged Goods) */}
+                        {product.productType === 'PACKAGED' &&
+                          product.packagingBarcodes &&
+                          product.packagingBarcodes.length > 0 && (
+                            <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] space-y-1">
+                              <p className="font-medium text-stone-500 dark:text-[#94A39B]">
+                                {isVi ? 'Mã đóng gói / Thùng' : 'Pack / Case Barcodes'}
+                              </p>
                               {product.packagingBarcodes.map((pb, idx) => (
                                 <div
                                   key={idx}
-                                  className="flex justify-between font-mono-num text-[11px]"
+                                  className="flex justify-between gap-2 font-mono-num text-[11px]"
                                 >
-                                  <span className="text-stone-500 dark:text-[#94A39B]">
+                                  <span className="text-stone-600 dark:text-[#94A39B]">
                                     {pb.label}
                                   </span>
-                                  <span className="text-stone-700 dark:text-[#D5DFDA]">
+                                  <span className="text-stone-800 dark:text-[#D5DFDA] break-all text-right">
                                     {pb.barcode} (×{pb.unitsPerPack})
                                   </span>
                                 </div>
                               ))}
                             </div>
                           )}
-                        </div>
-                      ) : product.variants && product.variants.length > 0 ? (
-                        <div>
-                          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B] mb-1.5 flex items-center gap-1">
-                            <Layers className="w-3.5 h-3.5" />
-                            {isVi ? 'Kích cỡ & Giá bán' : 'Size Variants'} ({product.variants.length}
-                            )
-                          </p>
-                          <ul className="space-y-1">
-                            {product.variants.map((v) => {
-                              const vCogs = Math.round(calculateRecipeCogs(v.recipe, ingredients));
-                              return (
-                                <li
-                                  key={v.id}
-                                  className="flex justify-between text-stone-700 dark:text-[#D5DFDA]"
-                                >
-                                  <span className="font-medium">
-                                    {isVi ? v.nameVi || v.name : v.name}
-                                  </span>
-                                  <span className="font-mono-num">
-                                    {formatKhr(v.priceKhr)}{' '}
-                                    <span className="text-stone-400 dark:text-[#94A39B]">
-                                      ({v.recipe.length > 0 ? formatKhr(vCogs) : '—'})
-                                    </span>
-                                  </span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                          {isUnlinkedRecipe && (
-                            <button
-                              type="button"
-                              onClick={() => openEdit(product, 'recipe')}
-                              className="mt-2.5 w-full h-10 min-h-[40px] px-3.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950/45 dark:hover:bg-amber-950/75 dark:text-amber-200 dark:border-amber-500/40 transition-colors"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              {isVi ? 'Gắn nguyên liệu' : 'Link Ingredients'}
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B] mb-1.5">
-                            {product.productType === 'PREPARED_STOCK'
-                              ? isVi
-                                ? 'Công thức pha mẻ (cho 1 đơn vị thành phẩm)'
-                                : 'Batch Prep Recipe (per 1 finished unit)'
-                              : t.products.recipeSection}
-                          </p>
-                          {product.recipe.length === 0 ? (
-                            isUnlinkedRecipe ? (
-                              <button
-                                type="button"
-                                onClick={() => openEdit(product, 'recipe')}
-                                className="mt-1 w-full h-10 min-h-[40px] px-3.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950/45 dark:hover:bg-amber-950/75 dark:text-amber-200 dark:border-amber-500/40 transition-colors"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                {isVi ? 'Gắn nguyên liệu' : 'Link Ingredients'}
-                              </button>
-                            ) : (
-                              <p className="text-xs text-stone-400 dark:text-[#94A39B]/70">
-                                {t.products.noRecipeYet}
+
+                        {/* Size Variant Breakdown */}
+                        {product.productType !== 'PACKAGED' &&
+                          product.variants &&
+                          product.variants.length > 0 && (
+                            <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] space-y-1.5">
+                              <p className="font-medium text-stone-500 dark:text-[#94A39B] flex items-center gap-1">
+                                <Layers className="w-3.5 h-3.5" />
+                                {isVi ? 'Kích cỡ & Giá bán' : 'Size Variants'} (
+                                {product.variants.length})
                               </p>
-                            )
-                          ) : (
-                            <ul className="space-y-1 text-stone-700 dark:text-[#D5DFDA]">
-                              {product.recipe.slice(0, 5).map((row, idx) => {
-                                const ing = ingMap.get(row.ingredientId);
-                                if (!ing) return null;
-                                return (
-                                  <li
-                                    key={`${row.ingredientId}-${idx}`}
-                                    className="flex justify-between gap-2"
-                                  >
-                                    <span className="truncate">
-                                      {isVi ? ing.nameVi || ing.name : ing.name}
-                                    </span>
-                                    <span className="font-mono-num text-stone-500 dark:text-[#94A39B] whitespace-nowrap shrink-0">
-                                      {formatQty(row.quantity, row.unit || ing.unit)}
-                                    </span>
-                                  </li>
-                                );
-                              })}
-                            </ul>
+                              <ul className="space-y-1">
+                                {product.variants.map((v) => {
+                                  const vCogs = Math.round(
+                                    calculateRecipeCogs(v.recipe, ingredients)
+                                  );
+                                  return (
+                                    <li
+                                      key={v.id}
+                                      className="flex justify-between gap-2 text-stone-700 dark:text-[#D5DFDA]"
+                                    >
+                                      <span className="font-medium">
+                                        {isVi ? v.nameVi || v.name : v.name}
+                                      </span>
+                                      <span className="font-mono-num">
+                                        {formatKhr(v.priceKhr)}{' '}
+                                        <span className="text-stone-400 dark:text-[#94A39B]">
+                                          ({v.recipe.length > 0 ? formatKhr(vCogs) : '—'})
+                                        </span>
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                              {isUnlinkedRecipe && (
+                                <button
+                                  type="button"
+                                  onClick={() => openEdit(product, 'recipe')}
+                                  className="mt-1.5 w-full h-9 px-3 inline-flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950/45 dark:hover:bg-amber-950/75 dark:text-amber-200 dark:border-amber-500/40 transition-colors"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  {isVi ? 'Gắn nguyên liệu' : 'Link Ingredients'}
+                                </button>
+                              )}
+                            </div>
                           )}
-                        </div>
-                      )}
-                    </div>
+
+                        {/* Linked Ingredient Recipe List */}
+                        {product.productType !== 'PACKAGED' &&
+                          (!product.variants || product.variants.length === 0) && (
+                            <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] space-y-1.5">
+                              <p className="font-medium text-stone-500 dark:text-[#94A39B]">
+                                {product.productType === 'PREPARED_STOCK'
+                                  ? isVi
+                                    ? 'Công thức pha mẻ (1 đơn vị)'
+                                    : 'Batch Prep Recipe (per unit)'
+                                  : t.products.recipeSection}
+                              </p>
+                              {product.recipe.length === 0 ? (
+                                isUnlinkedRecipe ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openEdit(product, 'recipe')}
+                                    className="w-full h-9 px-3 inline-flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950/45 dark:hover:bg-amber-950/75 dark:text-amber-200 dark:border-amber-500/40 transition-colors"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    {isVi ? 'Gắn nguyên liệu' : 'Link Ingredients'}
+                                  </button>
+                                ) : (
+                                  <p className="text-stone-400 dark:text-[#94A39B]/70">
+                                    {t.products.noRecipeYet}
+                                  </p>
+                                )
+                              ) : (
+                                <ul className="space-y-1 text-stone-700 dark:text-[#D5DFDA]">
+                                  {product.recipe.map((row, idx) => {
+                                    const ing = ingMap.get(row.ingredientId);
+                                    if (!ing) return null;
+                                    return (
+                                      <li
+                                        key={`${row.ingredientId}-${idx}`}
+                                        className="flex justify-between gap-2"
+                                      >
+                                        <span className="truncate">
+                                          {isVi ? ing.nameVi || ing.name : ing.name}
+                                        </span>
+                                        <span className="font-mono-num text-stone-500 dark:text-[#94A39B] whitespace-nowrap shrink-0">
+                                          {formatQty(row.quantity, row.unit || ing.unit)}
+                                        </span>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
+                            </div>
+                          )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Touch-Friendly Footer Actions (40px-44px pill buttons left, isolated 40x40 trash icon far right) */}
-                <div className="px-5 py-3.5 border-t border-stone-100 dark:border-[#1F3028] flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(product)}
-                      className="inline-flex items-center justify-center gap-1.5 h-10 min-h-[40px] px-3.5 text-xs font-semibold rounded-full bg-stone-100/90 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      {t.common.edit}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setLabelProduct(product)}
-                      className="inline-flex items-center justify-center gap-1.5 h-10 min-h-[40px] px-3.5 text-xs font-semibold rounded-full bg-stone-100/90 dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors"
-                    >
-                      <QrCode className="w-3.5 h-3.5" />
-                      {isVi ? 'In nhãn' : 'Labels'}
-                    </button>
-                  </div>
-
+                {/* Card Footer Actions: Evenly aligned Edit, Label, Delete (h-9) */}
+                <div className="px-4 py-3 border-t border-stone-100 dark:border-[#1F3028] bg-stone-50/40 dark:bg-[#0F1814]/40">
                   {confirmDeleteId === product.id ? (
-                    <div className="inline-flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await deleteProduct(product.id);
-                          setConfirmDeleteId(null);
-                        }}
-                        className="h-10 min-h-[40px] px-3 inline-flex items-center gap-1 text-xs font-semibold rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        {t.common.delete}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteId(null)}
-                        aria-label={t.common.cancel}
-                        className="w-10 h-10 inline-flex items-center justify-center rounded-full text-stone-500 dark:text-[#94A39B] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-red-700 dark:text-[#F87171] truncate">
+                        {isVi ? 'Xóa sản phẩm này?' : 'Delete this product?'}
+                      </span>
+                      <div className="inline-flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await deleteProduct(product.id);
+                            setConfirmDeleteId(null);
+                          }}
+                          className="h-9 px-3 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors whitespace-nowrap"
+                        >
+                          <Check className="w-3.5 h-3.5 shrink-0" />
+                          <span>{t.common.delete}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          aria-label={t.common.cancel}
+                          className="h-9 px-2.5 inline-flex items-center justify-center text-xs font-medium rounded-lg text-stone-600 dark:text-[#94A39B] hover:bg-stone-200/70 dark:hover:bg-[#1F3028] transition-colors"
+                        >
+                          {t.common.cancel}
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteId(product.id)}
-                      aria-label={t.common.delete}
-                      title={t.common.delete}
-                      className="w-10 h-10 inline-flex items-center justify-center rounded-full text-stone-400 dark:text-[#94A39B] hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/50 dark:hover:text-[#F87171] transition-colors shrink-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(product)}
+                        className="h-9 px-2.5 text-xs font-medium inline-flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors whitespace-nowrap"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>{t.common.edit}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setLabelProduct(product)}
+                        className="h-9 px-2.5 text-xs font-medium inline-flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors whitespace-nowrap"
+                      >
+                        <QrCode className="w-3.5 h-3.5 shrink-0" />
+                        <span>{isVi ? 'Nhãn' : 'Label'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(product.id)}
+                        className="h-9 px-2.5 text-xs font-medium inline-flex items-center justify-center gap-1.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-[#F87171] border border-red-200/80 dark:border-red-500/30 hover:bg-red-100 dark:hover:bg-red-950/70 transition-colors whitespace-nowrap"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>{t.common.delete}</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
