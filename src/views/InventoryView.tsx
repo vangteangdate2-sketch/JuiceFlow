@@ -35,7 +35,12 @@ import type {
 } from '../types';
 import { calculateRecipeCogs, formatKhr, formatQty, todayIso } from '../utils/format';
 import { type BatchPrepMode, type StockShortage } from '../utils/inventoryEngine';
-import { formatBarcodeTypeLabel, matchesBarcodeSearch } from '../utils/barcodeRegistry';
+import {
+  findDuplicateBarcodeConflicts,
+  formatBarcodeTypeLabel,
+  matchesBarcodeSearch,
+  normalizeBarcodeString,
+} from '../utils/barcodeRegistry';
 import {
   getCategoriesForScope,
   getCategoryById,
@@ -220,7 +225,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [scannedInventoryMatch, setScannedInventoryMatch] = useState<{
     code: string;
     format: BarcodeFormat;
-    product: Product;
+    itemType: 'product' | 'ingredient';
+    product?: Product;
+    ingredient?: Ingredient;
     unitsPerScan: number;
     packLabel?: string;
   } | null>(null);
@@ -246,38 +253,99 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [ingReorder, setIngReorder] = useState('500');
   const [ingCost, setIngCost] = useState('10');
   const [ingSupplier, setIngSupplier] = useState('');
+  const [ingBarcode, setIngBarcode] = useState('');
+  const [ingBarcodeScannerOpen, setIngBarcodeScannerOpen] = useState(false);
   const [ingSaveError, setIngSaveError] = useState<string | null>(null);
 
-  // Live canonical duplicate guard for Add/Edit Ingredient modal
-  const ingDuplicateGuard = useMemo(() => {
+  // Live canonical duplicate guard (normalized name + cross-item barcodeRegistry check)
+  const ingDuplicateGuard = useMemo<
+    | {
+        kind: 'ingredient';
+        ingredient: Ingredient;
+        displayName: string;
+        reason: 'name' | 'barcode';
+        matchedCode?: string;
+      }
+    | {
+        kind: 'product';
+        product: Product;
+        displayName: string;
+        reason: 'name' | 'barcode';
+        matchedCode?: string;
+      }
+    | null
+  >(() => {
     if (!ingModalOpen) return null;
     const norm = normalizeName(ingName);
-    if (!norm) return null;
+    if (norm) {
+      const existingIng = ingredients.find(
+        (i) => i.id !== editingIng?.id && normalizeName(i.name) === norm
+      );
+      if (existingIng) {
+        return {
+          kind: 'ingredient',
+          ingredient: existingIng,
+          displayName: isVi ? existingIng.nameVi || existingIng.name : existingIng.name,
+          reason: 'name',
+        };
+      }
 
-    const existingIng = ingredients.find(
-      (i) => i.id !== editingIng?.id && normalizeName(i.name) === norm
-    );
-    if (existingIng) {
-      return {
-        kind: 'ingredient' as const,
-        ingredient: existingIng,
-        displayName: isVi ? existingIng.nameVi || existingIng.name : existingIng.name,
-      };
+      const existingProd = products.find(
+        (p) => p.active && p.productType !== 'PREPARED_TO_ORDER' && normalizeName(p.name) === norm
+      );
+      if (existingProd) {
+        return {
+          kind: 'product',
+          product: existingProd,
+          displayName: isVi ? existingProd.nameVi || existingProd.name : existingProd.name,
+          reason: 'name',
+        };
+      }
     }
 
-    const existingProd = products.find(
-      (p) => p.active && p.productType !== 'PREPARED_TO_ORDER' && normalizeName(p.name) === norm
-    );
-    if (existingProd) {
-      return {
-        kind: 'product' as const,
-        product: existingProd,
-        displayName: isVi ? existingProd.nameVi || existingProd.name : existingProd.name,
-      };
+    const cleanCode = normalizeBarcodeString(ingBarcode);
+    if (cleanCode) {
+      const conflicts = findDuplicateBarcodeConflicts(
+        {
+          id: editingIng?.id,
+          itemType: 'ingredient',
+          name: ingName.trim() || editingIng?.name || 'Ingredient',
+          barcode: cleanCode,
+        },
+        products,
+        barcodeRegistry,
+        ingredients
+      );
+      const first = conflicts.find((c) => !c.isInternalDuplicate);
+      if (first) {
+        if (first.existingItemType === 'ingredient' && first.existingIngredientId) {
+          const matchedIng = ingredients.find((i) => i.id === first.existingIngredientId);
+          if (matchedIng) {
+            return {
+              kind: 'ingredient',
+              ingredient: matchedIng,
+              displayName: isVi ? matchedIng.nameVi || matchedIng.name : matchedIng.name,
+              reason: 'barcode',
+              matchedCode: first.code,
+            };
+          }
+        } else if (first.existingProductId) {
+          const matchedProd = products.find((p) => p.id === first.existingProductId);
+          if (matchedProd) {
+            return {
+              kind: 'product',
+              product: matchedProd,
+              displayName: isVi ? matchedProd.nameVi || matchedProd.name : matchedProd.name,
+              reason: 'barcode',
+              matchedCode: first.code,
+            };
+          }
+        }
+      }
     }
 
     return null;
-  }, [ingModalOpen, ingName, ingredients, products, editingIng?.id, isVi]);
+  }, [ingModalOpen, ingName, ingBarcode, ingredients, products, barcodeRegistry, editingIng?.id, editingIng?.name, isVi]);
 
   // Stock-In / Quick Restock Purchase modal (supports all 3 tiers + pack/carton multiplication)
   const [purchaseTarget, setPurchaseTarget] = useState<StockItemTarget | null>(null);
@@ -378,6 +446,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         reorderLevel: ing.reorderLevel,
         unitCostKhr: ing.unitCostKhr,
         supplier: ing.supplier,
+        barcode: ing.barcode || undefined,
         status,
         isExpiringBatch: false,
         progressPct: computeStockProgressPct(ing.stockQty, ing.reorderLevel),
@@ -602,22 +671,36 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       setAttentionFilter('none');
       setSearch(effectiveCode);
 
-      if (!res.found || !res.product) {
-        setUnknownStockBarcode({
+      if (res.found && res.ingredient) {
+        triggerHighlightItem(res.ingredient.id);
+        setScannedInventoryMatch({
           code: effectiveCode,
           format: res.format,
-          prefill: res.externalPrefill || null,
+          itemType: 'ingredient',
+          ingredient: res.ingredient,
+          unitsPerScan: res.unitsPerScan,
+          packLabel: res.packLabel,
         });
         return;
       }
 
-      triggerHighlightItem(res.product.id);
-      setScannedInventoryMatch({
+      if (res.found && res.product) {
+        triggerHighlightItem(res.product.id);
+        setScannedInventoryMatch({
+          code: effectiveCode,
+          format: res.format,
+          itemType: 'product',
+          product: res.product,
+          unitsPerScan: res.unitsPerScan,
+          packLabel: res.packLabel || res.product.packagingBarcodes?.[0]?.label,
+        });
+        return;
+      }
+
+      setUnknownStockBarcode({
         code: effectiveCode,
         format: res.format,
-        product: res.product,
-        unitsPerScan: res.unitsPerScan,
-        packLabel: res.packLabel || res.product.packagingBarcodes?.[0]?.label,
+        prefill: res.externalPrefill || null,
       });
     } finally {
       setScanLookingUp(false);
@@ -627,6 +710,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   useBarcodeScanner({
     enabled:
       !scannerOpen &&
+      !ingBarcodeScannerOpen &&
       !purchaseTarget &&
       !ingModalOpen &&
       !batchProduct &&
@@ -665,6 +749,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           name: ing.name,
           nameVi: ing.nameVi,
           categoryId: nextCategoryId,
+          barcode: ing.barcode,
           unit: ing.unit,
           stockQty: ing.stockQty,
           reorderLevel: ing.reorderLevel,
@@ -722,10 +807,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     }
   };
 
-  const openNewIngredient = () => {
+  const openNewIngredient = (initialBarcode?: string, initialName?: string) => {
     setEditingIng(null);
-    setIngName('');
-    setIngNameVi('');
+    setIngName(initialName || '');
+    setIngNameVi(initialName || '');
     const defaultCat =
       inventoryCategories.find((c) => c.id === 'produce')?.id ||
       inventoryCategories[0]?.id ||
@@ -739,6 +824,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     setIngReorder(String(settings.lowStockDefault || 15));
     setIngCost('10');
     setIngSupplier('');
+    setIngBarcode(initialBarcode || '');
+    setIngBarcodeScannerOpen(false);
     setIngSaveError(null);
     setIngModalOpen(true);
     window.requestAnimationFrame(() => ingNameInputRef.current?.focus());
@@ -757,6 +844,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     setIngReorder(String(ing.reorderLevel));
     setIngCost(String(ing.unitCostKhr));
     setIngSupplier(ing.supplier);
+    setIngBarcode(ing.barcode || '');
+    setIngBarcodeScannerOpen(false);
     setIngSaveError(null);
     setIngModalOpen(true);
   };
@@ -838,11 +927,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     const trimmedName = ingName.trim();
     if (!trimmedName || ingDuplicateGuard) return;
     setIngSaveError(null);
+    const cleanCode = normalizeBarcodeString(ingBarcode);
     const res = await saveIngredient({
       id: editingIng?.id,
       name: trimmedName,
       nameVi: ingNameVi.trim() || trimmedName,
       categoryId: ingCategoryId || UNCATEGORIZED_ID,
+      barcode: cleanCode || undefined,
       unit: ingUnit,
       stockQty: Number(ingStock) || 0,
       reorderLevel: Math.max(0, Number(ingReorder) || 0),
@@ -857,6 +948,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       return;
     }
     triggerHighlightItem(res.id);
+    if (unknownStockBarcode && cleanCode && unknownStockBarcode.code === cleanCode) {
+      setUnknownStockBarcode(null);
+    }
 
     if (mode === 'add_another' && !editingIng) {
       showNoticeToast({
@@ -868,6 +962,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       // Reset per-item fields while retaining smart defaults (category, unit, reorder level, supplier)
       setIngName('');
       setIngNameVi('');
+      setIngBarcode('');
       setIngStock('0');
       setIngCost('10');
       setIngSaveError(null);
@@ -1253,7 +1348,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </div>
       )}
 
-      {/* Matched Scanned Barcode Banner */}
+      {/* Matched Scanned Barcode Banner (supports Products & Raw Ingredients via barcodeRegistry) */}
       {scannedInventoryMatch && (
         <div
           role="status"
@@ -1262,79 +1357,136 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           <div className="flex items-start gap-2.5 min-w-0">
             <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <p className="text-sm font-semibold truncate">
-                {isVi ? 'Đã tìm thấy' : 'Matched'}:{' '}
-                {isVi
-                  ? scannedInventoryMatch.product.nameVi || scannedInventoryMatch.product.name
-                  : scannedInventoryMatch.product.name}
-              </p>
-              <p className="text-xs opacity-85 mt-0.5 flex flex-wrap items-center gap-x-1.5">
-                <span className="font-mono-num">
-                  {formatBarcodeTypeLabel(scannedInventoryMatch.format)} · {scannedInventoryMatch.code}
-                </span>
-                <span aria-hidden="true">·</span>
-                {scannedInventoryMatch.product.productType === 'PREPARED_TO_ORDER' ? (
-                  <span>
+              {scannedInventoryMatch.itemType === 'ingredient' && scannedInventoryMatch.ingredient ? (
+                <>
+                  <p className="text-sm font-semibold truncate">
+                    {isVi ? 'Đã tìm thấy nguyên liệu' : 'Matched Raw Ingredient'}:{' '}
                     {isVi
-                      ? 'Món pha chế theo đơn — quản lý tồn theo nguyên liệu thô'
-                      : 'Made-to-Order — tracked via raw ingredients'}
-                  </span>
-                ) : (
-                  <span className="font-mono-num">
-                    {isVi ? 'Tồn kho' : 'In stock'}:{' '}
-                    {formatQty(
-                      scannedInventoryMatch.product.stockQty,
-                      scannedInventoryMatch.product.unit || 'pcs'
+                      ? scannedInventoryMatch.ingredient.nameVi ||
+                        scannedInventoryMatch.ingredient.name
+                      : scannedInventoryMatch.ingredient.name}
+                  </p>
+                  <p className="text-xs opacity-85 mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                    <span className="font-mono-num">
+                      {formatBarcodeTypeLabel(scannedInventoryMatch.format)} ·{' '}
+                      {scannedInventoryMatch.code}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className="font-mono-num">
+                      {isVi ? 'Tồn kho' : 'In stock'}:{' '}
+                      {formatQty(
+                        scannedInventoryMatch.ingredient.stockQty,
+                        scannedInventoryMatch.ingredient.unit
+                      )}
+                    </span>
+                  </p>
+                </>
+              ) : scannedInventoryMatch.product ? (
+                <>
+                  <p className="text-sm font-semibold truncate">
+                    {isVi ? 'Đã tìm thấy' : 'Matched'}:{' '}
+                    {isVi
+                      ? scannedInventoryMatch.product.nameVi || scannedInventoryMatch.product.name
+                      : scannedInventoryMatch.product.name}
+                  </p>
+                  <p className="text-xs opacity-85 mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                    <span className="font-mono-num">
+                      {formatBarcodeTypeLabel(scannedInventoryMatch.format)} ·{' '}
+                      {scannedInventoryMatch.code}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    {scannedInventoryMatch.product.productType === 'PREPARED_TO_ORDER' ? (
+                      <span>
+                        {isVi
+                          ? 'Món pha chế theo đơn — quản lý tồn theo nguyên liệu thô'
+                          : 'Made-to-Order — tracked via raw ingredients'}
+                      </span>
+                    ) : (
+                      <span className="font-mono-num">
+                        {isVi ? 'Tồn kho' : 'In stock'}:{' '}
+                        {formatQty(
+                          scannedInventoryMatch.product.stockQty,
+                          scannedInventoryMatch.product.unit || 'pcs'
+                        )}
+                        {scannedInventoryMatch.unitsPerScan > 1
+                          ? ` (${scannedInventoryMatch.packLabel || `${scannedInventoryMatch.unitsPerScan}x pack`})`
+                          : ''}
+                      </span>
                     )}
-                    {scannedInventoryMatch.unitsPerScan > 1
-                      ? ` (${scannedInventoryMatch.packLabel || `${scannedInventoryMatch.unitsPerScan}x pack`})`
-                      : ''}
-                  </span>
-                )}
-              </p>
+                  </p>
+                </>
+              ) : null}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {scannedInventoryMatch.product.productType !== 'PREPARED_TO_ORDER' && (
-              <button
-                type="button"
-                onClick={() => {
-                  const prod = scannedInventoryMatch.product;
-                  if (prod.productType === 'PREPARED_STOCK') {
-                    openBatchPrepModal(prod);
-                  } else {
-                    const target: StockItemTarget = {
-                      ...toTargetFromProduct(prod),
+            {scannedInventoryMatch.itemType === 'ingredient' && scannedInventoryMatch.ingredient ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ing = scannedInventoryMatch.ingredient!;
+                    openPurchaseModal({
+                      ...toTargetFromIngredient(ing),
                       barcodeScanned: scannedInventoryMatch.code,
-                      packLabel: scannedInventoryMatch.packLabel,
-                    };
-                    openPurchaseModal(
-                      target,
-                      scannedInventoryMatch.unitsPerScan > 1
-                        ? scannedInventoryMatch.unitsPerScan
-                        : undefined
-                    );
-                  }
-                }}
-                className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
-              >
-                {scannedInventoryMatch.product.productType === 'PREPARED_STOCK'
-                  ? isVi
-                    ? '+ Pha mẻ'
-                    : '+ Prep Batch'
-                  : isVi
-                    ? '+ Nhập kho'
-                    : '+ Restock'}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setEditingStockProduct(scannedInventoryMatch.product)}
-              className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              {isVi ? 'Sửa' : 'Edit'}
-            </button>
+                    });
+                  }}
+                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                >
+                  {isVi ? '+ Nhập kho' : '+ Restock'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openEditIngredient(scannedInventoryMatch.ingredient!)}
+                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  {isVi ? 'Sửa' : 'Edit'}
+                </button>
+              </>
+            ) : scannedInventoryMatch.product ? (
+              <>
+                {scannedInventoryMatch.product.productType !== 'PREPARED_TO_ORDER' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const prod = scannedInventoryMatch.product!;
+                      if (prod.productType === 'PREPARED_STOCK') {
+                        openBatchPrepModal(prod);
+                      } else {
+                        const target: StockItemTarget = {
+                          ...toTargetFromProduct(prod),
+                          barcodeScanned: scannedInventoryMatch.code,
+                          packLabel: scannedInventoryMatch.packLabel,
+                        };
+                        openPurchaseModal(
+                          target,
+                          scannedInventoryMatch.unitsPerScan > 1
+                            ? scannedInventoryMatch.unitsPerScan
+                            : undefined
+                        );
+                      }
+                    }}
+                    className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    {scannedInventoryMatch.product.productType === 'PREPARED_STOCK'
+                      ? isVi
+                        ? '+ Pha mẻ'
+                        : '+ Prep Batch'
+                      : isVi
+                        ? '+ Nhập kho'
+                        : '+ Restock'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setEditingStockProduct(scannedInventoryMatch.product!)}
+                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  {isVi ? 'Sửa' : 'Edit'}
+                </button>
+              </>
+            ) : null}
             <button
               type="button"
               onClick={() => {
@@ -1373,18 +1525,27 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     ? `Gợi ý từ Open Food Facts: ${unknownStockBarcode.prefill.name}${unknownStockBarcode.prefill.brand ? ` · ${unknownStockBarcode.prefill.brand}` : ''}`
                     : `Prefill from Open Food Facts: ${unknownStockBarcode.prefill.name}${unknownStockBarcode.prefill.brand ? ` · ${unknownStockBarcode.prefill.brand}` : ''}`
                   : isVi
-                    ? 'Không tìm thấy trên Open Food Facts — bạn có thể đăng ký sản phẩm mới ngay rồi nhập kho.'
-                    : 'Not found externally — register this product now and proceed directly to Stock-In.'}
+                    ? 'Không tìm thấy trên Open Food Facts — hãy liên kết mã này với sản phẩm hoặc nguyên liệu mới.'
+                    : 'Not found externally — link this barcode to a new product or raw ingredient.'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+          <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-center">
             <button
               type="button"
               onClick={() => setQuickRegisterOpen(true)}
               className="h-11 inline-flex items-center justify-center px-3.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
             >
               {isVi ? '+ Đăng ký sản phẩm' : '+ Register Product'}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                openNewIngredient(unknownStockBarcode.code, unknownStockBarcode.prefill?.name)
+              }
+              className="h-11 inline-flex items-center justify-center px-3.5 text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] rounded-lg transition-colors whitespace-nowrap"
+            >
+              {isVi ? '+ Thêm nguyên liệu' : '+ Add Ingredient'}
             </button>
             <button
               type="button"
@@ -1696,7 +1857,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
               <button
                 type="button"
-                onClick={openNewIngredient}
+                onClick={() => openNewIngredient()}
                 className="inline-flex items-center justify-center h-11 px-4 text-xs sm:text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
               >
                 {`+ ${t.inventory.addIngredient}`}
@@ -2291,13 +2452,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                           : `"${ingDuplicateGuard.displayName}" already exists`}
                       </p>
                       <p className="mt-0.5 text-[11px] text-amber-800 dark:text-amber-300/90 leading-relaxed">
-                        {ingDuplicateGuard.kind === 'ingredient'
+                        {ingDuplicateGuard.reason === 'barcode'
                           ? isVi
-                            ? `Đang có trong Nguyên liệu thô (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)}). Không thể tạo bản trùng để tránh tách tồn kho.`
-                            : `Found in Raw Ingredients (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)}). Duplicates are blocked so stock stays unified.`
-                          : isVi
-                            ? `Đang có trong Danh mục sản phẩm (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')}). Không thể tạo bản trùng.`
-                            : `Found in Product Catalog (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')}). Duplicates are blocked so stock stays unified.`}
+                            ? `Mã vạch ${ingDuplicateGuard.matchedCode} đã được gắn cho mục này trong danh bạ mã vạch. Hãy chỉnh sửa hoặc nhập thêm kho thay vì tạo trùng.`
+                            : `Barcode ${ingDuplicateGuard.matchedCode} is already registered to this item in barcodeRegistry. Edit or restock it instead of creating a duplicate.`
+                          : ingDuplicateGuard.kind === 'ingredient'
+                            ? isVi
+                              ? `Đang có trong Nguyên liệu thô (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)}). Không thể tạo bản trùng để tránh tách tồn kho.`
+                              : `Found in Raw Ingredients (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)}). Duplicates are blocked so stock stays unified.`
+                            : isVi
+                              ? `Đang có trong Danh mục sản phẩm (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')}). Không thể tạo bản trùng.`
+                              : `Found in Product Catalog (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')}). Duplicates are blocked so stock stays unified.`}
                       </p>
                     </div>
                   </div>
@@ -2512,6 +2677,32 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   onChange={(e) => setIngSupplier(e.target.value)}
                   className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
+                  {isVi ? 'Mã vạch (tùy chọn — EAN-13 / UPC-A)' : 'Barcode (optional — EAN-13 / UPC-A)'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    maxLength={64}
+                    value={ingBarcode}
+                    onChange={(e) => {
+                      setIngBarcode(e.target.value);
+                      setIngSaveError(null);
+                    }}
+                    placeholder={isVi ? 'Quét hoặc nhập mã vạch...' : 'Scan or enter barcode...'}
+                    className="flex-1 min-w-0 h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIngBarcodeScannerOpen(true)}
+                    className="h-11 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
+                    {isVi ? 'Quét' : 'Scan'}
+                  </button>
+                </div>
               </div>
               <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex flex-wrap items-center justify-end gap-2.5">
                 <button
@@ -3261,13 +3452,30 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         onClose={() => setEditingStockProduct(null)}
       />
 
+      {/* Camera Barcode Scanner for Ingredient Modal Barcode Field */}
+      <BarcodeScannerModal
+        open={ingBarcodeScannerOpen}
+        title={isVi ? 'Quét mã vạch nguyên liệu' : 'Scan Ingredient Barcode'}
+        subtitle={
+          isVi
+            ? 'Đưa camera vào mã EAN-13 hoặc UPC-A trên bao bì nguyên liệu để liên kết.'
+            : 'Point camera at an EAN-13 or UPC-A barcode on the ingredient package to link it.'
+        }
+        onDetected={(code) => {
+          setIngBarcode(normalizeBarcodeString(code));
+          setIngSaveError(null);
+        }}
+        onClose={() => setIngBarcodeScannerOpen(false)}
+      />
+
       {/* Bottom-Right Floating Action Button + Scroll-to-Top Pill */}
       <FloatingActionBar
         label={t.inventory.addIngredient}
         topLabel={isVi ? 'Lên đầu' : 'Top'}
-        onAction={openNewIngredient}
+        onAction={() => openNewIngredient()}
         hidden={
           ingModalOpen ||
+          ingBarcodeScannerOpen ||
           Boolean(purchaseTarget) ||
           Boolean(batchProduct) ||
           Boolean(adjustModalTarget) ||

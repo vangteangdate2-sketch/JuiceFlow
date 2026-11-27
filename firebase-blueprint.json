@@ -104,14 +104,16 @@
     },
     "BarcodeRecord": {
       "title": "BarcodeRecord",
-      "description": "Universal barcode registry entry mapping exact string barcode identifiers (preserving leading zeros) to products, variants, or multi-unit cartons.",
+      "description": "Universal barcode registry entry mapping exact string barcode identifiers (preserving leading zeros) to products, variants, cartons, or raw ingredients.",
       "type": "object",
       "properties": {
         "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "memberUids": { "type": "array" },
         "code": { "type": "string", "minLength": 1, "maxLength": 64 },
         "format": { "type": "string", "enum": ["EAN_13", "EAN_8", "UPC_A", "UPC_E", "CODE_128", "QR_CODE", "INTERNAL"] },
+        "itemType": { "type": "string", "enum": ["product", "ingredient"] },
         "productId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ingredientId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "variantId": { "type": "string", "maxLength": 64 },
         "packagingType": { "type": "string", "enum": ["unit", "pack", "carton", "variant"] },
         "label": { "type": "string", "maxLength": 80 },
@@ -123,14 +125,14 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": [
-        "workspaceId", "memberUids", "code", "format", "productId",
+        "workspaceId", "memberUids", "code", "format", "itemType",
         "packagingType", "label", "unitsPerScan", "active", "source",
         "createdBy", "createdAt", "updatedAt"
       ]
     },
     "Ingredient": {
       "title": "Ingredient",
-      "description": "Raw ingredient or packaging item tracked in inventory with unit cost in KHR.",
+      "description": "Raw ingredient or packaging item tracked in inventory with optional barcode and unit cost in KHR.",
       "type": "object",
       "properties": {
         "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
@@ -138,6 +140,7 @@
         "name": { "type": "string", "minLength": 1, "maxLength": 100 },
         "nameVi": { "type": "string", "maxLength": 100 },
         "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "barcode": { "type": "string", "maxLength": 64 },
         "unit": { "type": "string", "enum": ["g", "kg", "ml", "L", "pcs"] },
         "stockQty": { "type": "number" },
         "reorderLevel": { "type": "number" },
@@ -337,9 +340,13 @@
       "schema": { "$ref": "#/entities/Product" },
       "description": "Product catalog (Packaged, Made-to-Order, Prepared Stock) with variants, barcodes, and recipes."
     },
+    "/workspaces/{workspaceId}/barcodeRegistry/{barcodeId}": {
+      "schema": { "$ref": "#/entities/BarcodeRecord" },
+      "description": "Primary Firestore barcode registry mapping exact scanned barcode codes (preserving leading zeros) to internal productId or ingredientId records."
+    },
     "/workspaces/{workspaceId}/barcodes/{barcodeId}": {
       "schema": { "$ref": "#/entities/BarcodeRecord" },
-      "description": "Deterministic Firestore barcode registry mapping exact string codes (preserving leading zeros) to products, variants, and cartons."
+      "description": "Legacy barcode registry path retained for seamless backward compatibility."
     },
     "/workspaces/{workspaceId}/ingredients/{ingredientId}": {
       "schema": { "$ref": "#/entities/Ingredient" },

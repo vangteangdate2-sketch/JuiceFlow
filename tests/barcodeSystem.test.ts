@@ -20,7 +20,7 @@ import {
   normalizeProduct,
   resolveBarcodeMatch,
 } from '../src/utils/inventoryEngine';
-import type { Product } from '../src/types';
+import type { Ingredient, Product } from '../src/types';
 
 function makeProduct(overrides: Partial<Product> = {}): Product {
   return normalizeProduct({
@@ -114,7 +114,7 @@ async function runTests() {
     const match = resolveFromRegistryAndProducts(hidRaw, registry, [product]);
     assert.ok(match);
     assert.equal(match.code, '0049000042566');
-    assert.equal(match.product.id, product.id);
+    assert.equal(match.product?.id, product.id);
     assert.equal(match.unitsPerScan, 1);
   });
 
@@ -156,14 +156,14 @@ async function runTests() {
     const cartonRes = resolveFromRegistryAndProducts('0049000042566-CTN24', registry, allProducts);
     assert.ok(cartonRes);
     assert.ok(cartonRes.registryRecord);
-    assert.equal(cartonRes.product.id, 'prod_coke');
+    assert.equal(cartonRes.product?.id, 'prod_coke');
     assert.equal(cartonRes.unitsPerScan, 24);
     assert.equal(cartonRes.packLabel, 'Carton 24 cans');
 
     // Variant hit from registry
     const variantRes = resolveFromRegistryAndProducts('JF-MTO-MANGO-L', registry, allProducts);
     assert.ok(variantRes);
-    assert.equal(variantRes.product.id, 'prod_mango');
+    assert.equal(variantRes.product?.id, 'prod_mango');
     assert.equal(variantRes.variant?.id, 'v_l');
     assert.equal(variantRes.unitsPerScan, 1);
 
@@ -425,6 +425,57 @@ async function runTests() {
     assert.ok(svg.includes('<svg'));
     const skuSvg = await QRCode.toString('JF-PKG-SUGAR-003', { type: 'svg', margin: 1 });
     assert.ok(skuSvg.includes('<svg'));
+  });
+
+  // 11. Cross-item barcodeRegistry support for raw ingredients + EAN-13/UPC-A equivalence
+  await run('links barcodes to ingredientId in barcodeRegistry and blocks cross-item duplicates', () => {
+    const prod = makeProduct({ id: 'prod_tea', name: 'Oishi Green Tea', barcode: '8854698005015' });
+    const ing: Ingredient = {
+      id: 'ing_condensed_milk',
+      name: 'Condensed Milk Can',
+      nameVi: 'Sữa Đặc Có Đường',
+      categoryId: 'dairy',
+      barcode: '0036000291452', // 13-digit EAN-13 equivalent of UPC-A 036000291452
+      unit: 'g',
+      stockQty: 2000,
+      reorderLevel: 500,
+      unitCostKhr: 15,
+      supplier: 'Phnom Penh Dairy',
+    };
+
+    const registry = buildRegistryFromProducts([prod], [ing]);
+    const ingHitExact = resolveFromRegistryAndProducts('0036000291452', registry, [prod], [ing]);
+    assert.ok(ingHitExact);
+    assert.equal(ingHitExact.itemType, 'ingredient');
+    assert.equal(ingHitExact.ingredient?.id, 'ing_condensed_milk');
+
+    // UPC-A 12-digit scan matches leading-zero EAN-13 ingredient entry
+    const ingHitUpcA = resolveFromRegistryAndProducts('036000291452', registry, [prod], [ing]);
+    assert.ok(ingHitUpcA);
+    assert.equal(ingHitUpcA.itemType, 'ingredient');
+    assert.equal(ingHitUpcA.ingredient?.id, 'ing_condensed_milk');
+
+    // Product attempting to reuse ingredient's barcode is blocked
+    const prodConflict = findDuplicateBarcodeConflicts(
+      { id: 'prod_new', itemType: 'product', barcode: '036000291452', variants: [], packagingBarcodes: [] },
+      [prod],
+      registry,
+      [ing]
+    );
+    assert.equal(prodConflict.length, 1);
+    assert.equal(prodConflict[0].existingItemType, 'ingredient');
+    assert.equal(prodConflict[0].existingIngredientId, 'ing_condensed_milk');
+
+    // Ingredient attempting to reuse product's barcode is blocked
+    const ingConflict = findDuplicateBarcodeConflicts(
+      { id: 'ing_new', itemType: 'ingredient', barcode: '8854698005015' },
+      [prod],
+      registry,
+      [ing]
+    );
+    assert.equal(ingConflict.length, 1);
+    assert.equal(ingConflict[0].existingItemType, 'product');
+    assert.equal(ingConflict[0].existingProductId, 'prod_tea');
   });
 
   console.log(`\nAll ${passed} barcode system tests passed.`);

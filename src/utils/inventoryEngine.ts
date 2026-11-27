@@ -62,11 +62,16 @@ export function normalizeIngredient(raw: Partial<Ingredient> & { id: string }): 
     typeof raw.categoryId === 'string' && raw.categoryId.trim().length > 0
       ? raw.categoryId.trim()
       : undefined;
+  const barcode =
+    typeof raw.barcode === 'string' && raw.barcode.trim().length > 0
+      ? raw.barcode.trim().slice(0, 64)
+      : undefined;
   return {
     id: String(raw.id),
     name,
     nameVi,
     ...(categoryId ? { categoryId } : {}),
+    ...(barcode ? { barcode } : {}),
     unit,
     stockQty: Number.isFinite(Number(raw.stockQty)) ? Number(raw.stockQty) : 0,
     reorderLevel: Number.isFinite(Number(raw.reorderLevel))

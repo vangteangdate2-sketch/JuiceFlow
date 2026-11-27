@@ -3,6 +3,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocFromServer,
@@ -42,6 +43,7 @@ import type {
   AppLanguage,
   BarcodeFormat,
   BarcodePackagingType,
+  BarcodeRegistryItemType,
   BarcodeRegistryRecord,
   BarcodeResolutionResult,
   BarcodeSource,
@@ -75,8 +77,10 @@ import {
 import {
   buildRegistryFromProducts,
   detectBarcodeFormat,
+  extractIngredientBarcodeRecords,
   extractProductBarcodeRecords,
   findDuplicateBarcodeConflicts,
+  getEquivalentBarcodeCodes,
   lookupOpenFoodFactsV3,
   normalizeBarcodeString,
   resolveFromRegistryAndProducts,
@@ -176,13 +180,21 @@ function normalizeBarcodeRecord(
   if (!raw || typeof raw !== 'object') return null;
   const code = normalizeBarcodeString(typeof raw.code === 'string' ? raw.code : '');
   const productId = typeof raw.productId === 'string' ? raw.productId.trim() : '';
-  if (!code || !productId) return null;
+  const ingredientId = typeof raw.ingredientId === 'string' ? raw.ingredientId.trim() : '';
+  const itemType: BarcodeRegistryItemType =
+    raw.itemType === 'ingredient' || (!productId && Boolean(ingredientId))
+      ? 'ingredient'
+      : 'product';
+  if (!code) return null;
+  if (itemType === 'ingredient' && !ingredientId) return null;
+  if (itemType === 'product' && !productId) return null;
   return {
     id: String(raw.id || toBarcodeDocId(code)),
     code,
     format: raw.format || detectBarcodeFormat(code),
-    productId,
-    ...(raw.variantId ? { variantId: String(raw.variantId) } : {}),
+    itemType,
+    ...(itemType === 'product' ? { productId } : { ingredientId }),
+    ...(itemType === 'product' && raw.variantId ? { variantId: String(raw.variantId) } : {}),
     packagingType: raw.packagingType || 'unit',
     label: String(raw.label || 'Unit'),
     unitsPerScan: Math.max(1, Math.round(Number(raw.unitsPerScan) || 1)),
@@ -190,6 +202,38 @@ function normalizeBarcodeRecord(
     source: raw.source || 'manufacturer',
     ...(raw.createdAt ? { createdAt: String(raw.createdAt) } : {}),
     ...(raw.updatedAt ? { updatedAt: String(raw.updatedAt) } : {}),
+  };
+}
+
+function parseFirestoreBarcodeDoc(
+  docId: string,
+  d: DocumentData,
+  fallbackCode = ''
+): BarcodeRegistryRecord | null {
+  const code = normalizeBarcodeString(String(d.code || fallbackCode || ''));
+  const productId = typeof d.productId === 'string' ? d.productId.trim() : '';
+  const ingredientId = typeof d.ingredientId === 'string' ? d.ingredientId.trim() : '';
+  const itemType: BarcodeRegistryItemType =
+    d.itemType === 'ingredient' || (!productId && Boolean(ingredientId))
+      ? 'ingredient'
+      : 'product';
+  if (!code) return null;
+  if (itemType === 'ingredient' && !ingredientId) return null;
+  if (itemType === 'product' && !productId) return null;
+  return {
+    id: docId,
+    code,
+    format: (d.format as BarcodeFormat) || detectBarcodeFormat(code),
+    itemType,
+    ...(itemType === 'product' ? { productId } : { ingredientId }),
+    ...(itemType === 'product' && d.variantId ? { variantId: String(d.variantId) } : {}),
+    packagingType: (d.packagingType as BarcodePackagingType) || 'unit',
+    label: String(d.label || 'Unit'),
+    unitsPerScan: Math.max(1, Math.round(Number(d.unitsPerScan) || 1)),
+    active: d.active !== false,
+    source: (d.source as BarcodeSource) || 'manufacturer',
+    createdAt: tsToIso(d.createdAt),
+    updatedAt: tsToIso(d.updatedAt),
   };
 }
 
@@ -255,7 +299,9 @@ function loadLocalSnapshot(): LocalSnapshot {
           : [];
 
         const barcodeRegistry =
-          parsedRegistry.length > 0 ? parsedRegistry : buildRegistryFromProducts(products);
+          parsedRegistry.length > 0
+            ? parsedRegistry
+            : buildRegistryFromProducts(products, ingredients);
 
         const categories = ensureCategoriesList(
           Array.isArray(parsed.categories) ? parsed.categories : undefined
@@ -286,7 +332,7 @@ function loadLocalSnapshot(): LocalSnapshot {
   return {
     settings: createInitialSettings(),
     categories: ensureCategoriesList(),
-    barcodeRegistry: buildRegistryFromProducts(seed.products),
+    barcodeRegistry: buildRegistryFromProducts(seed.products, seed.ingredients),
     ...seed,
   };
 }
@@ -758,13 +804,21 @@ function barcodeRecordToFirestoreDoc(
   memberUids: string[],
   createdByUid: string
 ) {
+  const itemType: BarcodeRegistryItemType =
+    rec.itemType === 'ingredient' || (!rec.productId && Boolean(rec.ingredientId))
+      ? 'ingredient'
+      : 'product';
   return stripUndefined({
     workspaceId,
     memberUids,
     code: normalizeBarcodeString(rec.code),
     format: rec.format,
-    productId: rec.productId,
-    ...(rec.variantId ? { variantId: sanitizeString(rec.variantId, 64) } : {}),
+    itemType,
+    ...(itemType === 'product' && rec.productId ? { productId: rec.productId } : {}),
+    ...(itemType === 'ingredient' && rec.ingredientId ? { ingredientId: rec.ingredientId } : {}),
+    ...(itemType === 'product' && rec.variantId
+      ? { variantId: sanitizeString(rec.variantId, 64) }
+      : {}),
     packagingType: rec.packagingType,
     label: sanitizeString(rec.label || 'Unit', 80),
     unitsPerScan: clampNumber(Math.round(rec.unitsPerScan || 1), 1, 10000),
@@ -774,6 +828,34 @@ function barcodeRecordToFirestoreDoc(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+}
+
+function barcodeRecordToFirestoreUpdate(rec: BarcodeRegistryRecord): Record<string, unknown> {
+  const itemType: BarcodeRegistryItemType =
+    rec.itemType === 'ingredient' || (!rec.productId && Boolean(rec.ingredientId))
+      ? 'ingredient'
+      : 'product';
+  return {
+    format: rec.format,
+    itemType,
+    ...(itemType === 'product'
+      ? {
+          productId: rec.productId || '',
+          ingredientId: deleteField(),
+          variantId: rec.variantId ? sanitizeString(rec.variantId, 64) : deleteField(),
+        }
+      : {
+          ingredientId: rec.ingredientId || '',
+          productId: deleteField(),
+          variantId: deleteField(),
+        }),
+    packagingType: rec.packagingType,
+    label: sanitizeString(rec.label || 'Unit', 80),
+    unitsPerScan: clampNumber(Math.round(rec.unitsPerScan || 1), 1, 10000),
+    active: Boolean(rec.active),
+    source: rec.source,
+    updatedAt: serverTimestamp(),
+  };
 }
 
 function movementToFirestoreDoc(
@@ -921,6 +1003,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [rememberMe, setRememberMeState] = useState<boolean>(() => loadRememberMePreference());
   const [cashPresets, setCashPresetsState] = useState<number[]>(() => loadCashPresets());
   const seededCloudCategoriesWsRef = useRef<string | null>(null);
+  const barcodeRegistryIdsRef = useRef<Set<string>>(new Set());
+  const legacyBarcodeIdsRef = useRef<Set<string>>(new Set());
 
   const setRememberMe = useCallback((value: boolean) => {
     setRememberMeState(value);
@@ -1099,6 +1183,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               name: sanitizeString(ing.name, 100),
               nameVi: sanitizeString(ing.nameVi, 100),
               ...(ing.categoryId ? { categoryId: sanitizeString(ing.categoryId, 64) } : {}),
+              ...(ing.barcode ? { barcode: sanitizeString(ing.barcode, 64) } : {}),
               unit: ing.unit,
               stockQty: clampNumber(ing.stockQty, -1000000, 100000000),
               reorderLevel: clampNumber(ing.reorderLevel, 0, 100000000),
@@ -1109,6 +1194,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               updatedAt: serverTimestamp(),
             })
           );
+          for (const rec of extractIngredientBarcodeRecords(ing)) {
+            seedBatch.set(
+              doc(db, 'workspaces', wsId, 'barcodeRegistry', rec.id),
+              barcodeRecordToFirestoreDoc(rec, wsId, uids, user.uid)
+            );
+          }
         }
         for (const prod of cur.products) {
           seedBatch.set(doc(db, 'workspaces', wsId, 'products', prod.id), {
@@ -1121,7 +1212,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           });
           for (const rec of extractProductBarcodeRecords(prod)) {
             seedBatch.set(
-              doc(db, 'workspaces', wsId, 'barcodes', rec.id),
+              doc(db, 'workspaces', wsId, 'barcodeRegistry', rec.id),
               barcodeRecordToFirestoreDoc(rec, wsId, uids, user.uid)
             );
           }
@@ -1367,30 +1458,61 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (err) => handleFirestoreError(err, OperationType.LIST, movPath)
     );
 
-    const barcodePath = `workspaces/${cloudWorkspaceId}/barcodes`;
-    const unsubBarcodes = onSnapshot(
-      query(collection(db, barcodePath), where('memberUids', 'array-contains', user.uid)),
+    const barcodeRegistryPath = `workspaces/${cloudWorkspaceId}/barcodeRegistry`;
+    const legacyBarcodePath = `workspaces/${cloudWorkspaceId}/barcodes`;
+    let registryDocsMap = new Map<string, BarcodeRegistryRecord>();
+    let legacyDocsMap = new Map<string, BarcodeRegistryRecord>();
+
+    const syncMergedBarcodeRegistry = () => {
+      const merged = new Map<string, BarcodeRegistryRecord>();
+      for (const [id, rec] of legacyDocsMap.entries()) {
+        merged.set(id, rec);
+      }
+      // Primary barcodeRegistry collection always takes precedence over legacy barcodes
+      for (const [id, rec] of registryDocsMap.entries()) {
+        merged.set(id, rec);
+      }
+      setBarcodeRegistry(Array.from(merged.values()));
+    };
+
+    const unsubBarcodeRegistry = onSnapshot(
+      query(collection(db, barcodeRegistryPath), where('memberUids', 'array-contains', user.uid)),
       (snap) => {
-        const list: BarcodeRegistryRecord[] = snap.docs.map((docSnap) => {
-          const d = docSnap.data();
-          return {
-            id: docSnap.id,
-            code: normalizeBarcodeString(String(d.code || '')),
-            format: (d.format as BarcodeFormat) || detectBarcodeFormat(String(d.code || '')),
-            productId: String(d.productId || ''),
-            ...(d.variantId ? { variantId: String(d.variantId) } : {}),
-            packagingType: (d.packagingType as BarcodePackagingType) || 'unit',
-            label: String(d.label || 'Unit'),
-            unitsPerScan: Math.max(1, Math.round(Number(d.unitsPerScan) || 1)),
-            active: d.active !== false,
-            source: (d.source as BarcodeSource) || 'manufacturer',
-            createdAt: tsToIso(d.createdAt),
-            updatedAt: tsToIso(d.updatedAt),
-          };
-        });
-        setBarcodeRegistry(list);
+        const nextMap = new Map<string, BarcodeRegistryRecord>();
+        const nextIds = new Set<string>();
+        for (const docSnap of snap.docs) {
+          const parsed = parseFirestoreBarcodeDoc(docSnap.id, docSnap.data());
+          if (parsed) {
+            nextMap.set(parsed.id, parsed);
+            nextIds.add(parsed.id);
+          }
+        }
+        registryDocsMap = nextMap;
+        barcodeRegistryIdsRef.current = nextIds;
+        syncMergedBarcodeRegistry();
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, barcodePath)
+      (err) => handleFirestoreError(err, OperationType.LIST, barcodeRegistryPath)
+    );
+
+    const unsubLegacyBarcodes = onSnapshot(
+      query(collection(db, legacyBarcodePath), where('memberUids', 'array-contains', user.uid)),
+      (snap) => {
+        const nextMap = new Map<string, BarcodeRegistryRecord>();
+        const nextIds = new Set<string>();
+        for (const docSnap of snap.docs) {
+          const parsed = parseFirestoreBarcodeDoc(docSnap.id, docSnap.data());
+          if (parsed) {
+            nextMap.set(parsed.id, parsed);
+            nextIds.add(parsed.id);
+          }
+        }
+        legacyDocsMap = nextMap;
+        legacyBarcodeIdsRef.current = nextIds;
+        syncMergedBarcodeRegistry();
+      },
+      () => {
+        // Legacy collection read errors are non-fatal when primary barcodeRegistry is active
+      }
     );
 
     const catPath = `workspaces/${cloudWorkspaceId}/categories`;
@@ -1445,7 +1567,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       unsubWs();
       unsubCategories();
       unsubProducts();
-      unsubBarcodes();
+      unsubBarcodeRegistry();
+      unsubLegacyBarcodes();
       unsubIngredients();
       unsubSales();
       unsubExpenses();
@@ -1476,8 +1599,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           });
           ops++;
         }
-        for (const bc of cur.barcodeRegistry) {
-          batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', bc.id), {
+        for (const bcId of barcodeRegistryIdsRef.current) {
+          batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'barcodeRegistry', bcId), {
+            memberUids,
+            updatedAt: serverTimestamp(),
+          });
+          ops++;
+        }
+        for (const legacyId of legacyBarcodeIdsRef.current) {
+          batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', legacyId), {
             memberUids,
             updatedAt: serverTimestamp(),
           });
@@ -1617,23 +1747,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      // Prevent duplicate active barcode assignments across products, variants, and cartons
+      // Prevent duplicate active barcode assignments across products, variants, cartons, and ingredients
       const conflicts = findDuplicateBarcodeConflicts(
         {
           id,
+          itemType: 'product',
           name: productInput.name,
           barcode: productInput.barcode,
           variants: productInput.variants,
           packagingBarcodes: productInput.packagingBarcodes,
         },
         cur.products,
-        cur.barcodeRegistry
+        cur.barcodeRegistry,
+        cur.ingredients
       );
       if (conflicts.length > 0) {
         const first = conflicts[0];
         const msg = first.isInternalDuplicate
           ? `Duplicate barcode "${first.code}" appears more than once on this product.`
-          : `Barcode "${first.code}" is already assigned to "${first.existingProductName}"${
+          : `Barcode "${first.code}" is already assigned to ${
+              first.existingItemType === 'ingredient' ? 'raw ingredient ' : ''
+            }"${first.existingProductName}"${
               first.existingVariantName ? ` (${first.existingVariantName})` : ''
             }.`;
         return { ok: false, error: msg };
@@ -1689,28 +1823,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
 
           for (const removedId of removedBarcodeIds) {
-            batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', removedId));
+            batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodeRegistry', removedId));
+            if (legacyBarcodeIdsRef.current.has(removedId)) {
+              batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', removedId));
+            }
           }
 
-          const existingRegMap = new Map(cur.barcodeRegistry.map((r) => [r.id, r]));
           for (const rec of nextBarcodeRecords) {
-            const existingRec = existingRegMap.get(rec.id);
-            const bcRef = doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', rec.id);
-            if (existingRec && existingRec.productId === id) {
-              batch.update(
-                bcRef,
-                stripUndefined({
-                  format: rec.format,
-                  productId: rec.productId,
-                  ...(rec.variantId ? { variantId: sanitizeString(rec.variantId, 64) } : {}),
-                  packagingType: rec.packagingType,
-                  label: sanitizeString(rec.label || 'Unit', 80),
-                  unitsPerScan: clampNumber(Math.round(rec.unitsPerScan || 1), 1, 10000),
-                  active: Boolean(rec.active),
-                  source: rec.source,
-                  updatedAt: serverTimestamp(),
-                })
-              );
+            const bcRef = doc(db, 'workspaces', cloudWorkspaceId, 'barcodeRegistry', rec.id);
+            if (barcodeRegistryIdsRef.current.has(rec.id)) {
+              batch.update(bcRef, barcodeRecordToFirestoreUpdate(rec));
             } else {
               batch.set(bcRef, barcodeRecordToFirestoreDoc(rec, cloudWorkspaceId, uids, user.uid));
             }
@@ -1741,7 +1863,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const batch = writeBatch(db);
           batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'products', productId));
           for (const rec of removedBarcodes) {
-            batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', rec.id));
+            batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodeRegistry', rec.id));
+            if (legacyBarcodeIdsRef.current.has(rec.id)) {
+              batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', rec.id));
+            }
           }
           await batch.commit();
         } catch (err) {
@@ -1773,46 +1898,100 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       const cur = latestRef.current;
 
-      // Step 1: Always check JuiceFlow Firestore barcode registry FIRST
+      // Step 1: Always query Firestore `barcodeRegistry` FIRST (with EAN-13 <-> UPC-A equivalence)
       if (user && cloudWorkspaceId) {
-        const docId = toBarcodeDocId(code);
+        const candidateCodes = getEquivalentBarcodeCodes(code);
         try {
-          const bcSnap = await getDoc(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', docId));
-          if (bcSnap.exists()) {
-            const d = bcSnap.data();
-            const regRecord: BarcodeRegistryRecord = {
-              id: bcSnap.id,
-              code: normalizeBarcodeString(String(d.code || code)),
-              format: (d.format as BarcodeFormat) || format,
-              productId: String(d.productId || ''),
-              ...(d.variantId ? { variantId: String(d.variantId) } : {}),
-              packagingType: (d.packagingType as BarcodePackagingType) || 'unit',
-              label: String(d.label || 'Unit'),
-              unitsPerScan: Math.max(1, Math.round(Number(d.unitsPerScan) || 1)),
-              active: d.active !== false,
-              source: (d.source as BarcodeSource) || 'manufacturer',
-              createdAt: tsToIso(d.createdAt),
-              updatedAt: tsToIso(d.updatedAt),
-            };
-            const matchedProduct = cur.products.find((p) => p.id === regRecord.productId);
-            if (matchedProduct) {
-              const matchedVariant = regRecord.variantId
-                ? matchedProduct.variants?.find((v) => v.id === regRecord.variantId)
-                : undefined;
-              return {
-                found: true,
-                code,
-                format: regRecord.format,
-                source: 'firestore_registry',
-                product: matchedProduct,
-                variant: matchedVariant,
-                registryRecord: regRecord,
-                unitsPerScan: regRecord.unitsPerScan,
-                packagingType: regRecord.packagingType,
-                packLabel: regRecord.label,
-                externalPrefill: null,
-                lookedUpExternally: false,
-              };
+          let regRecord: BarcodeRegistryRecord | null = null;
+          for (const candCode of candidateCodes) {
+            const docId = toBarcodeDocId(candCode);
+            if (!docId) continue;
+            const regSnap = await getDoc(
+              doc(db, 'workspaces', cloudWorkspaceId, 'barcodeRegistry', docId)
+            );
+            if (regSnap.exists()) {
+              regRecord = parseFirestoreBarcodeDoc(regSnap.id, regSnap.data(), candCode);
+              if (regRecord) break;
+            }
+            // Fallback to legacy `barcodes` collection for older workspaces
+            const legacySnap = await getDoc(
+              doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', docId)
+            );
+            if (legacySnap.exists()) {
+              regRecord = parseFirestoreBarcodeDoc(legacySnap.id, legacySnap.data(), candCode);
+              if (regRecord) break;
+            }
+          }
+
+          if (regRecord && regRecord.active !== false) {
+            if (regRecord.itemType === 'ingredient' && regRecord.ingredientId) {
+              let matchedIngredient = cur.ingredients.find((i) => i.id === regRecord.ingredientId);
+              if (!matchedIngredient) {
+                const ingSnap = await getDoc(
+                  doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', regRecord.ingredientId)
+                );
+                if (ingSnap.exists()) {
+                  const d = ingSnap.data();
+                  matchedIngredient = normalizeIngredient({
+                    id: ingSnap.id,
+                    ...d,
+                    createdAt: tsToIso(d.createdAt),
+                    updatedAt: tsToIso(d.updatedAt),
+                  } as Partial<Ingredient> & { id: string });
+                }
+              }
+              if (matchedIngredient) {
+                return {
+                  found: true,
+                  code: regRecord.code,
+                  format: regRecord.format,
+                  source: 'firestore_registry',
+                  itemType: 'ingredient',
+                  ingredient: matchedIngredient,
+                  registryRecord: regRecord,
+                  unitsPerScan: regRecord.unitsPerScan,
+                  packagingType: regRecord.packagingType,
+                  packLabel: regRecord.label,
+                  externalPrefill: null,
+                  lookedUpExternally: false,
+                };
+              }
+            } else if (regRecord.productId) {
+              let matchedProduct = cur.products.find((p) => p.id === regRecord.productId);
+              if (!matchedProduct) {
+                const prodSnap = await getDoc(
+                  doc(db, 'workspaces', cloudWorkspaceId, 'products', regRecord.productId)
+                );
+                if (prodSnap.exists()) {
+                  const d = prodSnap.data();
+                  matchedProduct = normalizeProduct({
+                    id: prodSnap.id,
+                    ...d,
+                    createdAt: tsToIso(d.createdAt),
+                    updatedAt: tsToIso(d.updatedAt),
+                  } as Partial<Product> & { id: string });
+                }
+              }
+              if (matchedProduct) {
+                const matchedVariant = regRecord.variantId
+                  ? matchedProduct.variants?.find((v) => v.id === regRecord.variantId)
+                  : undefined;
+                return {
+                  found: true,
+                  code: regRecord.code,
+                  format: regRecord.format,
+                  source: 'firestore_registry',
+                  itemType: 'product',
+                  product: matchedProduct,
+                  variant: matchedVariant,
+                  registryRecord: regRecord,
+                  unitsPerScan: regRecord.unitsPerScan,
+                  packagingType: regRecord.packagingType,
+                  packLabel: regRecord.label,
+                  externalPrefill: null,
+                  lookedUpExternally: false,
+                };
+              }
             }
           }
         } catch {
@@ -1820,15 +1999,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      // Step 2: Check local mirrored barcode registry & embedded product barcodes
-      const localHit = resolveFromRegistryAndProducts(code, cur.barcodeRegistry, cur.products);
+      // Step 2: Check local mirrored barcodeRegistry & embedded product/ingredient barcodes
+      const localHit = resolveFromRegistryAndProducts(
+        code,
+        cur.barcodeRegistry,
+        cur.products,
+        cur.ingredients
+      );
       if (localHit) {
         return {
           found: true,
           code: localHit.code,
           format: localHit.format,
           source: 'local_registry',
+          itemType: localHit.itemType,
           product: localHit.product,
+          ingredient: localHit.ingredient,
           variant: localHit.variant,
           registryRecord: localHit.registryRecord,
           unitsPerScan: localHit.unitsPerScan,
@@ -2147,6 +2333,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         };
       }
 
+      // Prevent cross-item duplicate barcode assignments (across products & ingredients)
+      const cleanBarcode = normalizeBarcodeString(input.barcode || '');
+      if (cleanBarcode) {
+        const barcodeConflicts = findDuplicateBarcodeConflicts(
+          {
+            id,
+            itemType: 'ingredient',
+            name: input.name,
+            barcode: cleanBarcode,
+          },
+          cur.products,
+          cur.barcodeRegistry,
+          cur.ingredients
+        );
+        if (barcodeConflicts.length > 0) {
+          const first = barcodeConflicts[0];
+          return {
+            ok: false,
+            error: `Barcode "${first.code}" is already assigned to ${
+              first.existingItemType === 'ingredient' ? 'raw ingredient ' : ''
+            }"${first.existingProductName}"${
+              first.existingVariantName ? ` (${first.existingVariantName})` : ''
+            }.`,
+          };
+        }
+      }
+
       const safeCategoryId =
         typeof input.categoryId === 'string' && input.categoryId.trim().length > 0
           ? sanitizeString(input.categoryId, 64)
@@ -2156,6 +2369,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         name: sanitizeString(input.name, 100),
         nameVi: sanitizeString(input.nameVi || input.name, 100),
         categoryId: safeCategoryId,
+        ...(cleanBarcode ? { barcode: sanitizeString(cleanBarcode, 64) } : {}),
         unit: input.unit,
         stockQty: clampNumber(input.stockQty, -1000000, 100000000),
         reorderLevel: clampNumber(input.reorderLevel, 0, 100000000),
@@ -2164,16 +2378,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updatedAt: new Date().toISOString(),
       };
 
+      const nextBarcodeRecords = extractIngredientBarcodeRecords(clean);
+      const nextBarcodeIds = new Set(nextBarcodeRecords.map((r) => r.id));
+      const previousIngredientRecords = cur.barcodeRegistry.filter((r) => r.ingredientId === id);
+      const removedBarcodeIds = previousIngredientRecords
+        .filter((r) => !nextBarcodeIds.has(r.id))
+        .map((r) => r.id);
+
       setIngredients((prev) => (isEdit ? prev.map((i) => (i.id === id ? clean : i)) : [clean, ...prev]));
+      setBarcodeRegistry((prev) => {
+        const withoutThisIng = prev.filter(
+          (r) => r.ingredientId !== id && !nextBarcodeIds.has(r.id)
+        );
+        return [...nextBarcodeRecords, ...withoutThisIng];
+      });
 
       if (user && cloudWorkspaceId) {
         const path = `workspaces/${cloudWorkspaceId}/ingredients/${id}`;
+        const uids = activeMemberUids();
         try {
+          const batch = writeBatch(db);
           if (isEdit) {
-            await updateDoc(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', id), {
+            batch.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', id), {
               name: clean.name,
               nameVi: clean.nameVi,
               categoryId: safeCategoryId,
+              barcode: clean.barcode || '',
               unit: clean.unit,
               stockQty: clean.stockQty,
               reorderLevel: clean.reorderLevel,
@@ -2182,22 +2412,40 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               updatedAt: serverTimestamp(),
             });
           } else {
-            await setDoc(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', id), {
-              workspaceId: cloudWorkspaceId,
-              memberUids: activeMemberUids(),
-              name: clean.name,
-              nameVi: clean.nameVi,
-              categoryId: safeCategoryId,
-              unit: clean.unit,
-              stockQty: clean.stockQty,
-              reorderLevel: clean.reorderLevel,
-              unitCostKhr: clean.unitCostKhr,
-              supplier: clean.supplier,
-              createdBy: user.uid,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
+            batch.set(
+              doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', id),
+              stripUndefined({
+                workspaceId: cloudWorkspaceId,
+                memberUids: uids,
+                name: clean.name,
+                nameVi: clean.nameVi,
+                categoryId: safeCategoryId,
+                ...(clean.barcode ? { barcode: clean.barcode } : {}),
+                unit: clean.unit,
+                stockQty: clean.stockQty,
+                reorderLevel: clean.reorderLevel,
+                unitCostKhr: clean.unitCostKhr,
+                supplier: clean.supplier,
+                createdBy: user.uid,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              })
+            );
           }
+
+          for (const removedId of removedBarcodeIds) {
+            batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodeRegistry', removedId));
+          }
+          for (const rec of nextBarcodeRecords) {
+            const bcRef = doc(db, 'workspaces', cloudWorkspaceId, 'barcodeRegistry', rec.id);
+            if (barcodeRegistryIdsRef.current.has(rec.id)) {
+              batch.update(bcRef, barcodeRecordToFirestoreUpdate(rec));
+            } else {
+              batch.set(bcRef, barcodeRecordToFirestoreDoc(rec, cloudWorkspaceId, uids, user.uid));
+            }
+          }
+
+          await batch.commit();
         } catch (err) {
           handleFirestoreError(err, isEdit ? OperationType.UPDATE : OperationType.CREATE, path);
         }
@@ -2255,6 +2503,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       let bestReorder = Number(primary.reorderLevel) || 0;
       let bestSupplier = primary.supplier || '';
       let bestNameVi = primary.nameVi || primary.name;
+      let bestIngBarcode = normalizeBarcodeString(primary.barcode || '');
 
       for (const dup of dups) {
         const convertedStock = convertUnitQty(Number(dup.stockQty) || 0, dup.unit, primary.unit);
@@ -2283,6 +2532,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if ((!bestNameVi || bestNameVi === primary.name) && dup.nameVi && dup.nameVi !== dup.name) {
           bestNameVi = dup.nameVi;
         }
+        const dupIngBarcode = normalizeBarcodeString(dup.barcode || '');
+        if (!bestIngBarcode && dupIngBarcode) {
+          bestIngBarcode = dupIngBarcode;
+        }
 
         removedIngredientIds.add(dup.id);
         ingredientRemap.set(dup.id, {
@@ -2300,6 +2553,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const mergedPrimary: Ingredient = {
         ...primary,
         nameVi: bestNameVi,
+        ...(bestIngBarcode ? { barcode: sanitizeString(bestIngBarcode, 64) } : {}),
         stockQty: clampNumber(combinedStock, -1000000, 100000000),
         reorderLevel: clampNumber(bestReorder, 0, 100000000),
         unitCostKhr: clampNumber(finalUnitCost, 0, 100000000),
@@ -2492,14 +2746,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .filter((p) => !removedProductIds.has(p.id))
       .map((p) => prodMap.get(p.id) || p);
 
-    // Rebuild barcode registry cleanly for affected products
+    // Rebuild barcode registry cleanly for affected products AND ingredients
     const affectedProdIds = new Set<string>([
       ...Array.from(removedProductIds),
       ...Array.from(updatedProducts.keys()),
     ]);
+    const affectedIngIds = new Set<string>([
+      ...Array.from(removedIngredientIds),
+      ...Array.from(updatedIngredients.keys()),
+    ]);
     const removedBarcodeIds = new Set<string>();
     for (const rec of cur.barcodeRegistry) {
-      if (affectedProdIds.has(rec.productId)) {
+      if (
+        (rec.productId && affectedProdIds.has(rec.productId)) ||
+        (rec.ingredientId && affectedIngIds.has(rec.ingredientId))
+      ) {
         removedBarcodeIds.add(rec.id);
       }
     }
@@ -2511,20 +2772,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         removedBarcodeIds.delete(rec.id);
       }
     }
+    for (const ing of updatedIngredients.values()) {
+      if (removedIngredientIds.has(ing.id)) continue;
+      for (const rec of extractIngredientBarcodeRecords(ing)) {
+        newBarcodeRecords.push(rec);
+        removedBarcodeIds.delete(rec.id);
+      }
+    }
     const nextBarcodeIds = new Set(newBarcodeRecords.map((r) => r.id));
 
     setIngredients(nextIngredients);
     setProducts(nextProducts);
     setBarcodeRegistry((prev) => {
       const kept = prev.filter(
-        (r) => !affectedProdIds.has(r.productId) && !nextBarcodeIds.has(r.id)
+        (r) =>
+          !(r.productId && affectedProdIds.has(r.productId)) &&
+          !(r.ingredientId && affectedIngIds.has(r.ingredientId)) &&
+          !nextBarcodeIds.has(r.id)
       );
       return [...newBarcodeRecords, ...kept];
     });
 
     if (user && cloudWorkspaceId) {
       const uids = activeMemberUids();
-      const wsRoot = `workspaces/${cloudWorkspaceId}`;
       type BatchOp = (batch: ReturnType<typeof writeBatch>) => void;
       const ops: BatchOp[] = [];
 
@@ -2534,6 +2804,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             name: ing.name,
             nameVi: ing.nameVi,
             categoryId: ing.categoryId || UNCATEGORIZED_ID,
+            barcode: ing.barcode || '',
             unit: ing.unit,
             stockQty: ing.stockQty,
             reorderLevel: ing.reorderLevel,
@@ -2564,30 +2835,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
       for (const delBcId of removedBarcodeIds) {
         ops.push((b) =>
-          b.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', delBcId))
+          b.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodeRegistry', delBcId))
         );
-      }
-      const existingRegMap = new Map(cur.barcodeRegistry.map((r) => [r.id, r]));
-      for (const rec of newBarcodeRecords) {
-        const existingRec = existingRegMap.get(rec.id);
-        const bcRef = doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', rec.id);
-        if (existingRec) {
+        if (legacyBarcodeIdsRef.current.has(delBcId)) {
           ops.push((b) =>
-            b.update(
-              bcRef,
-              stripUndefined({
-                format: rec.format,
-                productId: rec.productId,
-                ...(rec.variantId ? { variantId: sanitizeString(rec.variantId, 64) } : {}),
-                packagingType: rec.packagingType,
-                label: sanitizeString(rec.label || 'Unit', 80),
-                unitsPerScan: clampNumber(Math.round(rec.unitsPerScan || 1), 1, 10000),
-                active: Boolean(rec.active),
-                source: rec.source,
-                updatedAt: serverTimestamp(),
-              })
-            )
+            b.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodes', delBcId))
           );
+        }
+      }
+      for (const rec of newBarcodeRecords) {
+        const bcRef = doc(db, 'workspaces', cloudWorkspaceId, 'barcodeRegistry', rec.id);
+        if (barcodeRegistryIdsRef.current.has(rec.id)) {
+          ops.push((b) => b.update(bcRef, barcodeRecordToFirestoreUpdate(rec)));
         } else {
           ops.push((b) =>
             b.set(bcRef, barcodeRecordToFirestoreDoc(rec, cloudWorkspaceId, uids, user.uid))
@@ -2634,11 +2893,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const deleteIngredient = useCallback(
     async (ingredientId: string) => {
+      const removedBarcodes = latestRef.current.barcodeRegistry.filter(
+        (r) => r.ingredientId === ingredientId
+      );
       setIngredients((prev) => prev.filter((i) => i.id !== ingredientId));
+      setBarcodeRegistry((prev) => prev.filter((r) => r.ingredientId !== ingredientId));
       if (user && cloudWorkspaceId) {
         const path = `workspaces/${cloudWorkspaceId}/ingredients/${ingredientId}`;
         try {
-          await deleteDoc(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ingredientId));
+          const batch = writeBatch(db);
+          batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ingredientId));
+          for (const rec of removedBarcodes) {
+            batch.delete(doc(db, 'workspaces', cloudWorkspaceId, 'barcodeRegistry', rec.id));
+          }
+          await batch.commit();
         } catch (err) {
           handleFirestoreError(err, OperationType.DELETE, path);
         }
@@ -3989,7 +4257,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setBarcodeRegistry(
         normalizedRegistry.length > 0
           ? normalizedRegistry
-          : buildRegistryFromProducts(normalizedProds)
+          : buildRegistryFromProducts(normalizedProds, normalizedIngs)
       );
       setSales(
         Array.isArray(parsed.sales)
@@ -4029,7 +4297,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setCategories(ensureCategoriesList(DEFAULT_CATEGORIES));
     setIngredients(seed.ingredients);
     setProducts(seed.products);
-    setBarcodeRegistry(buildRegistryFromProducts(seed.products));
+    setBarcodeRegistry(buildRegistryFromProducts(seed.products, seed.ingredients));
     setSales(seed.sales);
     setExpenses(seed.expenses);
     setPurchases(seed.purchases);
@@ -4072,25 +4340,39 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const wsRef = doc(db, 'workspaces', cloudWorkspaceId);
       const catPath = `workspaces/${cloudWorkspaceId}/categories`;
       const prodPath = `workspaces/${cloudWorkspaceId}/products`;
-      const bcPath = `workspaces/${cloudWorkspaceId}/barcodes`;
+      const bcRegPath = `workspaces/${cloudWorkspaceId}/barcodeRegistry`;
+      const legacyBcPath = `workspaces/${cloudWorkspaceId}/barcodes`;
       const ingPath = `workspaces/${cloudWorkspaceId}/ingredients`;
       const salesPath = `workspaces/${cloudWorkspaceId}/sales`;
       const expPath = `workspaces/${cloudWorkspaceId}/expenses`;
       const purPath = `workspaces/${cloudWorkspaceId}/purchases`;
       const movPath = `workspaces/${cloudWorkspaceId}/stockMovements`;
 
-      const [wsSnap, catSnap, prodSnap, bcSnap, ingSnap, salesSnap, expSnap, purSnap, movSnap] =
-        await Promise.all([
-          fetchDoc(wsRef),
-          fetchQuery(query(collection(db, catPath), where('memberUids', 'array-contains', user.uid))),
-          fetchQuery(query(collection(db, prodPath), where('memberUids', 'array-contains', user.uid))),
-          fetchQuery(query(collection(db, bcPath), where('memberUids', 'array-contains', user.uid))),
-          fetchQuery(query(collection(db, ingPath), where('memberUids', 'array-contains', user.uid))),
-          fetchQuery(query(collection(db, salesPath), where('memberUids', 'array-contains', user.uid))),
-          fetchQuery(query(collection(db, expPath), where('memberUids', 'array-contains', user.uid))),
-          fetchQuery(query(collection(db, purPath), where('memberUids', 'array-contains', user.uid))),
-          fetchQuery(query(collection(db, movPath), where('memberUids', 'array-contains', user.uid))),
-        ]);
+      const [
+        wsSnap,
+        catSnap,
+        prodSnap,
+        bcRegSnap,
+        legacyBcSnap,
+        ingSnap,
+        salesSnap,
+        expSnap,
+        purSnap,
+        movSnap,
+      ] = await Promise.all([
+        fetchDoc(wsRef),
+        fetchQuery(query(collection(db, catPath), where('memberUids', 'array-contains', user.uid))),
+        fetchQuery(query(collection(db, prodPath), where('memberUids', 'array-contains', user.uid))),
+        fetchQuery(query(collection(db, bcRegPath), where('memberUids', 'array-contains', user.uid))),
+        fetchQuery(
+          query(collection(db, legacyBcPath), where('memberUids', 'array-contains', user.uid))
+        ).catch(() => null),
+        fetchQuery(query(collection(db, ingPath), where('memberUids', 'array-contains', user.uid))),
+        fetchQuery(query(collection(db, salesPath), where('memberUids', 'array-contains', user.uid))),
+        fetchQuery(query(collection(db, expPath), where('memberUids', 'array-contains', user.uid))),
+        fetchQuery(query(collection(db, purPath), where('memberUids', 'array-contains', user.uid))),
+        fetchQuery(query(collection(db, movPath), where('memberUids', 'array-contains', user.uid))),
+      ]);
 
       if (wsSnap.exists()) {
         const d = wsSnap.data();
@@ -4164,25 +4446,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         })
       );
 
-      setBarcodeRegistry(
-        bcSnap.docs.map((docSnap) => {
-          const d = docSnap.data();
-          return {
-            id: docSnap.id,
-            code: normalizeBarcodeString(String(d.code || '')),
-            format: (d.format as BarcodeFormat) || detectBarcodeFormat(String(d.code || '')),
-            productId: String(d.productId || ''),
-            ...(d.variantId ? { variantId: String(d.variantId) } : {}),
-            packagingType: (d.packagingType as BarcodePackagingType) || 'unit',
-            label: String(d.label || 'Unit'),
-            unitsPerScan: Math.max(1, Math.round(Number(d.unitsPerScan) || 1)),
-            active: d.active !== false,
-            source: (d.source as BarcodeSource) || 'manufacturer',
-            createdAt: tsToIso(d.createdAt),
-            updatedAt: tsToIso(d.updatedAt),
-          };
-        })
-      );
+      const mergedReg = new Map<string, BarcodeRegistryRecord>();
+      const nextRegIds = new Set<string>();
+      const nextLegacyIds = new Set<string>();
+      if (legacyBcSnap) {
+        for (const docSnap of legacyBcSnap.docs) {
+          const parsed = parseFirestoreBarcodeDoc(docSnap.id, docSnap.data());
+          if (parsed) {
+            mergedReg.set(parsed.id, parsed);
+            nextLegacyIds.add(parsed.id);
+          }
+        }
+      }
+      for (const docSnap of bcRegSnap.docs) {
+        const parsed = parseFirestoreBarcodeDoc(docSnap.id, docSnap.data());
+        if (parsed) {
+          mergedReg.set(parsed.id, parsed);
+          nextRegIds.add(parsed.id);
+        }
+      }
+      barcodeRegistryIdsRef.current = nextRegIds;
+      legacyBarcodeIdsRef.current = nextLegacyIds;
+      setBarcodeRegistry(Array.from(mergedReg.values()));
 
       setIngredients(
         ingSnap.docs.map((docSnap) => {

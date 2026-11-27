@@ -139,6 +139,7 @@ export interface Ingredient {
   name: string;
   nameVi: string;
   categoryId?: string;
+  barcode?: string;
   unit: IngredientUnit;
   stockQty: number;
   reorderLevel: number;
@@ -296,11 +297,15 @@ export type BarcodePackagingType = 'unit' | 'pack' | 'carton' | 'variant';
 
 export type BarcodeSource = 'manufacturer' | 'internal' | 'open_food_facts';
 
+export type BarcodeRegistryItemType = 'product' | 'ingredient';
+
 export interface BarcodeRegistryRecord {
   id: string; // Deterministic doc ID (bc_<hex>) strictly preserving leading zeros
   code: string; // Exact trimmed string identifier (never coerced to number)
   format: BarcodeFormat;
-  productId: string;
+  itemType?: BarcodeRegistryItemType;
+  productId?: string;
+  ingredientId?: string;
   variantId?: string;
   packagingType: BarcodePackagingType;
   label: string;
@@ -327,7 +332,9 @@ export interface BarcodeResolutionResult {
   code: string;
   format: BarcodeFormat;
   source: 'firestore_registry' | 'local_registry' | 'open_food_facts' | 'not_found';
+  itemType?: BarcodeRegistryItemType;
   product?: Product;
+  ingredient?: Ingredient;
   variant?: ProductVariant;
   registryRecord?: BarcodeRegistryRecord;
   unitsPerScan: number;

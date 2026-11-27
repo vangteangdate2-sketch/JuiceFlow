@@ -17,6 +17,7 @@ import {
   Minus,
   MoreVertical,
   Package,
+  PackagePlus,
   Plus,
   QrCode,
   ScanBarcode,
@@ -268,6 +269,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     code: string;
     format: BarcodeFormat;
     product: Product | null;
+    ingredient: Ingredient | null;
     prefill: ExternalBarcodePrefill | null;
   } | null>(null);
   const [quickInitialBarcode, setQuickInitialBarcode] = useState<string | null>(null);
@@ -683,25 +685,39 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       const res = await lookupBarcode(cleaned);
       const effectiveCode = res.code || cleaned;
 
-      // Automatically search the product catalog for the scanned barcode
-      setTypeFilter('ALL');
-      setCategoryFilter('all');
-      setSearch(effectiveCode);
-
       if (res.found && res.product) {
+        // Automatically search the product catalog for the matched product barcode
+        setTypeFilter('ALL');
+        setCategoryFilter('all');
+        setSearch(effectiveCode);
         resetQuickScanSeed();
         triggerHighlightProduct(res.product.id);
         setScannedMatch({
           code: effectiveCode,
           format: res.format,
           product: res.product,
+          ingredient: null,
           prefill: null,
         });
-      } else {
+      } else if (res.found && res.ingredient) {
+        // Cross-item match from Firestore barcodeRegistry (raw ingredient)
+        resetQuickScanSeed();
         setScannedMatch({
           code: effectiveCode,
           format: res.format,
           product: null,
+          ingredient: res.ingredient,
+          prefill: null,
+        });
+      } else {
+        setTypeFilter('ALL');
+        setCategoryFilter('all');
+        setSearch(effectiveCode);
+        setScannedMatch({
+          code: effectiveCode,
+          format: res.format,
+          product: null,
+          ingredient: null,
           prefill: res.externalPrefill || null,
         });
       }
@@ -788,7 +804,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         <div
           role="status"
           className={`px-4 py-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-            scannedMatch.product
+            scannedMatch.product || scannedMatch.ingredient
               ? 'bg-emerald-50 dark:bg-[#064E3B]/75 border-emerald-200 dark:border-[#10B981]/45 text-emerald-950 dark:text-[#D1FAE5]'
               : 'bg-amber-50 dark:bg-amber-950/35 border-amber-200 dark:border-amber-600/50 text-amber-950 dark:text-amber-100'
           }`}
@@ -796,7 +812,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           <div className="flex items-start gap-2.5 min-w-0">
             <ScanBarcode
               className={`w-4 h-4 shrink-0 mt-0.5 ${
-                scannedMatch.product
+                scannedMatch.product || scannedMatch.ingredient
                   ? 'text-[#0F5C43] dark:text-[#34D399]'
                   : 'text-amber-600 dark:text-amber-400'
               }`}
@@ -812,6 +828,25 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   </p>
                   <p className="text-xs opacity-85 font-mono-num mt-0.5">
                     {formatBarcodeTypeLabel(scannedMatch.format)} · {scannedMatch.code}
+                  </p>
+                </>
+              ) : scannedMatch.ingredient ? (
+                <>
+                  <p className="text-sm font-semibold truncate">
+                    {isVi ? 'Đã tìm thấy nguyên liệu trong kho' : 'Matched Raw Ingredient'}:{' '}
+                    {isVi
+                      ? scannedMatch.ingredient.nameVi || scannedMatch.ingredient.name
+                      : scannedMatch.ingredient.name}
+                  </p>
+                  <p className="text-xs opacity-85 font-mono-num mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                    <span>
+                      {formatBarcodeTypeLabel(scannedMatch.format)} · {scannedMatch.code}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span>
+                      {isVi ? 'Tồn kho' : 'In stock'}:{' '}
+                      {formatQty(scannedMatch.ingredient.stockQty, scannedMatch.ingredient.unit)}
+                    </span>
                   </p>
                 </>
               ) : (
@@ -855,6 +890,29 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   <QrCode className="w-3.5 h-3.5" />
                   {isVi ? 'In nhãn' : 'Label'}
                 </button>
+              </>
+            ) : scannedMatch.ingredient ? (
+              <>
+                {onRestockExistingIngredient && (
+                  <button
+                    type="button"
+                    onClick={() => onRestockExistingIngredient(scannedMatch.ingredient!)}
+                    className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    <PackagePlus className="w-3.5 h-3.5" />
+                    {isVi ? '+ Nhập kho' : '+ Restock'}
+                  </button>
+                )}
+                {onEditExistingIngredient && (
+                  <button
+                    type="button"
+                    onClick={() => onEditExistingIngredient(scannedMatch.ingredient!)}
+                    className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    {isVi ? 'Mở trong Kho' : 'Edit in Inventory'}
+                  </button>
+                )}
               </>
             ) : (
               <button

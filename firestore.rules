@@ -201,6 +201,49 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidBarcodeRegistryRecord(data, workspaceId) {
+      return data.keys().hasAll([
+          'workspaceId', 'memberUids', 'code', 'format', 'itemType',
+          'packagingType', 'label', 'unitsPerScan', 'active', 'source',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'workspaceId', 'memberUids', 'code', 'format', 'itemType',
+          'productId', 'ingredientId', 'variantId',
+          'packagingType', 'label', 'unitsPerScan', 'active', 'source',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.workspaceId == workspaceId
+        && isValidMemberUids(data.memberUids)
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 64
+        && data.format is string && data.format in ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'QR_CODE', 'INTERNAL']
+        && data.itemType is string && data.itemType in ['product', 'ingredient']
+        && (
+          (
+            data.itemType == 'product'
+            && 'productId' in data
+            && isValidId(data.productId)
+            && !('ingredientId' in data)
+            && (!('variantId' in data) || (data.variantId is string && data.variantId.size() <= 64))
+          ) ||
+          (
+            data.itemType == 'ingredient'
+            && 'ingredientId' in data
+            && isValidId(data.ingredientId)
+            && !('productId' in data)
+            && !('variantId' in data)
+          )
+        )
+        && data.packagingType is string && data.packagingType in ['unit', 'pack', 'carton', 'variant']
+        && data.label is string && data.label.size() <= 80
+        && data.unitsPerScan is number && data.unitsPerScan >= 1 && data.unitsPerScan <= 10000
+        && data.active is bool
+        && data.source is string && data.source in ['manufacturer', 'internal', 'open_food_facts']
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     function isValidIngredient(data, workspaceId) {
       return data.keys().hasAll([
           'workspaceId', 'memberUids', 'name', 'nameVi', 'unit',
@@ -208,7 +251,7 @@ service cloud.firestore {
           'createdBy', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'workspaceId', 'memberUids', 'name', 'nameVi', 'categoryId', 'unit',
+          'workspaceId', 'memberUids', 'name', 'nameVi', 'categoryId', 'barcode', 'unit',
           'stockQty', 'reorderLevel', 'unitCostKhr', 'supplier',
           'createdBy', 'createdAt', 'updatedAt'
         ])
@@ -217,6 +260,7 @@ service cloud.firestore {
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
         && data.nameVi is string && data.nameVi.size() <= 100
         && (!('categoryId' in data) || isValidId(data.categoryId))
+        && (!('barcode' in data) || (data.barcode is string && data.barcode.size() <= 64))
         && isValidUnit(data.unit)
         && data.stockQty is number && data.stockQty >= -1000000 && data.stockQty <= 100000000
         && data.reorderLevel is number && data.reorderLevel >= 0 && data.reorderLevel <= 100000000
@@ -574,6 +618,41 @@ service cloud.firestore {
         allow delete: if isVerified() && isValidId(workspaceId) && isValidId(barcodeId) && isWorkspaceMember(workspaceId);
       }
 
+      // 5c. Primary Cross-Item Barcode Registry (links scanned codes to productId OR ingredientId)
+      match /barcodeRegistry/{barcodeId} {
+        allow get: if isVerified() && isValidId(workspaceId) && isValidId(barcodeId) && isWorkspaceMember(workspaceId);
+        allow list: if isVerified() && (request.auth.uid in resource.data.memberUids);
+        allow create: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(barcodeId)
+          && isValidBarcodeRegistryRecord(incoming(), workspaceId)
+          && incoming().createdBy == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId);
+        allow update: if isVerified()
+          && isValidId(workspaceId)
+          && isValidId(barcodeId)
+          && isValidBarcodeRegistryRecord(incoming(), workspaceId)
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().code == existing().code
+          && incoming().createdBy == existing().createdBy
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && isWorkspaceMember(workspaceId)
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'format', 'itemType', 'productId', 'ingredientId', 'variantId', 'packagingType',
+              'label', 'unitsPerScan', 'active', 'source', 'updatedAt'
+            ]) ||
+            (
+              incoming().memberUids.hasAll(existing().memberUids)
+              && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+            )
+          );
+        allow delete: if isVerified() && isValidId(workspaceId) && isValidId(barcodeId) && isWorkspaceMember(workspaceId);
+      }
+
       // 6. Ingredients & Raw Materials
       match /ingredients/{ingredientId} {
         allow get: if isVerified() && isValidId(workspaceId) && isValidId(ingredientId) && isWorkspaceMember(workspaceId);
@@ -597,7 +676,7 @@ service cloud.firestore {
           && isWorkspaceMember(workspaceId)
           && (
             incoming().diff(existing()).affectedKeys().hasOnly([
-              'name', 'nameVi', 'categoryId', 'unit', 'stockQty', 'reorderLevel', 'unitCostKhr', 'supplier', 'updatedAt'
+              'name', 'nameVi', 'categoryId', 'barcode', 'unit', 'stockQty', 'reorderLevel', 'unitCostKhr', 'supplier', 'updatedAt'
             ]) ||
             incoming().diff(existing()).affectedKeys().hasOnly(['categoryId', 'updatedAt']) ||
             incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'unitCostKhr', 'supplier', 'updatedAt']) ||

@@ -414,19 +414,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, drivePickerOpen, scannerTarget, labelModalOpen, onClose]);
 
-  // Real-time duplicate active barcode validation across products, variants, and cartons
+  // Real-time duplicate active barcode validation across products, variants, cartons, and ingredients
   const barcodeConflicts = useMemo(
     () =>
       findDuplicateBarcodeConflicts(
         {
           id: activeEditingProduct?.id,
+          itemType: 'product',
           name: name.trim() || activeEditingProduct?.name || 'This product',
           barcode,
           variants: productType === 'PREPARED_TO_ORDER' ? variants : [],
           packagingBarcodes,
         },
         existingProducts,
-        barcodeRegistry
+        barcodeRegistry,
+        ingredients
       ),
     [
       activeEditingProduct,
@@ -437,6 +439,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       packagingBarcodes,
       existingProducts,
       barcodeRegistry,
+      ingredients,
     ]
   );
 
@@ -449,7 +452,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   // Real-time canonical normalized-name & barcode duplicate guard
   const duplicateGuard = useMemo<
     | { kind: 'product'; product: Product; reason: 'name' | 'barcode'; matchedCode?: string }
-    | { kind: 'ingredient'; ingredient: Ingredient; reason: 'name' }
+    | { kind: 'ingredient'; ingredient: Ingredient; reason: 'name' | 'barcode'; matchedCode?: string }
     | null
   >(() => {
     const normInput = normalizeName(name);
@@ -473,16 +476,33 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
     const externalBarcodeConflict = unitBarcodeConflicts.find((c) => !c.isInternalDuplicate);
     if (externalBarcodeConflict) {
-      const matchedProduct = existingProducts.find(
-        (p) => p.id === externalBarcodeConflict.existingProductId
-      );
-      if (matchedProduct) {
-        return {
-          kind: 'product',
-          product: matchedProduct,
-          reason: 'barcode',
-          matchedCode: externalBarcodeConflict.code,
-        };
+      if (
+        externalBarcodeConflict.existingItemType === 'ingredient' &&
+        externalBarcodeConflict.existingIngredientId
+      ) {
+        const matchedIngredient = ingredients.find(
+          (i) => i.id === externalBarcodeConflict.existingIngredientId
+        );
+        if (matchedIngredient) {
+          return {
+            kind: 'ingredient',
+            ingredient: matchedIngredient,
+            reason: 'barcode',
+            matchedCode: externalBarcodeConflict.code,
+          };
+        }
+      } else {
+        const matchedProduct = existingProducts.find(
+          (p) => p.id === externalBarcodeConflict.existingProductId
+        );
+        if (matchedProduct) {
+          return {
+            kind: 'product',
+            product: matchedProduct,
+            reason: 'barcode',
+            matchedCode: externalBarcodeConflict.code,
+          };
+        }
       }
     }
 
@@ -1636,6 +1656,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                         duplicateGuard.product.stockQty,
                                         duplicateGuard.product.unit
                                       )} in stock — Edit or restock the existing record so stock stays unified.`
+                                    )
+                                  ) : duplicateGuard.reason === 'barcode' ? (
+                                    isVi ? (
+                                      `Mã vạch ${duplicateGuard.matchedCode} đã được gắn cho nguyên liệu này trong kho. Hãy chỉnh sửa hoặc nhập thêm kho thay vì tạo trùng.`
+                                    ) : (
+                                      `Barcode ${duplicateGuard.matchedCode} is already registered to this Raw Ingredient in inventory. Edit or restock it instead of creating a duplicate.`
                                     )
                                   ) : isVi ? (
                                     `Nguyên liệu trong kho · Hiện còn ${formatQty(

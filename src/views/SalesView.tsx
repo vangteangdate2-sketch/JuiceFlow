@@ -437,6 +437,17 @@ export const SalesView: React.FC<SalesViewProps> = ({
       setLookingUpBarcode(null);
     }
 
+    if (result.found && result.ingredient) {
+      const ingName = isVi
+        ? result.ingredient.nameVi || result.ingredient.name
+        : result.ingredient.name;
+      const msg = isVi
+        ? `"${ingName}" là nguyên liệu thô trong Kho (mã ${result.code || cleaned}) — không phải sản phẩm bán lẻ POS.`
+        : `"${ingName}" is a Raw Ingredient in Inventory (${result.code || cleaned}) — not a sellable POS item.`;
+      setCheckoutError(msg);
+      return { ok: false, message: msg };
+    }
+
     if (!result.found || !result.product) {
       // Calm quick-registration prompt (never treated as an error; keeps current cart intact)
       setUnknownBarcodePrompt({

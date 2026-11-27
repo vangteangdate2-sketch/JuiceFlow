@@ -1,9 +1,11 @@
 import type {
   BarcodeFormat,
   BarcodePackagingType,
+  BarcodeRegistryItemType,
   BarcodeRegistryRecord,
   BarcodeSource,
   ExternalBarcodePrefill,
+  Ingredient,
   PackagingBarcode,
   Product,
   ProductCategory,
@@ -241,6 +243,7 @@ export function extractProductBarcodeRecords(
       id,
       code,
       format,
+      itemType: 'product',
       productId: product.id,
       ...(variantId ? { variantId } : {}),
       packagingType,
@@ -276,12 +279,58 @@ export function extractProductBarcodeRecords(
 }
 
 /**
- * Synthesize a complete local barcode registry from a list of products.
+ * Extract active barcode registry record(s) owned by a single Ingredient.
  */
-export function buildRegistryFromProducts(products: Product[]): BarcodeRegistryRecord[] {
+export function extractIngredientBarcodeRecords(
+  ingredient: Ingredient,
+  preferredSource?: BarcodeSource
+): BarcodeRegistryRecord[] {
+  const code = normalizeBarcodeString(ingredient.barcode);
+  if (!code) return [];
+  const id = toBarcodeDocId(code);
+  if (!id) return [];
+
+  const format = detectBarcodeFormat(code);
+  const source: BarcodeSource =
+    preferredSource ?? (format === 'INTERNAL' ? 'internal' : 'manufacturer');
+  const nowIso = ingredient.updatedAt || new Date().toISOString();
+
+  return [
+    {
+      id,
+      code,
+      format,
+      itemType: 'ingredient',
+      ingredientId: ingredient.id,
+      packagingType: 'unit',
+      label: (ingredient.unit || 'Unit').trim().slice(0, 80),
+      unitsPerScan: 1,
+      active: true,
+      source,
+      createdAt: ingredient.createdAt || nowIso,
+      updatedAt: nowIso,
+    },
+  ];
+}
+
+/**
+ * Synthesize a complete local barcode registry from products and optional ingredients.
+ */
+export function buildRegistryFromProducts(
+  products: Product[],
+  ingredients: Ingredient[] = []
+): BarcodeRegistryRecord[] {
   const map = new Map<string, BarcodeRegistryRecord>();
   for (const prod of products) {
     const entries = extractProductBarcodeRecords(prod);
+    for (const rec of entries) {
+      if (!map.has(rec.id)) {
+        map.set(rec.id, rec);
+      }
+    }
+  }
+  for (const ing of ingredients) {
+    const entries = extractIngredientBarcodeRecords(ing);
     for (const rec of entries) {
       if (!map.has(rec.id)) {
         map.set(rec.id, rec);
@@ -293,7 +342,9 @@ export function buildRegistryFromProducts(products: Product[]): BarcodeRegistryR
 
 export interface BarcodeConflict {
   code: string;
+  existingItemType?: BarcodeRegistryItemType;
   existingProductId: string;
+  existingIngredientId?: string;
   existingProductName: string;
   existingVariantName?: string;
   existingLabel?: string;
@@ -302,6 +353,7 @@ export interface BarcodeConflict {
 
 export interface BarcodeConflictCandidate {
   id?: string;
+  itemType?: BarcodeRegistryItemType;
   name?: string;
   barcode?: string;
   variants?: Array<{ id?: string; name?: string; barcode?: string }>;
@@ -309,17 +361,19 @@ export interface BarcodeConflictCandidate {
 }
 
 /**
- * Validate that NO barcode on the candidate product duplicates:
- * 1) Another barcode on the same product (e.g. unit barcode == carton barcode or 2 variants share a code)
- * 2) Any active barcode assigned to a different product in the Firestore registry or product catalog.
+ * Validate that NO barcode on the candidate product/ingredient duplicates:
+ * 1) Another barcode on the same submission
+ * 2) Any active barcode assigned to a different product or ingredient in the barcodeRegistry or catalog.
  */
 export function findDuplicateBarcodeConflicts(
   candidate: BarcodeConflictCandidate,
   existingProducts: Product[],
-  registry: BarcodeRegistryRecord[] = []
+  registry: BarcodeRegistryRecord[] = [],
+  existingIngredients: Ingredient[] = []
 ): BarcodeConflict[] {
   const conflicts: BarcodeConflict[] = [];
   const candidateEntries: Array<{ code: string; label: string }> = [];
+  const candidateType: BarcodeRegistryItemType = candidate.itemType || 'product';
 
   const unitCode = normalizeBarcodeString(candidate.barcode);
   if (unitCode) {
@@ -338,14 +392,15 @@ export function findDuplicateBarcodeConflicts(
     }
   }
 
-  // 1. Check duplicates within the same product submission
+  // 1. Check duplicates within the same submission
   const seenLocal = new Map<string, string>();
   for (const entry of candidateEntries) {
     if (seenLocal.has(entry.code)) {
       conflicts.push({
         code: entry.code,
+        existingItemType: candidateType,
         existingProductId: candidate.id || '',
-        existingProductName: candidate.name || 'This product',
+        existingProductName: candidate.name || 'This item',
         existingLabel: seenLocal.get(entry.code),
         isInternalDuplicate: true,
       });
@@ -355,41 +410,66 @@ export function findDuplicateBarcodeConflicts(
   }
 
   const prodMap = new Map(existingProducts.map((p) => [p.id, p]));
+  const ingMap = new Map(existingIngredients.map((i) => [i.id, i]));
   const alreadyReportedExternal = new Set<string>();
 
-  // 2. Check active registry records belonging to other products
+  // 2. Check active registry records belonging to other products or ingredients
   for (const entry of candidateEntries) {
-    const docId = toBarcodeDocId(entry.code);
-    const regMatch = registry.find(
-      (r) =>
-        r.active &&
-        (r.code === entry.code || r.id === docId) &&
-        r.productId !== candidate.id
-    );
+    const equivCodes = getEquivalentBarcodeCodes(entry.code);
+    const equivDocIds = new Set(equivCodes.map((c) => toBarcodeDocId(c)));
+    const regMatch = registry.find((r) => {
+      if (!r.active) return false;
+      const matchesCode = equivCodes.includes(r.code) || equivDocIds.has(r.id);
+      if (!matchesCode) return false;
+      const recType: BarcodeRegistryItemType =
+        r.itemType || (r.ingredientId ? 'ingredient' : 'product');
+      if (recType === 'ingredient') {
+        return !(candidateType === 'ingredient' && candidate.id && r.ingredientId === candidate.id);
+      }
+      return !(candidateType === 'product' && candidate.id && r.productId === candidate.id);
+    });
     if (regMatch) {
-      const owner = prodMap.get(regMatch.productId);
-      const variant = owner?.variants?.find((v) => v.id === regMatch.variantId);
-      conflicts.push({
-        code: entry.code,
-        existingProductId: regMatch.productId,
-        existingProductName: owner?.name || regMatch.productId,
-        existingVariantName: variant?.name,
-        existingLabel: regMatch.label,
-        isInternalDuplicate: false,
-      });
+      const recType: BarcodeRegistryItemType =
+        regMatch.itemType || (regMatch.ingredientId ? 'ingredient' : 'product');
+      if (recType === 'ingredient' && regMatch.ingredientId) {
+        const ownerIng = ingMap.get(regMatch.ingredientId);
+        conflicts.push({
+          code: entry.code,
+          existingItemType: 'ingredient',
+          existingProductId: '',
+          existingIngredientId: regMatch.ingredientId,
+          existingProductName: ownerIng?.name || regMatch.ingredientId,
+          existingLabel: regMatch.label || 'Raw Ingredient',
+          isInternalDuplicate: false,
+        });
+      } else {
+        const pid = regMatch.productId || '';
+        const owner = prodMap.get(pid);
+        const variant = owner?.variants?.find((v) => v.id === regMatch.variantId);
+        conflicts.push({
+          code: entry.code,
+          existingItemType: 'product',
+          existingProductId: pid,
+          existingProductName: owner?.name || pid,
+          existingVariantName: variant?.name,
+          existingLabel: regMatch.label,
+          isInternalDuplicate: false,
+        });
+      }
       alreadyReportedExternal.add(entry.code);
       continue;
     }
 
     // 3. Check product catalog directly (covers offline / un-synced products)
     for (const prod of existingProducts) {
-      if (candidate.id && prod.id === candidate.id) continue;
+      if (candidateType === 'product' && candidate.id && prod.id === candidate.id) continue;
       if (!prod.active) continue;
 
-      if (normalizeBarcodeString(prod.barcode) === entry.code) {
+      if (equivCodes.includes(normalizeBarcodeString(prod.barcode))) {
         if (!alreadyReportedExternal.has(entry.code)) {
           conflicts.push({
             code: entry.code,
+            existingItemType: 'product',
             existingProductId: prod.id,
             existingProductName: prod.name,
             existingLabel: 'Unit SKU',
@@ -400,13 +480,14 @@ export function findDuplicateBarcodeConflicts(
         break;
       }
 
-      const matchedVariant = (prod.variants || []).find(
-        (v) => normalizeBarcodeString(v.barcode) === entry.code
+      const matchedVariant = (prod.variants || []).find((v) =>
+        equivCodes.includes(normalizeBarcodeString(v.barcode))
       );
       if (matchedVariant) {
         if (!alreadyReportedExternal.has(entry.code)) {
           conflicts.push({
             code: entry.code,
+            existingItemType: 'product',
             existingProductId: prod.id,
             existingProductName: prod.name,
             existingVariantName: matchedVariant.name,
@@ -418,13 +499,14 @@ export function findDuplicateBarcodeConflicts(
         break;
       }
 
-      const matchedPack = (prod.packagingBarcodes || []).find(
-        (pb) => normalizeBarcodeString(pb.barcode) === entry.code
+      const matchedPack = (prod.packagingBarcodes || []).find((pb) =>
+        equivCodes.includes(normalizeBarcodeString(pb.barcode))
       );
       if (matchedPack) {
         if (!alreadyReportedExternal.has(entry.code)) {
           conflicts.push({
             code: entry.code,
+            existingItemType: 'product',
             existingProductId: prod.id,
             existingProductName: prod.name,
             existingLabel: matchedPack.label,
@@ -435,6 +517,26 @@ export function findDuplicateBarcodeConflicts(
         break;
       }
     }
+
+    // 4. Check ingredients catalog directly
+    if (!alreadyReportedExternal.has(entry.code)) {
+      for (const ing of existingIngredients) {
+        if (candidateType === 'ingredient' && candidate.id && ing.id === candidate.id) continue;
+        if (equivCodes.includes(normalizeBarcodeString(ing.barcode))) {
+          conflicts.push({
+            code: entry.code,
+            existingItemType: 'ingredient',
+            existingProductId: '',
+            existingIngredientId: ing.id,
+            existingProductName: ing.name,
+            existingLabel: ing.unit || 'Raw Ingredient',
+            isInternalDuplicate: false,
+          });
+          alreadyReportedExternal.add(entry.code);
+          break;
+        }
+      }
+    }
   }
 
   return conflicts;
@@ -443,7 +545,9 @@ export function findDuplicateBarcodeConflicts(
 export interface RegistryLookupHit {
   code: string;
   format: BarcodeFormat;
-  product: Product;
+  itemType: BarcodeRegistryItemType;
+  product?: Product;
+  ingredient?: Ingredient;
   variant?: ProductVariant;
   registryRecord?: BarcodeRegistryRecord;
   unitsPerScan: number;
@@ -452,17 +556,19 @@ export interface RegistryLookupHit {
 }
 
 /**
- * Resolve a scanned barcode against the Barcode Registry first, then fall back to products array.
+ * Resolve a scanned barcode against the Barcode Registry first, then fall back to products & ingredients arrays.
  */
 export function resolveFromRegistryAndProducts(
   rawCode: string,
   registry: BarcodeRegistryRecord[],
-  products: Product[]
+  products: Product[],
+  ingredients: Ingredient[] = []
 ): RegistryLookupHit | null {
   const candidates = getEquivalentBarcodeCodes(rawCode);
   if (candidates.length === 0) return null;
 
   const prodMap = new Map(products.map((p) => [p.id, p]));
+  const ingMap = new Map(ingredients.map((i) => [i.id, i]));
 
   for (const code of candidates) {
     const docId = toBarcodeDocId(code);
@@ -470,21 +576,40 @@ export function resolveFromRegistryAndProducts(
     // 1. Check Barcode Registry first (exact string match preserving leading zeros)
     const regRecord = registry.find((r) => r.code === code || r.id === docId);
     if (regRecord) {
-      const product = prodMap.get(regRecord.productId);
-      if (product) {
-        const variant = regRecord.variantId
-          ? product.variants?.find((v) => v.id === regRecord.variantId)
-          : undefined;
-        return {
-          code,
-          format: regRecord.format || detectBarcodeFormat(code),
-          product,
-          variant,
-          registryRecord: regRecord,
-          unitsPerScan: Math.max(1, Math.round(regRecord.unitsPerScan || 1)),
-          packagingType: regRecord.packagingType,
-          packLabel: regRecord.label,
-        };
+      const recType: BarcodeRegistryItemType =
+        regRecord.itemType || (regRecord.ingredientId ? 'ingredient' : 'product');
+      if (recType === 'ingredient' && regRecord.ingredientId) {
+        const ingredient = ingMap.get(regRecord.ingredientId);
+        if (ingredient) {
+          return {
+            code,
+            format: regRecord.format || detectBarcodeFormat(code),
+            itemType: 'ingredient',
+            ingredient,
+            registryRecord: regRecord,
+            unitsPerScan: Math.max(1, Math.round(regRecord.unitsPerScan || 1)),
+            packagingType: regRecord.packagingType,
+            packLabel: regRecord.label,
+          };
+        }
+      } else if (regRecord.productId) {
+        const product = prodMap.get(regRecord.productId);
+        if (product) {
+          const variant = regRecord.variantId
+            ? product.variants?.find((v) => v.id === regRecord.variantId)
+            : undefined;
+          return {
+            code,
+            format: regRecord.format || detectBarcodeFormat(code),
+            itemType: 'product',
+            product,
+            variant,
+            registryRecord: regRecord,
+            unitsPerScan: Math.max(1, Math.round(regRecord.unitsPerScan || 1)),
+            packagingType: regRecord.packagingType,
+            packLabel: regRecord.label,
+          };
+        }
       }
     }
 
@@ -494,6 +619,7 @@ export function resolveFromRegistryAndProducts(
         return {
           code,
           format: detectBarcodeFormat(code),
+          itemType: 'product',
           product,
           unitsPerScan: 1,
           packagingType: 'unit',
@@ -507,6 +633,7 @@ export function resolveFromRegistryAndProducts(
         return {
           code,
           format: detectBarcodeFormat(code),
+          itemType: 'product',
           product,
           variant: matchedVariant,
           unitsPerScan: 1,
@@ -522,10 +649,26 @@ export function resolveFromRegistryAndProducts(
         return {
           code,
           format: detectBarcodeFormat(code),
+          itemType: 'product',
           product,
           unitsPerScan: units,
           packagingType: inferPackagingType(matchedPack.label || '', units),
           packLabel: matchedPack.label,
+        };
+      }
+    }
+
+    // 3. Fallback to embedded ingredient barcode fields
+    for (const ingredient of ingredients) {
+      if (normalizeBarcodeString(ingredient.barcode) === code) {
+        return {
+          code,
+          format: detectBarcodeFormat(code),
+          itemType: 'ingredient',
+          ingredient,
+          unitsPerScan: 1,
+          packagingType: 'unit',
+          packLabel: ingredient.unit || 'Unit',
         };
       }
     }
