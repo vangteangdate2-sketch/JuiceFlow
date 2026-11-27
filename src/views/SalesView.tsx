@@ -69,6 +69,7 @@ import {
   getProductTypeFilterPillClass,
   resolveProductCategoryId,
 } from '../utils/categories';
+import { useFilterVisibility } from '../hooks/useFilterVisibility';
 
 interface CartEntry {
   key: string; // `${productId}::${variantId || ''}`
@@ -113,7 +114,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
   const [posSearch, setPosSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | ProductType>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<'all' | ProductCategory>('all');
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  const { filtersOpen, toggleFilters } = useFilterVisibility();
   const activeFilterCount =
     (categoryFilter !== 'all' ? 1 : 0) + (typeFilter !== 'ALL' ? 1 : 0);
 
@@ -750,7 +751,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                 secondaryLeftSlot={
                   <button
                     type="button"
-                    onClick={() => setFiltersOpen((prev) => !prev)}
+                    onClick={toggleFilters}
                     aria-expanded={filtersOpen}
                     aria-controls="pos-catalog-filters"
                     className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap border ${
@@ -761,22 +762,19 @@ export const SalesView: React.FC<SalesViewProps> = ({ sidebarCollapsed = false }
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
                     <span>
-                      {activeFilterCount > 0
-                        ? filtersOpen
-                          ? isVi
-                            ? `Ẩn bộ lọc (${activeFilterCount})`
-                            : `Hide Filters (${activeFilterCount})`
-                          : isVi
-                            ? `Bộ lọc (${activeFilterCount})`
-                            : `Filters (${activeFilterCount})`
-                        : filtersOpen
-                          ? isVi
-                            ? 'Ẩn bộ lọc'
-                            : 'Hide Filters'
-                          : isVi
-                            ? 'Hiện bộ lọc'
-                            : 'Show Filters'}
+                      {filtersOpen
+                        ? isVi
+                          ? 'Ẩn bộ lọc'
+                          : 'Hide Filters'
+                        : isVi
+                          ? 'Hiện bộ lọc'
+                          : 'Show Filters'}
                     </span>
+                    {activeFilterCount > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-mono-num font-semibold bg-[#0D5C3E]/12 text-[#0D5C3E] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
+                        {activeFilterCount}
+                      </span>
+                    )}
                     <ChevronDown
                       className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-200 motion-reduce:transition-none ${
                         filtersOpen ? 'rotate-180' : ''

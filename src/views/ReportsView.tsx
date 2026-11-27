@@ -49,6 +49,7 @@ import {
   getProductTypeDotClass,
 } from '../utils/categories';
 import { useTheme } from '../hooks/useTheme';
+import { useFilterVisibility } from '../hooks/useFilterVisibility';
 import { CategoryFilterPills } from '../components/CategoryFilterPills';
 import { InfoHint } from '../components/InfoHint';
 
@@ -99,7 +100,7 @@ export const ReportsView: React.FC = () => {
   const [customStart, setCustomStart] = useState(daysAgoIso(29));
   const [customEnd, setCustomEnd] = useState(todayIso());
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  const { filtersOpen, toggleFilters } = useFilterVisibility();
 
   useEffect(() => {
     if (
@@ -614,7 +615,7 @@ export const ReportsView: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setFiltersOpen((prev) => !prev)}
+              onClick={toggleFilters}
               aria-expanded={filtersOpen}
               aria-controls="reports-category-filters"
               className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap border ${
@@ -625,22 +626,19 @@ export const ReportsView: React.FC = () => {
             >
               <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
               <span>
-                {activeFilterCount > 0
-                  ? filtersOpen
-                    ? isVi
-                      ? `Ẩn bộ lọc (${activeFilterCount})`
-                      : `Hide Filters (${activeFilterCount})`
-                    : isVi
-                      ? `Bộ lọc (${activeFilterCount})`
-                      : `Filters (${activeFilterCount})`
-                  : filtersOpen
-                    ? isVi
-                      ? 'Ẩn bộ lọc'
-                      : 'Hide Filters'
-                    : isVi
-                      ? 'Hiện bộ lọc'
-                      : 'Show Filters'}
+                {filtersOpen
+                  ? isVi
+                    ? 'Ẩn bộ lọc'
+                    : 'Hide Filters'
+                  : isVi
+                    ? 'Hiện bộ lọc'
+                    : 'Show Filters'}
               </span>
+              {activeFilterCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-mono-num font-semibold bg-[#0D5C3E]/12 text-[#0D5C3E] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
+                  {activeFilterCount}
+                </span>
+              )}
               <ChevronDown
                 className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-200 motion-reduce:transition-none ${
                   filtersOpen ? 'rotate-180' : ''
