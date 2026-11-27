@@ -62,6 +62,16 @@ function hasLinkedRecipe(product: Product): boolean {
   return product.recipe.length > 0;
 }
 
+function getProductTypeBadgeClass(productType: ProductType): string {
+  if (productType === 'PREPARED_TO_ORDER') {
+    return 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-[#064E3B]/60 dark:text-[#6EE7B7] dark:border-[#10B981]/30';
+  }
+  if (productType === 'PREPARED_STOCK') {
+    return 'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-500/35';
+  }
+  return 'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-500/35';
+}
+
 interface ProductsViewProps {
   autoOpenAdd?: boolean;
   onAutoOpenHandled?: () => void;
@@ -1038,21 +1048,26 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* Single-line Type · Category */}
+                      {/* Color-coded Type & Category badges (matching InventoryView) */}
                       <td className="py-3 px-3 text-xs whitespace-nowrap">
-                        <span className="font-semibold text-stone-800 dark:text-[#D5DFDA]">
-                          {t.productTypes[product.productType]}
-                        </span>
-                        <span className="text-stone-400 dark:text-[#94A39B]"> · </span>
-                        <span className="text-stone-600 dark:text-[#94A39B]">
-                          {getCategoryDisplayName(
-                            getCategoryById(
-                              resolveProductCategoryId(product, categories),
-                              categories
-                            ),
-                            isVi
-                          )}
-                        </span>
+                        <div className="inline-flex items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
+                              product.productType
+                            )}`}
+                          >
+                            {t.productTypes[product.productType]}
+                          </span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-600 border border-stone-200/80 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] whitespace-nowrap">
+                            {getCategoryDisplayName(
+                              getCategoryById(
+                                resolveProductCategoryId(product, categories),
+                                categories
+                              ),
+                              isVi
+                            )}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Interactive POS Visibility Toggle Pill */}
@@ -1352,19 +1367,24 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   <div className="p-5 pb-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        {/* Single-line Item Type · Category metadata */}
-                        <p className="text-xs text-stone-500 dark:text-[#94A39B] truncate whitespace-nowrap">
-                          <span className="font-semibold text-stone-700 dark:text-[#D5DFDA]">
+                        {/* Color-coded Item Type & Category badges (matching InventoryView) */}
+                        <p className="flex flex-wrap items-center gap-1.5 text-xs">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
+                              product.productType
+                            )}`}
+                          >
                             {t.productTypes[product.productType]}
                           </span>
-                          {' · '}
-                          {getCategoryDisplayName(
-                            getCategoryById(
-                              resolveProductCategoryId(product, categories),
-                              categories
-                            ),
-                            isVi
-                          )}
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-600 border border-stone-200/80 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] whitespace-nowrap">
+                            {getCategoryDisplayName(
+                              getCategoryById(
+                                resolveProductCategoryId(product, categories),
+                                categories
+                              ),
+                              isVi
+                            )}
+                          </span>
                         </p>
                         <h3 className="mt-1 font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                           {displayName}
