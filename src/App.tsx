@@ -14,7 +14,6 @@ import {
   PanelLeftOpen,
   Plus,
   Receipt,
-  RefreshCw,
   Settings,
   ShoppingCart,
   Sun,
@@ -94,7 +93,7 @@ interface JuiceFlowShellProps {
 }
 
 const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab }) => {
-  const { settings, cloudSynced, syncing, refreshing, refreshData, t, setActiveOperator } = useStore();
+  const { settings, t, setActiveOperator } = useStore();
   const { isDark, toggleTheme } = useTheme();
   const { showHints, toggleShowHints, areQuestionHintsVisible } = useHints();
   const isVi = settings?.language === 'vi';
@@ -113,7 +112,6 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
       return false;
     }
   });
-  const [justRefreshed, setJustRefreshed] = useState(false);
   const [pendingAction, setPendingAction] = useState<'add_expense' | 'add_product' | null>(null);
   const [pendingInventoryTarget, setPendingInventoryTarget] =
     useState<PendingInventoryTarget | null>(null);
@@ -133,15 +131,6 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
       }
       return next;
     });
-  };
-
-  const handleManualRefresh = async () => {
-    if (refreshing || syncing) return;
-    const res = await refreshData();
-    if (res.ok) {
-      setJustRefreshed(true);
-      window.setTimeout(() => setJustRefreshed(false), 1600);
-    }
   };
 
   const handleUpdateSecurity = (next: BiometricSecurityConfig) => {
@@ -362,14 +351,14 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
 
         {/* Main Workspace Viewport */}
         <div className="flex-1 flex flex-col w-full min-w-0">
-          {/* Clean, Uncluttered Full-Bleed Top Bar (64px height, comfortable touch spacing on narrow screens) */}
-          <header className="sticky top-0 inset-x-0 w-full z-30 h-16 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-xs border-b border-stone-200 dark:border-[#24352C] px-3 sm:px-5 lg:px-6 flex items-center justify-between gap-2 sm:gap-3 shrink-0 transition-colors duration-150 print:hidden">
+          {/* Minimalist Full-Bleed Top Bar (64px height) */}
+          <header className="sticky top-0 inset-x-0 w-full z-30 h-16 bg-white/90 dark:bg-[#0D1411]/90 backdrop-blur-md border-b border-slate-200/60 dark:border-emerald-950/50 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3 shrink-0 transition-colors duration-150 print:hidden">
             <div className="flex items-center gap-2 min-w-0">
               {/* Mobile/Tablet brand tap target -> Dashboard */}
               <button
                 type="button"
                 onClick={() => navigate('dashboard')}
-                className="lg:hidden font-display text-base sm:text-lg font-bold tracking-tight text-[#0F5C43] dark:text-[#10B981] h-11 px-1.5 -ml-1.5 inline-flex items-center rounded-lg hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors whitespace-nowrap shrink-0"
+                className="lg:hidden font-display text-base sm:text-lg font-bold tracking-tight text-[#0F5C43] dark:text-[#10B981] h-11 px-1.5 -ml-1.5 inline-flex items-center rounded-lg hover:bg-stone-100/80 dark:hover:bg-[#18251F] transition-colors whitespace-nowrap shrink-0"
               >
                 {t.brand}
               </button>
@@ -395,8 +384,8 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Global Show Hints Switch (hidden on non-Settings pages when ? hints are turned off) */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Global Show Hints Switch (only shown when ? hints are enabled in Settings) */}
               {areQuestionHintsVisible && (
                 <button
                   type="button"
@@ -409,13 +398,13 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                       : 'Toggle helper hints across all pages'
                   }
                   title={isVi ? 'Hiện / ẩn gợi ý giải thích' : 'Show or hide helper hints'}
-                  className="inline-flex items-center gap-1.5 sm:gap-2 h-11 min-h-[44px] px-2.5 sm:px-3 text-xs font-medium text-neutral-700 dark:text-neutral-200 bg-neutral-100/90 dark:bg-neutral-800/90 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200/70 dark:hover:bg-neutral-700/80 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                  className="inline-flex items-center gap-1.5 sm:gap-2 h-11 min-h-[44px] px-2.5 sm:px-3 text-xs font-medium text-stone-700 dark:text-[#D5DFDA] bg-transparent border border-slate-200/80 dark:border-emerald-950/70 hover:bg-stone-100/80 dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
                 >
                   <HelpCircle
                     className={`w-4 h-4 shrink-0 ${
                       showHints
                         ? 'text-[#0D5C3E] dark:text-[#34D399]'
-                        : 'text-neutral-500 dark:text-neutral-400'
+                        : 'text-stone-400 dark:text-[#94A39B]'
                     }`}
                   />
                   <span className="hidden md:inline">{isVi ? 'Gợi ý' : 'Show Hints'}</span>
@@ -424,7 +413,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
                       showHints
                         ? 'bg-[#0D5C3E] dark:bg-[#10B981]'
-                        : 'bg-neutral-300 dark:bg-neutral-600'
+                        : 'bg-stone-300 dark:bg-[#24352C]'
                     }`}
                   >
                     <span
@@ -436,7 +425,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                 </button>
               )}
 
-              {/* Light / Dark Mode Switcher (44x44px tap target) */}
+              {/* Light / Dark Mode Switcher (44x44px subtle ghost button) */}
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -458,56 +447,13 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                       ? 'Chế độ tối'
                       : 'Dark mode'
                 }
-                className="inline-flex items-center justify-center w-11 h-11 text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+                className="inline-flex items-center justify-center w-11 h-11 text-stone-600 dark:text-[#D5DFDA] bg-transparent border border-slate-200/80 dark:border-emerald-950/70 hover:bg-stone-100/80 dark:hover:bg-[#18251F] hover:text-stone-900 dark:hover:text-[#F1F5F3] rounded-lg transition-all duration-150 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
               >
                 {isDark ? (
                   <Sun className="w-[18px] h-[18px] text-amber-300" />
                 ) : (
                   <Moon className="w-[18px] h-[18px] text-stone-600" />
                 )}
-              </button>
-
-              {/* Refresh Button (44px tap target) */}
-              <button
-                type="button"
-                onClick={handleManualRefresh}
-                disabled={refreshing || syncing}
-                title={
-                  cloudSynced
-                    ? isVi
-                      ? 'Làm mới dữ liệu từ đám mây'
-                      : 'Refresh latest data from cloud'
-                    : isVi
-                      ? 'Làm mới dữ liệu cục bộ'
-                      : 'Refresh local data'
-                }
-                aria-label={isVi ? 'Làm mới dữ liệu' : 'Refresh data'}
-                className="inline-flex items-center justify-center gap-1.5 min-w-[44px] h-11 px-2.5 sm:px-3.5 text-xs font-medium text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] hover:text-stone-900 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shrink-0"
-              >
-                {justRefreshed ? (
-                  <Check className="w-4 h-4 text-[#0F5C43] dark:text-[#10B981]" />
-                ) : (
-                  <RefreshCw
-                    className={`w-4 h-4 ${
-                      refreshing || syncing
-                        ? 'animate-spin text-[#0F5C43] dark:text-[#10B981]'
-                        : 'text-stone-500 dark:text-[#94A39B]'
-                    }`}
-                  />
-                )}
-                <span className="hidden sm:inline">
-                  {refreshing
-                    ? isVi
-                      ? 'Đang tải...'
-                      : 'Refreshing...'
-                    : justRefreshed
-                      ? isVi
-                        ? 'Đã cập nhật'
-                        : 'Updated'
-                      : isVi
-                        ? 'Làm mới'
-                        : 'Refresh'}
-                </span>
               </button>
 
               <PWAInstallButton variant="compact" />
@@ -517,7 +463,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                 <button
                   type="button"
                   onClick={() => navigate('sales')}
-                  className="inline-flex items-center justify-center gap-1.5 h-11 px-3 sm:px-4 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  className="inline-flex items-center justify-center gap-1.5 h-11 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.98] whitespace-nowrap shrink-0"
                 >
                   <Plus className="w-4 h-4 shrink-0" />
                   <span className="hidden sm:inline">{t.dashboard.newSale}</span>

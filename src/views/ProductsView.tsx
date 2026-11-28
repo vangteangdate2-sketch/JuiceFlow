@@ -5,18 +5,15 @@ import {
   Check,
   CheckSquare,
   ChevronDown,
-  CupSoda,
   Edit2,
   Eye,
   EyeOff,
-  FlaskConical,
   FolderInput,
   Layers,
   LayoutGrid,
   Loader2,
   Minus,
   MoreVertical,
-  Package,
   PackagePlus,
   Plus,
   QrCode,
@@ -311,7 +308,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     }
   }, [bulkCategory, productCategories]);
 
-  const activeFilterCount = (categoryFilter !== 'all' ? 1 : 0) + (typeFilter !== 'ALL' ? 1 : 0);
+  const drawerFilterCount = categoryFilter !== 'all' ? 1 : 0;
+  const hasActiveFilters =
+    categoryFilter !== 'all' || typeFilter !== 'ALL' || search.trim().length > 0;
 
   const ingMap = useMemo(() => new Map(ingredients.map((i) => [i.id, i])), [ingredients]);
 
@@ -328,16 +327,19 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     let madeToOrder = 0;
     let packaged = 0;
     let preparedStock = 0;
+    let activeOnPos = 0;
     for (const p of products) {
       if (p.productType === 'PREPARED_TO_ORDER') madeToOrder += 1;
       else if (p.productType === 'PACKAGED') packaged += 1;
       else if (p.productType === 'PREPARED_STOCK') preparedStock += 1;
+      if (p.active !== false) activeOnPos += 1;
     }
     return {
       ALL: products.length,
       PREPARED_TO_ORDER: madeToOrder,
       PACKAGED: packaged,
       PREPARED_STOCK: preparedStock,
+      activeOnPos,
     };
   }, [products]);
 
@@ -737,7 +739,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Hidden shared file input for inline catalog photo uploads */}
       <input
         ref={inlinePhotoInputRef}
@@ -748,54 +750,67 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         aria-hidden="true"
       />
 
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-x-1">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
-            {t.products.title}
-          </h1>
-          <InfoHint
-            label={isVi ? 'Thông tin quản lý sản phẩm' : 'About Products'}
-            text={
-              isVi
-                ? 'Quản lý sản phẩm đóng gói, pha chế theo đơn (nhiều kích cỡ S/M/L) và hàng pha sẵn trữ lạnh.'
-                : 'Manage packaged goods, made-to-order drinks with size variants, and prepared-stock items.'
-            }
-          />
+      {/* Row 1: Minimalist Page Header — Title, Single Subtitle Line & Strictly 2 Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/60 dark:border-emerald-950/50">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <h1 className="font-display text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
+              {t.products.title}
+            </h1>
+            <InfoHint
+              label={isVi ? 'Thông tin quản lý sản phẩm' : 'About Products'}
+              text={
+                isVi
+                  ? 'Quản lý sản phẩm đóng gói, pha chế theo đơn (nhiều kích cỡ S/M/L) và hàng pha sẵn trữ lạnh.'
+                  : 'Manage packaged goods, made-to-order drinks with size variants, and prepared-stock items.'
+              }
+            />
+          </div>
+          <p className="mt-1 text-xs sm:text-sm text-stone-500 dark:text-[#94A39B] font-mono-num flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span>
+              {typeCounts.ALL}{' '}
+              {isVi ? 'sản phẩm' : typeCounts.ALL === 1 ? 'item' : 'items'}
+            </span>
+            <span className="text-stone-300 dark:text-[#2F463A]" aria-hidden="true">
+              ·
+            </span>
+            <span>
+              {typeCounts.activeOnPos}{' '}
+              {isVi ? 'đang bán tại POS' : 'active on POS'}
+            </span>
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
+        <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0">
           <button
             type="button"
             onClick={toggleSelectMode}
             aria-pressed={selectMode}
-            className={`inline-flex items-center gap-2 h-11 px-4 text-sm font-semibold rounded-lg border transition-colors whitespace-nowrap ${
+            className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-sm font-medium rounded-lg border transition-all duration-150 ease-out whitespace-nowrap ${
               selectMode
-                ? 'bg-[#E6F2ED] border-[#0F5C43] text-[#0F5C43] dark:bg-[#064E3B] dark:border-[#10B981] dark:text-[#6EE7B7]'
-                : 'text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
+                ? 'bg-emerald-50/80 border-emerald-500/40 text-[#0F5C43] dark:bg-[#064E3B]/70 dark:border-[#10B981]/50 dark:text-[#6EE7B7]'
+                : 'text-stone-600 dark:text-[#A8B8B0] bg-transparent border-slate-200/80 dark:border-emerald-950/80 hover:bg-stone-100/80 dark:hover:bg-[#18251F] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
             }`}
           >
             <CheckSquare className="w-4 h-4 shrink-0" />
-            {selectMode
-              ? isVi
-                ? 'Xong chọn'
-                : 'Done Selecting'
-              : isVi
-                ? 'Chọn nhiều'
-                : 'Select Mode'}
+            <span>
+              {selectMode
+                ? isVi
+                  ? 'Xong'
+                  : 'Done'
+                : isVi
+                  ? 'Chọn'
+                  : 'Select'}
+            </span>
           </button>
+
           <button
             type="button"
-            disabled={scanLookingUp}
-            onClick={() => setScanLookupOpen(true)}
-            className="inline-flex items-center gap-2 h-11 px-4 text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
+            onClick={openNew}
+            className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg shadow-2xs transition-all duration-150 ease-out active:scale-[0.98] whitespace-nowrap shrink-0"
           >
-            {scanLookingUp ? (
-              <Loader2 className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] animate-spin" />
-            ) : (
-              <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
-            )}
-            {isVi ? 'Quét mã vạch' : 'Scan Barcode'}
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>{isVi ? 'Thêm sản phẩm' : 'Add Product'}</span>
           </button>
         </div>
       </div>
@@ -971,45 +986,40 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         </div>
       )}
 
-      {/* Sticky Filter, Category, Search & Primary CTA Toolbar */}
-      <div className="sticky top-16 z-20 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border border-stone-200 dark:border-[#24352C] rounded-xl p-3.5 sm:p-4 space-y-3 shadow-xs">
-        {/* Row 1: Segmented Product-Type Tabs + Right-Aligned Grid/Table Switcher */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-          <div className="overflow-x-auto pb-0.5 -mx-1 px-1">
+      {/* Row 2: Unboxed Single-Strip Segmented Tabs, Search, Filters & View Switcher */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Left: Compact Segmented Pill Bar */}
+          <div className="min-w-0 max-w-full overflow-x-auto">
             <div
               role="tablist"
               aria-label={isVi ? 'Phân loại sản phẩm' : 'Product types'}
-              className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl"
+              className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-xl"
             >
               {(
                 [
                   {
                     id: 'ALL',
-                    icon: Layers,
-                    label: isVi ? 'Tất cả' : 'All Items',
+                    label: isVi ? 'Tất cả' : 'All',
                     count: typeCounts.ALL,
                   },
                   {
                     id: 'PREPARED_TO_ORDER',
-                    icon: CupSoda,
-                    label: t.productTypes.PREPARED_TO_ORDER,
+                    label: isVi ? 'Pha chế' : 'Made-to-Order',
                     count: typeCounts.PREPARED_TO_ORDER,
                   },
                   {
                     id: 'PACKAGED',
-                    icon: Package,
-                    label: t.productTypes.PACKAGED,
+                    label: isVi ? 'Đóng gói' : 'Packaged',
                     count: typeCounts.PACKAGED,
                   },
                   {
                     id: 'PREPARED_STOCK',
-                    icon: FlaskConical,
-                    label: t.productTypes.PREPARED_STOCK,
+                    label: isVi ? 'Pha sẵn' : 'Prepared',
                     count: typeCounts.PREPARED_STOCK,
                   },
                 ] as const
               ).map((tab) => {
-                const Icon = tab.icon;
                 const active = typeFilter === tab.id;
                 return (
                   <button
@@ -1018,20 +1028,15 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     role="tab"
                     aria-selected={active}
                     onClick={() => setTypeFilter(tab.id)}
-                    className={`h-11 px-3.5 inline-flex items-center gap-2 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap shrink-0 ${
+                    className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out whitespace-nowrap shrink-0 ${
                       active
-                        ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
-                        : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                        ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] font-semibold shadow-2xs'
+                        : 'text-stone-500 dark:text-[#94A39B] font-medium hover:text-stone-900 dark:hover:text-[#F1F5F3]'
                     }`}
                   >
-                    <Icon className="w-4 h-4 shrink-0" />
                     <span>{tab.label}</span>
-                    <span
-                      className={`font-mono-num text-[11px] font-bold ${
-                        active ? 'opacity-80' : 'text-stone-400 dark:text-[#94A39B]'
-                      }`}
-                    >
-                      ({tab.count})
+                    <span className="font-mono-num text-[11px] opacity-65">
+                      {tab.count}
                     </span>
                   </button>
                 );
@@ -1039,153 +1044,136 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             </div>
           </div>
 
-          {/* Grid / Table View Toggle */}
-          <div
-            role="group"
-            aria-label={isVi ? 'Chế độ hiển thị danh mục' : 'Catalog layout view'}
-            className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl self-start xl:self-auto shrink-0"
-          >
-            <button
-              type="button"
-              onClick={() => handleSetViewMode('grid')}
-              aria-pressed={viewMode === 'grid'}
-              title={isVi ? 'Xem dạng lưới' : 'Grid view'}
-              className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap ${
-                viewMode === 'grid'
-                  ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
-                  : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4 shrink-0" />
-              <span>{isVi ? 'Lưới' : 'Grid'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSetViewMode('table')}
-              aria-pressed={viewMode === 'table'}
-              title={isVi ? 'Xem dạng bảng' : 'Table view'}
-              className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap ${
-                viewMode === 'table'
-                  ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
-                  : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
-              }`}
-            >
-              <Table2 className="w-4 h-4 shrink-0" />
-              <span>{isVi ? 'Bảng' : 'Table'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: Search Bar + Collapsible Filter Toggle & Reset All (matches SalesView) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-stone-400 dark:text-[#94A39B] absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                if (scannedMatch) setScannedMatch(null);
-              }}
-              placeholder={isVi ? 'Tìm tên, thương hiệu, mã vạch...' : 'Search name, brand, barcode...'}
-              className={`w-full h-11 pl-10 ${search ? 'pr-20' : 'pr-11'} text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]`}
-            />
-            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-              {search && (
+          {/* Right: Search (with integrated barcode icon), Filters, Grid/Table Icons & Conditional Reset */}
+          <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-initial justify-end min-w-0">
+            <div className="relative flex-1 sm:flex-initial sm:w-60 lg:w-72 min-w-[180px]">
+              <Search className="w-4 h-4 text-stone-400 dark:text-[#6E8278] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  if (scannedMatch) setScannedMatch(null);
+                }}
+                placeholder={isVi ? 'Tìm tên, mã vạch...' : 'Search products or barcode...'}
+                className={`w-full h-11 pl-9 ${search ? 'pr-20' : 'pr-11'} text-sm bg-white/80 dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#6E8278] border border-slate-200/80 dark:border-emerald-950/80 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]/30 dark:focus-visible:ring-[#10B981]/40 focus-visible:border-[#0F5C43] dark:focus-visible:border-[#10B981] transition-all duration-150`}
+              />
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch('');
+                      setScannedMatch(null);
+                    }}
+                    className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-md transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearch('');
-                    setScannedMatch(null);
-                  }}
-                  className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-md"
-                  aria-label="Clear search"
+                  disabled={scanLookingUp}
+                  onClick={() => setScanLookupOpen(true)}
+                  title={isVi ? 'Quét mã vạch (EAN-13 / UPC-A)' : 'Scan Barcode (EAN-13 / UPC-A)'}
+                  aria-label={isVi ? 'Quét mã vạch' : 'Scan Barcode'}
+                  className="w-9 h-9 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:bg-emerald-50/70 dark:hover:bg-[#064E3B]/50 rounded-md transition-colors"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  {scanLookingUp ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#0F5C43] dark:text-[#34D399]" />
+                  ) : (
+                    <ScanBarcode className="w-4 h-4" />
+                  )}
                 </button>
-              )}
-              <button
-                type="button"
-                disabled={scanLookingUp}
-                onClick={() => setScanLookupOpen(true)}
-                title={isVi ? 'Quét mã vạch (EAN-13 / UPC-A)' : 'Scan Barcode (EAN-13 / UPC-A)'}
-                aria-label={isVi ? 'Quét mã vạch' : 'Scan Barcode'}
-                className="w-9 h-9 inline-flex items-center justify-center text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#064E3B]/70 rounded-md transition-colors"
-              >
-                {scanLookingUp ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <ScanBarcode className="w-4 h-4" />
-                )}
-              </button>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
             <button
               type="button"
               onClick={toggleFilters}
               aria-expanded={filtersOpen}
               aria-controls="products-catalog-filters"
-              className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap border ${
-                filtersOpen || activeFilterCount > 0
-                  ? 'bg-stone-100 dark:bg-[#18251F] border-transparent dark:border-[#24352C] text-stone-900 dark:text-[#F1F5F3] hover:bg-stone-200/70 dark:hover:bg-[#1F3028]'
-                  : 'bg-transparent border-transparent text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
+              className={`inline-flex items-center gap-1.5 h-11 px-3 text-xs sm:text-sm font-medium rounded-lg border transition-all duration-150 whitespace-nowrap shrink-0 ${
+                filtersOpen || drawerFilterCount > 0
+                  ? 'bg-stone-100/90 dark:bg-[#18251F] border-slate-300/90 dark:border-emerald-800/60 text-stone-900 dark:text-[#F1F5F3]'
+                  : 'bg-transparent border-slate-200/80 dark:border-emerald-950/80 text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100/70 dark:hover:bg-[#18251F]'
               }`}
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
-              <span>
-                {filtersOpen
-                  ? isVi
-                    ? 'Ẩn bộ lọc'
-                    : 'Hide Filters'
-                  : isVi
-                    ? 'Hiện bộ lọc'
-                    : 'Show Filters'}
-              </span>
-              {activeFilterCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-mono-num font-semibold bg-[#0D5C3E]/12 text-[#0D5C3E] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
-                  {activeFilterCount}
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+              <span>{isVi ? 'Bộ lọc' : 'Filters'}</span>
+              {drawerFilterCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-mono-num font-semibold bg-[#0F5C43]/12 text-[#0F5C43] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
+                  {drawerFilterCount}
                 </span>
               )}
               <ChevronDown
-                className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-200 motion-reduce:transition-none ${
+                className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-150 motion-reduce:transition-none ${
                   filtersOpen ? 'rotate-180' : ''
                 }`}
               />
             </button>
 
-            <button
-              type="button"
-              disabled={activeFilterCount === 0 && !search.trim()}
-              onClick={() => {
-                setCategoryFilter('all');
-                setTypeFilter('ALL');
-                setSearch('');
-                setScannedMatch(null);
-              }}
-              className="inline-flex items-center justify-center h-11 px-3 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors whitespace-nowrap"
+            {/* Compact Grid / Table Icon Switcher */}
+            <div
+              role="group"
+              aria-label={isVi ? 'Chế độ hiển thị danh mục' : 'Catalog layout view'}
+              className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-lg shrink-0"
             >
-              {isVi ? 'Đặt lại tất cả' : 'Reset All'}
-            </button>
+              <button
+                type="button"
+                onClick={() => handleSetViewMode('grid')}
+                aria-pressed={viewMode === 'grid'}
+                aria-label={isVi ? 'Xem dạng lưới' : 'Grid view'}
+                title={isVi ? 'Xem dạng lưới' : 'Grid view'}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md transition-all duration-150 ease-out ${
+                  viewMode === 'grid'
+                    ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] shadow-2xs'
+                    : 'text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetViewMode('table')}
+                aria-pressed={viewMode === 'table'}
+                aria-label={isVi ? 'Xem dạng bảng' : 'Table view'}
+                title={isVi ? 'Xem dạng bảng' : 'Table view'}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md transition-all duration-150 ease-out ${
+                  viewMode === 'table'
+                    ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] shadow-2xs'
+                    : 'text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                }`}
+              >
+                <Table2 className="w-4 h-4" />
+              </button>
+            </div>
 
-            <button
-              type="button"
-              onClick={openNew}
-              className="inline-flex items-center gap-1.5 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
-            >
-              <Plus className="w-4 h-4 shrink-0" />
-              <span>{isVi ? 'Thêm sản phẩm' : 'Add Product'}</span>
-            </button>
+            {/* Reset Link — Only Visible When a Filter or Search Is Active */}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoryFilter('all');
+                  setTypeFilter('ALL');
+                  setSearch('');
+                  setScannedMatch(null);
+                }}
+                className="inline-flex items-center justify-center h-11 px-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
+              >
+                {isVi ? 'Đặt lại' : 'Reset'}
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Collapsible Dynamic Category Filter Pills Drawer (matches SalesView) */}
+        {/* Collapsible Category Filter Drawer (Unboxed, Hairline Top Divider) */}
         <div
           id="products-catalog-filters"
           className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
             filtersOpen
-              ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-stone-100 dark:border-[#24352C]'
+              ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-slate-200/60 dark:border-emerald-950/50'
               : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
           }`}
         >

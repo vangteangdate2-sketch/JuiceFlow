@@ -6,19 +6,16 @@ import {
   ClipboardCheck,
   Clock,
   Edit2,
-  FlaskConical,
   History,
-  Layers,
   Loader2,
-  Package,
   PackageCheck,
   PackagePlus,
   Pencil,
+  Plus,
   ScanBarcode,
   Search,
   SlidersHorizontal,
   Sparkles,
-  Wheat,
   X,
 } from 'lucide-react';
 import { normalizeName, useStore } from '../context/StoreContext';
@@ -212,10 +209,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   // "Needs Attention Today" single-line alert filter state (filters the main list directly)
   const [attentionFilter, setAttentionFilter] = useState<AttentionFilter>('none');
 
-  const activeFilterCount =
-    (categoryFilter !== 'all' ? 1 : 0) +
-    (statusFilter !== 'all' ? 1 : 0) +
-    (attentionFilter !== 'none' ? 1 : 0);
+  const drawerFilterCount =
+    (categoryFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0);
+  const activeFilterCount = drawerFilterCount + (attentionFilter !== 'none' ? 1 : 0);
+  const hasActiveStockFilters = activeFilterCount > 0 || search.trim().length > 0;
+  const hasActiveMovementFilters =
+    movementTierFilter !== 'ALL' || movementTypeFilter !== 'ALL' || search.trim().length > 0;
 
   const [feedbackMsg, setFeedbackMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
@@ -1271,11 +1270,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
   return (
     <div className="w-full max-w-full overflow-x-hidden space-y-5">
-      {/* Page Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-1">
-            <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
+      {/* Row 1: Minimalist Page Header — Title, Single Subtitle Line & Strictly 2 Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/60 dark:border-emerald-950/50">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <h1 className="font-display text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
               {t.inventory.title}
             </h1>
             <InfoHint
@@ -1287,41 +1286,56 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               }
             />
           </div>
-          <p className="text-xs text-stone-500 dark:text-[#94A39B] mt-1 font-mono-num flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <p className="mt-1 text-xs sm:text-sm text-stone-500 dark:text-[#94A39B] font-mono-num flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>
               {t.inventory.stockValue}:{' '}
-              <strong className="text-stone-800 dark:text-[#F1F5F3]">
+              <span className="font-semibold text-stone-700 dark:text-[#D5DFDA]">
                 {formatKhr(valuation.totalVal)}
-              </strong>
+              </span>
             </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              {isVi ? 'Nguyên liệu' : 'Raw'} {formatKhr(valuation.ingVal)}
+            <span className="text-stone-300 dark:text-[#2F463A]" aria-hidden="true">
+              ·
             </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              {isVi ? 'Pha sẵn' : 'Batches'} {formatKhr(valuation.prepVal)}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              {isVi ? 'Đóng gói' : 'Packaged'} {formatKhr(valuation.packagedVal)}
-            </span>
+            {attentionItems.combined.length === 0 ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans font-medium bg-emerald-50/90 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/40">
+                <CheckCircle2 className="w-3 h-3 shrink-0" />
+                <span>{isVi ? 'Tồn kho ổn định' : 'All Stock Healthy'}</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans font-medium bg-amber-50 text-amber-800 border border-amber-200/70 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700/40">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>
+                  {attentionItems.combined.length}{' '}
+                  {isVi ? 'cần xử lý' : 'need attention'}
+                </span>
+              </span>
+            )}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0">
           <button
             type="button"
-            disabled={scanLookingUp}
-            onClick={() => setScannerOpen(true)}
-            className="h-11 inline-flex items-center gap-2 px-4 text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
+            role="tab"
+            aria-selected={activeTab === 'movements'}
+            onClick={() => setActiveTab(activeTab === 'movements' ? 'all' : 'movements')}
+            className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-sm font-medium rounded-lg border transition-all duration-150 ease-out whitespace-nowrap ${
+              activeTab === 'movements'
+                ? 'bg-emerald-50/80 border-emerald-500/40 text-[#0F5C43] dark:bg-[#064E3B]/70 dark:border-[#10B981]/50 dark:text-[#6EE7B7]'
+                : 'text-stone-600 dark:text-[#A8B8B0] bg-transparent border-slate-200/80 dark:border-emerald-950/80 hover:bg-stone-100/80 dark:hover:bg-[#18251F] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+            }`}
           >
-            {scanLookingUp ? (
-              <Loader2 className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] animate-spin" />
-            ) : (
-              <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
-            )}
-            {isVi ? 'Quét mã vạch' : 'Scan Barcode'}
+            <History className="w-4 h-4 shrink-0" />
+            <span>{isVi ? 'Lịch sử' : 'History'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openNewIngredient()}
+            className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg shadow-2xs transition-all duration-150 ease-out active:scale-[0.98] whitespace-nowrap shrink-0"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>{t.inventory.addIngredient}</span>
           </button>
         </div>
       </div>
@@ -1562,26 +1576,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </div>
       )}
 
-      {/* ================================================================== */}
-      {/* 1. SINGLE-LINE "NEEDS ATTENTION TODAY" ALERT FILTER BAR            */}
-      {/* ================================================================== */}
-      {attentionItems.combined.length === 0 ? (
-        <div className="needs-attention-container flex items-center animate-drawer-in">
-          <span className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-[#064E3B]/60 dark:text-[#6EE7B7] dark:border-[#10B981]/35 transition-colors duration-200 ease-out">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-[#34D399] shrink-0" />
-            <span>{isVi ? 'Tất cả tồn kho ổn định' : 'All Stock Healthy'}</span>
-          </span>
-        </div>
-      ) : (
+      {/* Compact Single-Line Needs Attention Quick-Filter Strip (only when urgent items exist) */}
+      {attentionItems.combined.length > 0 && activeTab !== 'movements' && (
         <section
           aria-label={isVi ? 'Cần xử lý hôm nay' : 'Needs Attention Today'}
-          className="needs-attention-container min-h-12 py-2.5 px-4 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-500/30 flex flex-wrap items-center justify-between gap-2.5 transition-all duration-200 ease-out animate-drawer-in"
+          className="needs-attention-container min-h-12 py-2 px-3.5 rounded-xl bg-amber-50/45 dark:bg-amber-950/15 border border-amber-200/60 dark:border-amber-800/35 flex flex-wrap items-center justify-between gap-2 transition-all duration-150 ease-out animate-drawer-in"
         >
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
             <div className="inline-flex items-center gap-1.5 pr-1 shrink-0">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <span className="text-xs sm:text-sm font-semibold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
-                {isVi ? 'Cần xử lý hôm nay' : 'Needs Attention Today'}
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] whitespace-nowrap">
+                {isVi ? 'Cần xử lý' : 'Needs Attention'}
               </span>
             </div>
 
@@ -1589,14 +1594,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               type="button"
               onClick={() => handleSelectAttentionFilter('all_urgent')}
               aria-pressed={attentionFilter === 'all_urgent'}
-              className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors duration-200 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
+              className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-colors duration-150 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
                 attentionFilter === 'all_urgent'
                   ? 'border-stone-900 bg-stone-900 text-white dark:border-[#10B981] dark:bg-[#10B981] dark:text-[#042419]'
-                  : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
+                  : 'border-slate-200/80 dark:border-emerald-950/80 bg-white/90 dark:bg-[#131D18] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F]'
               }`}
             >
-              <span>{isVi ? 'Tất cả khẩn cấp' : 'All Urgent'}</span>
-              <span className="font-mono-num">({attentionItems.combined.length})</span>
+              <span>{isVi ? 'Tất cả' : 'All Urgent'}</span>
+              <span className="font-mono-num opacity-80">({attentionItems.combined.length})</span>
             </button>
 
             {attentionItems.outOfStock.length > 0 && (
@@ -1604,14 +1609,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 type="button"
                 onClick={() => handleSelectAttentionFilter('out')}
                 aria-pressed={attentionFilter === 'out'}
-                className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors duration-200 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
+                className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-colors duration-150 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
                   attentionFilter === 'out'
                     ? 'border-red-600 bg-red-600 text-white dark:border-red-500 dark:bg-red-500 dark:text-white'
-                    : 'border-red-200 dark:border-red-500/40 bg-red-50/90 dark:bg-red-950/45 text-red-800 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-950/75'
+                    : 'border-red-200/70 dark:border-red-500/35 bg-red-50/80 dark:bg-red-950/35 text-red-700 dark:text-red-200 hover:bg-red-100/80 dark:hover:bg-red-950/60'
                 }`}
               >
                 <span>{isVi ? 'Hết hàng' : 'Out of Stock'}</span>
-                <span className="font-mono-num">({attentionItems.outOfStock.length})</span>
+                <span className="font-mono-num opacity-80">({attentionItems.outOfStock.length})</span>
               </button>
             )}
 
@@ -1620,14 +1625,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 type="button"
                 onClick={() => handleSelectAttentionFilter('low')}
                 aria-pressed={attentionFilter === 'low'}
-                className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors duration-200 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
+                className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-colors duration-150 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
                   attentionFilter === 'low'
                     ? 'border-amber-600 bg-amber-600 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-stone-950'
-                    : 'border-amber-200 dark:border-amber-500/40 bg-amber-50/90 dark:bg-amber-950/45 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-950/75'
+                    : 'border-amber-200/70 dark:border-amber-500/35 bg-amber-50/80 dark:bg-amber-950/35 text-amber-800 dark:text-amber-200 hover:bg-amber-100/80 dark:hover:bg-amber-950/60'
                 }`}
               >
                 <span>{isVi ? 'Sắp hết' : 'Low Stock'}</span>
-                <span className="font-mono-num">({attentionItems.lowStock.length})</span>
+                <span className="font-mono-num opacity-80">({attentionItems.lowStock.length})</span>
               </button>
             )}
 
@@ -1636,14 +1641,16 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 type="button"
                 onClick={() => handleSelectAttentionFilter('prepared_attention')}
                 aria-pressed={attentionFilter === 'prepared_attention'}
-                className={`h-9 px-3 text-xs font-semibold rounded-full border transition-colors duration-200 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
+                className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-colors duration-150 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
                   attentionFilter === 'prepared_attention'
                     ? 'border-purple-600 bg-purple-600 text-white dark:border-purple-500 dark:bg-purple-500 dark:text-white'
-                    : 'border-purple-200 dark:border-purple-500/40 bg-purple-50/90 dark:bg-purple-950/45 text-purple-900 dark:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-950/75'
+                    : 'border-purple-200/70 dark:border-purple-500/35 bg-purple-50/80 dark:bg-purple-950/35 text-purple-800 dark:text-purple-200 hover:bg-purple-100/80 dark:hover:bg-purple-950/60'
                 }`}
               >
                 <span>{isVi ? 'Mẻ thấp' : 'Low Batch'}</span>
-                <span className="font-mono-num">({attentionItems.preparedAttention.length})</span>
+                <span className="font-mono-num opacity-80">
+                  ({attentionItems.preparedAttention.length})
+                </span>
               </button>
             )}
           </div>
@@ -1652,7 +1659,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <button
               type="button"
               onClick={() => setAttentionFilter('none')}
-              className="h-9 px-3 text-xs font-semibold rounded-full border border-stone-300 dark:border-[#344E41] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors duration-200 ease-out whitespace-nowrap shrink-0"
+              className="h-8 px-2.5 text-xs font-medium text-stone-600 hover:text-stone-900 dark:text-[#A8B8B0] dark:hover:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
             >
               {isVi ? 'Hiện tất cả' : 'Show All'}
             </button>
@@ -1660,47 +1667,40 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </section>
       )}
 
-      {/* ================================================================== */}
-      {/* 2. STICKY 3-TIER NAVIGATION TABS + SEARCH & ACTION TOOLBAR         */}
-      {/* ================================================================== */}
-      <div className="sticky top-16 z-20 w-full max-w-full bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border border-stone-200 dark:border-[#24352C] rounded-xl p-3.5 sm:p-4 space-y-3 shadow-xs">
-        {/* Row 1: 3-Tier Navigation Tabs + Secondary Stock History Tab */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 min-w-0">
-          <div className="min-w-0 max-w-full overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* Row 2: Unboxed Single-Strip Segmented Tabs, Search & Filters (Identical to ProductsView) */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Left: Compact Segmented Pill Bar */}
+          <div className="min-w-0 max-w-full overflow-x-auto">
             <div
               role="tablist"
               aria-label={isVi ? 'Phân nhóm kho hàng' : 'Inventory tiers'}
-              className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl"
+              className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-xl"
             >
               {(
                 [
                   {
                     id: 'all',
-                    icon: Layers,
-                    label: isVi ? 'Tất cả' : 'All Items',
+                    label: isVi ? 'Tất cả' : 'All',
                     count: allUnifiedItems.length,
                   },
                   {
                     id: 'ingredients',
-                    icon: Wheat,
-                    label: isVi ? 'Nguyên liệu thô' : 'Raw Ingredients',
+                    label: isVi ? 'Nguyên liệu' : 'Raw',
                     count: ingredients.length,
                   },
                   {
                     id: 'prepared_stock',
-                    icon: FlaskConical,
-                    label: isVi ? 'Mẻ pha sẵn' : 'Prepared Batches',
+                    label: isVi ? 'Mẻ pha sẵn' : 'Batches',
                     count: preparedStockProducts.length,
                   },
                   {
                     id: 'packaged',
-                    icon: Package,
-                    label: isVi ? 'Hàng đóng gói' : 'Packaged Goods',
+                    label: isVi ? 'Đóng gói' : 'Packaged',
                     count: packagedProducts.length,
                   },
                 ] as const
               ).map((tab) => {
-                const Icon = tab.icon;
                 const active = activeTab === tab.id;
                 return (
                   <button
@@ -1709,20 +1709,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     role="tab"
                     aria-selected={active}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`h-10 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap shrink-0 ${
+                    className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out whitespace-nowrap shrink-0 ${
                       active
-                        ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
-                        : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                        ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] font-semibold shadow-2xs'
+                        : 'text-stone-500 dark:text-[#94A39B] font-medium hover:text-stone-900 dark:hover:text-[#F1F5F3]'
                     }`}
                   >
-                    <Icon className="w-4 h-4 shrink-0" />
                     <span>{tab.label}</span>
-                    <span
-                      className={`font-mono-num text-[11px] font-bold ${
-                        active ? 'opacity-80' : 'text-stone-400 dark:text-[#94A39B]'
-                      }`}
-                    >
-                      ({tab.count})
+                    <span className="font-mono-num text-[11px] opacity-65">
+                      {tab.count}
                     </span>
                   </button>
                 );
@@ -1730,176 +1725,155 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             </div>
           </div>
 
-          {/* Secondary Stock History Tab Button */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'movements'}
-            onClick={() => setActiveTab(activeTab === 'movements' ? 'all' : 'movements')}
-            className={`h-11 px-3.5 inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 ${
-              activeTab === 'movements'
-                ? 'border-[#0F5C43] bg-emerald-50 text-[#0F5C43] dark:border-[#10B981] dark:bg-[#064E3B] dark:text-[#6EE7B7]'
-                : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
-            }`}
-          >
-            <History className="w-4 h-4 shrink-0" />
-            <span>{isVi ? 'Lịch sử kho' : 'Stock History'}</span>
-            <span className="font-mono-num text-[11px] opacity-80">
-              ({stockMovements.length})
-            </span>
-          </button>
-        </div>
-
-        {/* Row 2: Aligned Search Bar + Wrapping Toolbar Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 min-w-0">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="w-4 h-4 text-stone-400 dark:text-[#94A39B] absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                if (scannedInventoryMatch) setScannedInventoryMatch(null);
-              }}
-              placeholder={
-                activeTab === 'movements'
-                  ? isVi
-                    ? 'Tìm theo tên món, ghi chú, người thực hiện...'
-                    : 'Search item, note, or staff...'
-                  : isVi
-                    ? 'Tìm nguyên liệu, sản phẩm, nhà cung cấp, mã vạch...'
-                    : 'Search item name, barcode, or supplier...'
-              }
-              className={`w-full h-11 pl-10 ${search ? 'pr-20' : 'pr-11'} text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]`}
-            />
-            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-              {search && (
+          {/* Right: Search (with integrated barcode icon), Filters & Conditional Reset */}
+          <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-initial justify-end min-w-0">
+            <div className="relative flex-1 sm:flex-initial sm:w-60 lg:w-72 min-w-[180px]">
+              <Search className="w-4 h-4 text-stone-400 dark:text-[#6E8278] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  if (scannedInventoryMatch) setScannedInventoryMatch(null);
+                }}
+                placeholder={
+                  activeTab === 'movements'
+                    ? isVi
+                      ? 'Tìm món, ghi chú, nhân viên...'
+                      : 'Search item, note, or staff...'
+                    : isVi
+                      ? 'Tìm nguyên liệu, mã vạch...'
+                      : 'Search inventory or barcode...'
+                }
+                className={`w-full h-11 pl-9 ${search ? 'pr-20' : 'pr-11'} text-sm bg-white/80 dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#6E8278] border border-slate-200/80 dark:border-emerald-950/80 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]/30 dark:focus-visible:ring-[#10B981]/40 focus-visible:border-[#0F5C43] dark:focus-visible:border-[#10B981] transition-all duration-150`}
+              />
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch('');
+                      setScannedInventoryMatch(null);
+                      setUnknownStockBarcode(null);
+                    }}
+                    className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-md transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearch('');
-                    setScannedInventoryMatch(null);
-                    setUnknownStockBarcode(null);
-                  }}
-                  className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-md"
-                  aria-label="Clear search"
+                  disabled={scanLookingUp}
+                  onClick={() => setScannerOpen(true)}
+                  title={isVi ? 'Quét mã vạch (EAN-13 / UPC-A)' : 'Scan Barcode (EAN-13 / UPC-A)'}
+                  aria-label={isVi ? 'Quét mã vạch' : 'Scan Barcode'}
+                  className="w-9 h-9 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:bg-emerald-50/70 dark:hover:bg-[#064E3B]/50 rounded-md transition-colors"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  {scanLookingUp ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#0F5C43] dark:text-[#34D399]" />
+                  ) : (
+                    <ScanBarcode className="w-4 h-4" />
+                  )}
                 </button>
-              )}
-              <button
-                type="button"
-                disabled={scanLookingUp}
-                onClick={() => setScannerOpen(true)}
-                title={isVi ? 'Quét mã vạch (EAN-13 / UPC-A)' : 'Scan Barcode (EAN-13 / UPC-A)'}
-                aria-label={isVi ? 'Quét mã vạch' : 'Scan Barcode'}
-                className="w-9 h-9 inline-flex items-center justify-center text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#064E3B]/70 rounded-md transition-colors"
-              >
-                {scanLookingUp ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <ScanBarcode className="w-4 h-4" />
-                )}
-              </button>
+              </div>
             </div>
-          </div>
 
-          {activeTab !== 'movements' ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={toggleFilters}
-                aria-expanded={filtersOpen}
-                aria-controls="inventory-stock-filters"
-                className={`inline-flex items-center gap-1.5 h-11 px-3 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap border ${
-                  filtersOpen || activeFilterCount > 0
-                    ? 'bg-stone-100 dark:bg-[#18251F] border-transparent dark:border-[#24352C] text-stone-900 dark:text-[#F1F5F3] hover:bg-stone-200/70 dark:hover:bg-[#1F3028]'
-                    : 'bg-transparent border-transparent text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
-                }`}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
-                <span>
-                  {filtersOpen
-                    ? isVi
-                      ? 'Ẩn bộ lọc'
-                      : 'Hide Filters'
-                    : isVi
-                      ? 'Hiện bộ lọc'
-                      : 'Show Filters'}
-                </span>
-                {activeFilterCount > 0 && (
-                  <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-mono-num font-semibold bg-[#0D5C3E]/12 text-[#0D5C3E] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
-                    {activeFilterCount}
-                  </span>
-                )}
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-200 motion-reduce:transition-none ${
-                    filtersOpen ? 'rotate-180' : ''
+            {activeTab !== 'movements' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={toggleFilters}
+                  aria-expanded={filtersOpen}
+                  aria-controls="inventory-stock-filters"
+                  className={`inline-flex items-center gap-1.5 h-11 px-3 text-xs sm:text-sm font-medium rounded-lg border transition-all duration-150 whitespace-nowrap shrink-0 ${
+                    filtersOpen || drawerFilterCount > 0
+                      ? 'bg-stone-100/90 dark:bg-[#18251F] border-slate-300/90 dark:border-emerald-800/60 text-stone-900 dark:text-[#F1F5F3]'
+                      : 'bg-transparent border-slate-200/80 dark:border-emerald-950/80 text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100/70 dark:hover:bg-[#18251F]'
                   }`}
-                />
-              </button>
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+                  <span>{isVi ? 'Bộ lọc' : 'Filters'}</span>
+                  {drawerFilterCount > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-mono-num font-semibold bg-[#0F5C43]/12 text-[#0F5C43] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
+                      {drawerFilterCount}
+                    </span>
+                  )}
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-150 motion-reduce:transition-none ${
+                      filtersOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
 
-              <button
-                type="button"
-                disabled={activeFilterCount === 0 && !search.trim()}
-                onClick={() => {
-                  setCategoryFilter('all');
-                  setStatusFilter('all');
-                  setAttentionFilter('none');
-                  setSearch('');
-                  setScannedInventoryMatch(null);
-                  setUnknownStockBarcode(null);
-                }}
-                className="inline-flex items-center justify-center h-11 px-2.5 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors whitespace-nowrap"
-              >
-                {isVi ? 'Đặt lại' : 'Reset All'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => openNewIngredient()}
-                className="inline-flex items-center justify-center h-11 px-4 text-xs sm:text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
-              >
-                {`+ ${t.inventory.addIngredient}`}
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={movementTierFilter}
-                onChange={(e) =>
-                  setMovementTierFilter(e.target.value as 'ALL' | StockClassification)
-                }
-                className="h-11 px-3 text-xs sm:text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-              >
-                <option value="ALL">{isVi ? 'Mọi nhóm kho' : 'All Tiers'}</option>
-                <option value="ingredient">{isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}</option>
-                <option value="prepared_stock">{isVi ? 'Mẻ pha sẵn' : 'Prepared Batches'}</option>
-                <option value="packaged">{isVi ? 'Hàng đóng gói' : 'Packaged Goods'}</option>
-              </select>
-              <select
-                value={movementTypeFilter}
-                onChange={(e) => setMovementTypeFilter(e.target.value as 'ALL' | MovementType)}
-                className="h-11 px-3 text-xs sm:text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-              >
-                <option value="ALL">{isVi ? 'Mọi loại biến động' : 'All Types'}</option>
-                {(Object.keys(t.movementTypes) as MovementType[]).map((mt) => (
-                  <option key={mt} value={mt}>
-                    {t.movementTypes[mt]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+                {hasActiveStockFilters && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategoryFilter('all');
+                      setStatusFilter('all');
+                      setAttentionFilter('none');
+                      setSearch('');
+                      setScannedInventoryMatch(null);
+                      setUnknownStockBarcode(null);
+                    }}
+                    className="inline-flex items-center justify-center h-11 px-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
+                  >
+                    {isVi ? 'Đặt lại' : 'Reset'}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <select
+                  value={movementTierFilter}
+                  onChange={(e) =>
+                    setMovementTierFilter(e.target.value as 'ALL' | StockClassification)
+                  }
+                  className="h-11 px-3 text-xs sm:text-sm border border-slate-200/80 dark:border-emerald-950/80 rounded-lg bg-white/80 dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3]"
+                >
+                  <option value="ALL">{isVi ? 'Mọi nhóm kho' : 'All Tiers'}</option>
+                  <option value="ingredient">{isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}</option>
+                  <option value="prepared_stock">{isVi ? 'Mẻ pha sẵn' : 'Prepared Batches'}</option>
+                  <option value="packaged">{isVi ? 'Hàng đóng gói' : 'Packaged Goods'}</option>
+                </select>
+                <select
+                  value={movementTypeFilter}
+                  onChange={(e) => setMovementTypeFilter(e.target.value as 'ALL' | MovementType)}
+                  className="h-11 px-3 text-xs sm:text-sm border border-slate-200/80 dark:border-emerald-950/80 rounded-lg bg-white/80 dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3]"
+                >
+                  <option value="ALL">{isVi ? 'Mọi biến động' : 'All Types'}</option>
+                  {(Object.keys(t.movementTypes) as MovementType[]).map((mt) => (
+                    <option key={mt} value={mt}>
+                      {t.movementTypes[mt]}
+                    </option>
+                  ))}
+                </select>
+                {hasActiveMovementFilters && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMovementTierFilter('ALL');
+                      setMovementTypeFilter('ALL');
+                      setSearch('');
+                    }}
+                    className="inline-flex items-center justify-center h-11 px-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
+                  >
+                    {isVi ? 'Đặt lại' : 'Reset'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Collapsible Category & Stock Status Pills Drawer (matches SalesView) */}
+        {/* Collapsible Category & Stock Status Pills Drawer (Unboxed, Hairline Top Divider) */}
         {activeTab !== 'movements' && (
           <div
             id="inventory-stock-filters"
             className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
               filtersOpen
-                ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-stone-100 dark:border-[#24352C]'
+                ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-slate-200/60 dark:border-emerald-950/50'
                 : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
             }`}
           >
@@ -1937,7 +1911,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                           setAttentionFilter('none');
                         }}
                         aria-pressed={statusFilter === st && attentionFilter === 'none'}
-                        className={`h-11 px-4 text-xs font-medium rounded-full transition-colors duration-200 ease-out whitespace-nowrap shrink-0 border ${
+                        className={`h-10 px-3.5 text-xs font-medium rounded-full transition-colors duration-150 ease-out whitespace-nowrap shrink-0 border ${
                           statusFilter === st && attentionFilter === 'none'
                             ? 'bg-[#E6F2ED] text-[#0D5C3E] border-[#0D5C3E]/30 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/45 font-semibold'
                             : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
