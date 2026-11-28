@@ -5,6 +5,7 @@ import {
   Check,
   CheckSquare,
   ChevronDown,
+  CupSoda,
   Edit2,
   Eye,
   EyeOff,
@@ -14,6 +15,7 @@ import {
   Loader2,
   Minus,
   MoreVertical,
+  Package,
   PackagePlus,
   Plus,
   QrCode,
@@ -45,8 +47,7 @@ import {
   getCategoriesForScope,
   getCategoryById,
   getCategoryDisplayName,
-  getCategoryDotClass,
-  getProductTypeDotClass,
+  getProductTypeBadgeClass,
   resolveProductCategoryId,
   UNCATEGORIZED_ID,
 } from '../utils/categories';
@@ -326,19 +327,16 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   const typeCounts = useMemo(() => {
     let madeToOrder = 0;
     let packaged = 0;
-    let preparedStock = 0;
     let activeOnPos = 0;
     for (const p of products) {
       if (p.productType === 'PREPARED_TO_ORDER') madeToOrder += 1;
       else if (p.productType === 'PACKAGED') packaged += 1;
-      else if (p.productType === 'PREPARED_STOCK') preparedStock += 1;
       if (p.active !== false) activeOnPos += 1;
     }
     return {
       ALL: products.length,
       PREPARED_TO_ORDER: madeToOrder,
       PACKAGED: packaged,
-      PREPARED_STOCK: preparedStock,
       activeOnPos,
     };
   }, [products]);
@@ -986,67 +984,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         </div>
       )}
 
-      {/* Row 2: Unboxed Single-Strip Segmented Tabs, Search, Filters & View Switcher */}
+      {/* Row 2: Unboxed Single-Strip Toolbar (Search & Filters Left → Segmented Tabs & View Switcher Right) */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Left: Compact Segmented Pill Bar */}
-          <div className="min-w-0 max-w-full overflow-x-auto">
-            <div
-              role="tablist"
-              aria-label={isVi ? 'Phân loại sản phẩm' : 'Product types'}
-              className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-xl"
-            >
-              {(
-                [
-                  {
-                    id: 'ALL',
-                    label: isVi ? 'Tất cả' : 'All',
-                    count: typeCounts.ALL,
-                  },
-                  {
-                    id: 'PREPARED_TO_ORDER',
-                    label: isVi ? 'Pha chế' : 'Made-to-Order',
-                    count: typeCounts.PREPARED_TO_ORDER,
-                  },
-                  {
-                    id: 'PACKAGED',
-                    label: isVi ? 'Đóng gói' : 'Packaged',
-                    count: typeCounts.PACKAGED,
-                  },
-                  {
-                    id: 'PREPARED_STOCK',
-                    label: isVi ? 'Pha sẵn' : 'Prepared',
-                    count: typeCounts.PREPARED_STOCK,
-                  },
-                ] as const
-              ).map((tab) => {
-                const active = typeFilter === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setTypeFilter(tab.id)}
-                    className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out whitespace-nowrap shrink-0 ${
-                      active
-                        ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] font-semibold shadow-2xs'
-                        : 'text-stone-500 dark:text-[#94A39B] font-medium hover:text-stone-900 dark:hover:text-[#F1F5F3]'
-                    }`}
-                  >
-                    <span>{tab.label}</span>
-                    <span className="font-mono-num text-[11px] opacity-65">
-                      {tab.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right: Search (with integrated barcode icon), Filters, Grid/Table Icons & Conditional Reset */}
-          <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-initial justify-end min-w-0">
-            <div className="relative flex-1 sm:flex-initial sm:w-60 lg:w-72 min-w-[180px]">
+          {/* Left Side: Search (with integrated barcode icon), Filters toggle & conditional Reset */}
+          <div className="flex items-center gap-2.5 flex-1 min-w-[260px]">
+            <div className="relative flex-1 max-w-md min-w-[160px]">
               <Search className="w-4 h-4 text-stone-400 dark:text-[#6E8278] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
@@ -1114,6 +1057,82 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               />
             </button>
 
+            {/* Reset Link — Only Visible When a Filter or Search Is Active */}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoryFilter('all');
+                  setTypeFilter('ALL');
+                  setSearch('');
+                  setScannedMatch(null);
+                }}
+                className="inline-flex items-center justify-center h-11 px-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
+              >
+                {isVi ? 'Đặt lại' : 'Reset'}
+              </button>
+            )}
+          </div>
+
+          {/* Right Side: Segmented Item-Type Tabs & Compact Grid / Table Switcher */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="min-w-0 max-w-full overflow-x-auto">
+              <div
+                role="tablist"
+                aria-label={isVi ? 'Phân loại sản phẩm' : 'Product types'}
+                className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-xl"
+              >
+                {(
+                  [
+                    {
+                      id: 'ALL',
+                      label: isVi ? 'Tất cả' : 'All',
+                      count: typeCounts.ALL,
+                      icon: null,
+                      iconClass: '',
+                    },
+                    {
+                      id: 'PREPARED_TO_ORDER',
+                      label: t.productTypes.PREPARED_TO_ORDER,
+                      count: typeCounts.PREPARED_TO_ORDER,
+                      icon: CupSoda,
+                      iconClass: 'text-emerald-600 dark:text-emerald-400',
+                    },
+                    {
+                      id: 'PACKAGED',
+                      label: t.productTypes.PACKAGED,
+                      count: typeCounts.PACKAGED,
+                      icon: Package,
+                      iconClass: 'text-sky-600 dark:text-sky-400',
+                    },
+                  ] as const
+                ).map((tab) => {
+                  const active = typeFilter === tab.id;
+                  const TabIcon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setTypeFilter(tab.id)}
+                      className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out whitespace-nowrap shrink-0 ${
+                        active
+                          ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] font-semibold shadow-2xs'
+                          : 'text-stone-500 dark:text-[#94A39B] font-medium hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                      }`}
+                    >
+                      {TabIcon && <TabIcon className={`w-3.5 h-3.5 shrink-0 ${tab.iconClass}`} />}
+                      <span>{tab.label}</span>
+                      <span className="font-mono-num text-[11px] opacity-65">
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Compact Grid / Table Icon Switcher */}
             <div
               role="group"
@@ -1149,22 +1168,6 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 <Table2 className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Reset Link — Only Visible When a Filter or Search Is Active */}
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={() => {
-                  setCategoryFilter('all');
-                  setTypeFilter('ALL');
-                  setSearch('');
-                  setScannedMatch(null);
-                }}
-                className="inline-flex items-center justify-center h-11 px-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
-              >
-                {isVi ? 'Đặt lại' : 'Reset'}
-              </button>
-            )}
           </div>
         </div>
 
@@ -1263,9 +1266,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   const profit = basePrice - cogs;
                   const margin = basePrice > 0 ? Math.round((profit / basePrice) * 100) : 0;
                   const displayName = isVi ? product.nameVi || product.name : product.name;
-                  const isDirectStock =
-                    product.productType === 'PACKAGED' ||
-                    product.productType === 'PREPARED_STOCK';
+                  const isDirectStock = product.productType === 'PACKAGED';
                   const isLowStock = isDirectStock && product.stockQty <= product.reorderLevel;
                   const isUnlinkedRecipe =
                     product.productType === 'PREPARED_TO_ORDER' && !hasLinkedRecipe(product);
@@ -1374,27 +1375,24 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* Col 2: Clean single-line Type · Category with subtle status dots */}
+                      {/* Col 2: Canonical Type Badge · Category */}
                       <td className="px-2.5 py-3 text-xs">
-                        <div className="inline-flex items-center gap-1.5 text-stone-700 dark:text-[#D5DFDA] max-w-[190px] xl:max-w-none">
+                        <div className="inline-flex items-center gap-1.5 text-stone-600 dark:text-[#94A39B] max-w-[230px] xl:max-w-none">
                           <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${getProductTypeDotClass(
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium shrink-0 ${getProductTypeBadgeClass(
                               product.productType
                             )}`}
-                            aria-hidden="true"
-                          />
-                          <span className="font-medium truncate">
-                            {t.productTypes[product.productType]}
+                          >
+                            {product.productType === 'PACKAGED' ? (
+                              <Package className="w-3 h-3 shrink-0" aria-hidden="true" />
+                            ) : (
+                              <CupSoda className="w-3 h-3 shrink-0" aria-hidden="true" />
+                            )}
+                            <span>{t.productTypes[product.productType]}</span>
                           </span>
                           <span className="text-stone-300 dark:text-[#344E41] shrink-0" aria-hidden="true">
                             ·
                           </span>
-                          <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(
-                              catItem
-                            )}`}
-                            aria-hidden="true"
-                          />
                           <span className="text-stone-500 dark:text-[#94A39B] truncate">
                             {getCategoryDisplayName(catItem, isVi)}
                           </span>
@@ -1554,8 +1552,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             const profit = basePrice - cogs;
             const margin = basePrice > 0 ? Math.round((profit / basePrice) * 100) : 0;
             const displayName = isVi ? product.nameVi || product.name : product.name;
-            const isDirectStock =
-              product.productType === 'PACKAGED' || product.productType === 'PREPARED_STOCK';
+            const isDirectStock = product.productType === 'PACKAGED';
             const isLowStock = isDirectStock && product.stockQty <= product.reorderLevel;
             const isUnlinkedRecipe =
               product.productType === 'PREPARED_TO_ORDER' && !hasLinkedRecipe(product);
@@ -1704,25 +1701,24 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     >
                       {displayName}
                     </h3>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#94A39B] min-w-0">
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#94A39B] min-w-0">
                       <span
-                        className={`w-2 h-2 rounded-full shrink-0 ${getProductTypeDotClass(
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-medium shrink-0 ${getProductTypeBadgeClass(
                           product.productType
                         )}`}
-                        aria-hidden="true"
-                      />
-                      <span className="truncate font-medium text-stone-700 dark:text-[#D5DFDA]">
-                        {t.productTypes[product.productType]}
+                      >
+                        {product.productType === 'PACKAGED' ? (
+                          <Package className="w-3 h-3 shrink-0" aria-hidden="true" />
+                        ) : (
+                          <CupSoda className="w-3 h-3 shrink-0" aria-hidden="true" />
+                        )}
+                        <span>{t.productTypes[product.productType]}</span>
                       </span>
                       <span className="text-stone-300 dark:text-[#344E41] shrink-0" aria-hidden="true">
                         ·
                       </span>
-                      <span
-                        className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(catItem)}`}
-                        aria-hidden="true"
-                      />
                       <span className="truncate">{getCategoryDisplayName(catItem, isVi)}</span>
-                    </p>
+                    </div>
                   </div>
 
                   {/* Clean 2-Column Metric Row: Price | Margin / Stock */}
@@ -1972,11 +1968,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           (!product.variants || product.variants.length === 0) && (
                             <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] space-y-1.5">
                               <p className="font-medium text-stone-500 dark:text-[#94A39B]">
-                                {product.productType === 'PREPARED_STOCK'
-                                  ? isVi
-                                    ? 'Công thức pha mẻ (1 đơn vị)'
-                                    : 'Batch Prep Recipe (per unit)'
-                                  : t.products.recipeSection}
+                                {t.products.recipeSection}
                               </p>
                               {product.recipe.length === 0 ? (
                                 isUnlinkedRecipe ? (

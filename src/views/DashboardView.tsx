@@ -16,14 +16,15 @@ import {
   CheckCircle2,
   Cloud,
   CupSoda,
-  FlaskConical,
   HardDrive,
   Loader2,
+  Package,
   PackageCheck,
   Plus,
   Sparkles,
   TrendingUp,
   User,
+  Wheat,
   X,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
@@ -42,7 +43,8 @@ import {
   formatUsdRef,
   todayIso,
 } from '../utils/format';
-import { computeFinancialReport, type BatchPrepMode } from '../utils/inventoryEngine';
+import { computeFinancialReport } from '../utils/inventoryEngine';
+import { getStockClassificationBadgeClass } from '../utils/categories';
 import { InfoHint } from '../components/InfoHint';
 import { ModalPortal } from '../components/ModalPortal';
 import { useTheme } from '../hooks/useTheme';
@@ -110,7 +112,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     cloudSynced,
     syncing,
     recordStockPurchase,
-    prepareBatchStock,
     t,
   } = useStore();
   const { isDark } = useTheme();
@@ -129,8 +130,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const [restockPayment, setRestockPayment] = useState<PaymentMethod>('cash');
   const [restockSupplier, setRestockSupplier] = useState('');
   const [restockNote, setRestockNote] = useState('');
-  const [batchMode, setBatchMode] = useState<BatchPrepMode>('deduct_ingredients');
-  const [batchDirectUnitCost, setBatchDirectUnitCost] = useState('');
   const [restockSubmitting, setRestockSubmitting] = useState(false);
   const [restockError, setRestockError] = useState<string | null>(null);
 
@@ -255,13 +254,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     todayReport.operatingExpensesKhr + todayReport.inventoryPurchasesCashOutKhr;
   const todayNetCashFlowKhr = todayReport.netRevenueKhr - todayExpensesTotalKhr;
 
-  // Unified Low / Out-of-Stock items across all 3 inventory tiers
+  // Unified Low / Out-of-Stock items across Raw Ingredients and Retail Packaged stock
   const lowStockList = useMemo<UnifiedLowStockItem[]>(() => {
     const alerts: UnifiedLowStockItem[] = [];
 
     for (const p of products) {
       if (!p.active) continue;
-      if (p.productType === 'PACKAGED' || p.productType === 'PREPARED_STOCK') {
+      if (p.productType === 'PACKAGED') {
         if (p.stockQty <= p.reorderLevel) {
           const denom = Math.max(p.reorderLevel * 2, 1);
           const pct =
@@ -271,7 +270,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             itemId: p.id,
             name: p.name,
             nameVi: p.nameVi || p.name,
-            classification: p.productType === 'PACKAGED' ? 'packaged' : 'prepared_stock',
+            classification: 'packaged',
             stockQty: p.stockQty,
             reorderLevel: p.reorderLevel,
             unit: p.unit,
@@ -478,9 +477,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   }, [timeframe, todayReport, sevenDayReport, thirtyDayReport]);
 
   const getTierLabel = (c: StockClassification) => {
-    if (c === 'packaged') return isVi ? 'Hàng đóng gói' : 'Packaged Good';
-    if (c === 'prepared_stock') return isVi ? 'Mẻ pha sẵn' : 'Prepared Batch';
-    return isVi ? 'Nguyên liệu thô' : 'Raw Ingredient';
+    if (c === 'packaged') return isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged';
+    return isVi ? 'Nguyên liệu thô' : 'Raw Ingredients';
   };
 
   // Inline Quick Restock handlers
@@ -497,12 +495,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     setRestockSupplier(item.supplier || '');
     setRestockNote('');
     setRestockError(null);
-
-    if (item.classification === 'prepared_stock') {
-      const hasRecipe = Boolean(item.sourceProduct && item.sourceProduct.recipe.length > 0);
-      setBatchMode(hasRecipe ? 'deduct_ingredients' : 'direct_add');
-      setBatchDirectUnitCost(String(Math.round(Math.max(0, item.unitCostKhr))));
-    }
   };
 
   const handleSubmitInlineRestock = async (e: React.FormEvent) => {
@@ -520,51 +512,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     setRestockSubmitting(true);
     setRestockError(null);
     try {
-      if (restockTarget.classification === 'prepared_stock') {
-        const res = await prepareBatchStock({
-          productId: restockTarget.itemId,
-          batchQty: qty,
-          mode: batchMode,
-          directUnitCostKhr:
-            batchMode === 'direct_add' ? Math.max(0, Number(batchDirectUnitCost) || 0) : undefined,
-          note: restockNote.trim() || (isVi ? 'Pha thêm từ Bảng điều khiển' : 'Quick restock from Dashboard'),
-        });
-        if (!res.ok) {
-          setRestockError(res.error || (isVi ? 'Không thể pha mẻ mới.' : 'Could not prepare batch.'));
-          return;
-        }
-        const displayName = isVi ? restockTarget.nameVi : restockTarget.name;
-        setFeedbackBanner({
-          kind: 'ok',
-          text: isVi
-            ? `Đã pha thêm +${formatQty(qty, restockTarget.unit)} ${displayName}.`
-            : `Prepared +${formatQty(qty, restockTarget.unit)} of ${displayName}.`,
-        });
-        setRestockTarget(null);
-      } else {
-        const res = await recordStockPurchase({
-          itemId: restockTarget.itemId,
-          itemClassification: restockTarget.classification,
-          quantity: qty,
-          totalCostKhr: Math.max(0, Number(restockTotalCost) || 0),
-          paymentMethod: restockPayment,
-          supplier: restockSupplier.trim(),
-          note: restockNote.trim() || (isVi ? 'Nhập nhanh từ Bảng điều khiển' : 'Quick restock from Dashboard'),
-          purchaseDate: today,
-        });
-        if (!res.ok) {
-          setRestockError(res.error || (isVi ? 'Không thể nhập kho.' : 'Could not record restock.'));
-          return;
-        }
-        const displayName = isVi ? restockTarget.nameVi : restockTarget.name;
-        setFeedbackBanner({
-          kind: 'ok',
-          text: isVi
-            ? `Đã nhập kho +${formatQty(qty, restockTarget.unit)} ${displayName}.`
-            : `Restocked +${formatQty(qty, restockTarget.unit)} of ${displayName}.`,
-        });
-        setRestockTarget(null);
+      const res = await recordStockPurchase({
+        itemId: restockTarget.itemId,
+        itemClassification: restockTarget.classification,
+        quantity: qty,
+        totalCostKhr: Math.max(0, Number(restockTotalCost) || 0),
+        paymentMethod: restockPayment,
+        supplier: restockSupplier.trim(),
+        note: restockNote.trim() || (isVi ? 'Nhập nhanh từ Bảng điều khiển' : 'Quick restock from Dashboard'),
+        purchaseDate: today,
+      });
+      if (!res.ok) {
+        setRestockError(res.error || (isVi ? 'Không thể nhập kho.' : 'Could not record restock.'));
+        return;
       }
+      const displayName = isVi ? restockTarget.nameVi : restockTarget.name;
+      setFeedbackBanner({
+        kind: 'ok',
+        text: isVi
+          ? `Đã nhập kho +${formatQty(qty, restockTarget.unit)} ${displayName}.`
+          : `Restocked +${formatQty(qty, restockTarget.unit)} of ${displayName}.`,
+      });
+      setRestockTarget(null);
     } finally {
       setRestockSubmitting(false);
     }
@@ -893,8 +862,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                   label={isVi ? 'Giải thích cảnh báo kho' : 'About Stock Alerts'}
                   text={
                     isVi
-                      ? 'Số mặt hàng trên cả 3 nhóm kho (nguyên liệu, mẻ pha sẵn, hàng đóng gói) đang bằng hoặc thấp hơn mức cảnh báo.'
-                      : 'Items across Raw Ingredients, Prepared Batches, and Packaged Goods currently at or below their low-stock threshold.'
+                      ? 'Số mặt hàng Nguyên liệu thô và Đóng gói bán lẻ đang bằng hoặc thấp hơn mức cảnh báo.'
+                      : 'Items across Raw Ingredients and Retail Packaged goods currently at or below their low-stock threshold.'
                   }
                 />
               </div>
@@ -1178,20 +1147,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 </span>
                 <p className="text-xs text-stone-500 dark:text-[#94A39B]">
                   {isVi
-                    ? 'Không có nguyên liệu hay sản phẩm nào dưới mức cảnh báo.'
-                    : 'No ingredients, batches, or packaged goods are below threshold.'}
+                    ? 'Không có Nguyên liệu thô hay Đóng gói bán lẻ nào dưới mức cảnh báo.'
+                    : 'No Raw Ingredients or Retail Packaged items are below threshold.'}
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
                 {lowStockList.slice(0, 5).map((item) => {
                   const isOut = item.stockQty <= 0;
-                  const isPrepared = item.classification === 'prepared_stock' && !isOut;
                   const barColor = isOut
                     ? 'bg-red-600 dark:bg-red-500'
-                    : isPrepared
-                      ? 'bg-purple-600 dark:bg-purple-400'
-                      : 'bg-amber-500 dark:bg-amber-400';
+                    : 'bg-amber-500 dark:bg-amber-400';
 
                   return (
                     <div
@@ -1204,24 +1170,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                             className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
                               isOut
                                 ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/70 dark:text-red-200 dark:border-red-500/40'
-                                : isPrepared
-                                  ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/70 dark:text-purple-200 dark:border-purple-500/40'
-                                  : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-500/40'
+                                : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-500/40'
                             }`}
                           >
                             {isOut
                               ? isVi
                                 ? 'Hết hàng'
                                 : 'Out of Stock'
-                              : isPrepared
-                                ? isVi
-                                  ? 'Mẻ pha thấp'
-                                  : 'Low Batch'
-                                : isVi
-                                  ? 'Sắp hết'
-                                  : 'Low Stock'}
+                              : isVi
+                                ? 'Sắp hết'
+                                : 'Low Stock'}
                           </span>
-                          <span className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B] truncate">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border whitespace-nowrap ${getStockClassificationBadgeClass(
+                              item.classification
+                            )}`}
+                          >
+                            {item.classification === 'ingredient' ? (
+                              <Wheat className="w-3 h-3 shrink-0" aria-hidden="true" />
+                            ) : (
+                              <Package className="w-3 h-3 shrink-0" aria-hidden="true" />
+                            )}
                             {getTierLabel(item.classification)}
                           </span>
                         </div>
@@ -1236,9 +1205,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                               className={
                                 isOut
                                   ? 'text-red-700 dark:text-[#F87171]'
-                                  : isPrepared
-                                    ? 'text-purple-700 dark:text-purple-300'
-                                    : 'text-amber-700 dark:text-amber-300'
+                                  : 'text-amber-700 dark:text-amber-300'
                               }
                             >
                               {formatQty(item.stockQty, item.unit)}
@@ -1263,15 +1230,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                         className="h-10 px-3.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5 shrink-0" />
-                        <span>
-                          {item.classification === 'prepared_stock'
-                            ? isVi
-                              ? 'Pha mẻ'
-                              : 'Restock'
-                            : isVi
-                              ? 'Nhập thêm'
-                              : 'Restock'}
-                        </span>
+                        <span>{isVi ? 'Nhập thêm' : 'Restock'}</span>
                       </button>
                     </div>
                   );
@@ -1298,13 +1257,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-[#0F5C43] dark:text-[#34D399]">
-                  {restockTarget.classification === 'prepared_stock'
-                    ? isVi
-                      ? 'Pha mẻ nhanh'
-                      : 'Quick Batch Prep'
-                    : isVi
-                      ? 'Nhập kho nhanh'
-                      : 'Quick Restock'}
+                  {isVi ? 'Nhập kho nhanh' : 'Quick Restock'}
                 </p>
                 <h3 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
                   {isVi ? restockTarget.nameVi : restockTarget.name}
@@ -1352,7 +1305,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                     const nextVal = e.target.value;
                     setRestockQty(nextVal);
                     const n = Number(nextVal) || 0;
-                    if (restockTarget.classification !== 'prepared_stock' && n > 0) {
+                    if (n > 0) {
                       setRestockTotalCost(String(Math.round(n * Math.max(0, restockTarget.unitCostKhr))));
                     }
                   }}
@@ -1360,101 +1313,48 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 />
               </div>
 
-              {restockTarget.classification === 'prepared_stock' ? (
-                <>
-                  <div className="space-y-2">
-                    <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA]">
-                      {isVi ? 'Cách tính nguyên liệu' : 'Batch Prep Method'}
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setBatchMode('deduct_ingredients')}
-                        disabled={!restockTarget.sourceProduct?.recipe?.length}
-                        className={`h-11 px-3 rounded-lg border text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-40 ${
-                          batchMode === 'deduct_ingredients'
-                            ? 'bg-emerald-50 dark:bg-[#064E3B] border-[#0F5C43] dark:border-[#10B981] text-[#0F5C43] dark:text-[#D1FAE5]'
-                            : 'bg-white dark:bg-[#0F1814] border-stone-200 dark:border-[#24352C] text-stone-700 dark:text-[#D5DFDA]'
-                        }`}
-                      >
-                        <FlaskConical className="w-3.5 h-3.5 shrink-0" />
-                        <span>{isVi ? 'Trừ nguyên liệu' : 'Use Recipe'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBatchMode('direct_add')}
-                        className={`h-11 px-3 rounded-lg border text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors ${
-                          batchMode === 'direct_add'
-                            ? 'bg-emerald-50 dark:bg-[#064E3B] border-[#0F5C43] dark:border-[#10B981] text-[#0F5C43] dark:text-[#D1FAE5]'
-                            : 'bg-white dark:bg-[#0F1814] border-stone-200 dark:border-[#24352C] text-stone-700 dark:text-[#D5DFDA]'
-                        }`}
-                      >
-                        <span>{isVi ? 'Thêm trực tiếp' : 'Direct Add'}</span>
-                      </button>
-                    </div>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
+                    {isVi ? 'Tổng tiền nhập (KHR)' : 'Total Cost (KHR)'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={restockTotalCost}
+                    onChange={(e) => setRestockTotalCost(e.target.value)}
+                    className="w-full h-11 px-3.5 rounded-lg border border-stone-300 dark:border-[#24352C] bg-white dark:bg-[#0F1814] text-sm font-mono-num text-stone-900 dark:text-[#F1F5F3] focus:outline-none focus:ring-2 focus:ring-[#0F5C43] dark:focus:ring-[#10B981]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
+                    {isVi ? 'Thanh toán' : 'Payment'}
+                  </label>
+                  <select
+                    value={restockPayment}
+                    onChange={(e) => setRestockPayment(e.target.value as PaymentMethod)}
+                    className="w-full h-11 px-3 rounded-lg border border-stone-300 dark:border-[#24352C] bg-white dark:bg-[#0F1814] text-sm text-stone-900 dark:text-[#F1F5F3] focus:outline-none focus:ring-2 focus:ring-[#0F5C43] dark:focus:ring-[#10B981]"
+                  >
+                    <option value="cash">{t.paymentMethods.cash}</option>
+                    <option value="khqr">{t.paymentMethods.khqr}</option>
+                    <option value="aba">{t.paymentMethods.aba}</option>
+                    <option value="wing">{t.paymentMethods.wing}</option>
+                  </select>
+                </div>
+              </div>
 
-                  {batchMode === 'direct_add' && (
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                        {isVi ? 'Giá vốn mỗi đơn vị (KHR)' : 'Unit Cost (KHR)'}
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={batchDirectUnitCost}
-                        onChange={(e) => setBatchDirectUnitCost(e.target.value)}
-                        className="w-full h-11 px-3.5 rounded-lg border border-stone-300 dark:border-[#24352C] bg-white dark:bg-[#0F1814] text-sm font-mono-num text-stone-900 dark:text-[#F1F5F3] focus:outline-none focus:ring-2 focus:ring-[#0F5C43] dark:focus:ring-[#10B981]"
-                      />
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                        {isVi ? 'Tổng tiền nhập (KHR)' : 'Total Cost (KHR)'}
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={restockTotalCost}
-                        onChange={(e) => setRestockTotalCost(e.target.value)}
-                        className="w-full h-11 px-3.5 rounded-lg border border-stone-300 dark:border-[#24352C] bg-white dark:bg-[#0F1814] text-sm font-mono-num text-stone-900 dark:text-[#F1F5F3] focus:outline-none focus:ring-2 focus:ring-[#0F5C43] dark:focus:ring-[#10B981]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                        {isVi ? 'Thanh toán' : 'Payment'}
-                      </label>
-                      <select
-                        value={restockPayment}
-                        onChange={(e) => setRestockPayment(e.target.value as PaymentMethod)}
-                        className="w-full h-11 px-3 rounded-lg border border-stone-300 dark:border-[#24352C] bg-white dark:bg-[#0F1814] text-sm text-stone-900 dark:text-[#F1F5F3] focus:outline-none focus:ring-2 focus:ring-[#0F5C43] dark:focus:ring-[#10B981]"
-                      >
-                        <option value="cash">{t.paymentMethods.cash}</option>
-                        <option value="khqr">{t.paymentMethods.khqr}</option>
-                        <option value="aba">{t.paymentMethods.aba}</option>
-                        <option value="wing">{t.paymentMethods.wing}</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                      {isVi ? 'Nhà cung cấp (tùy chọn)' : 'Supplier (Optional)'}
-                    </label>
-                    <input
-                      type="text"
-                      value={restockSupplier}
-                      onChange={(e) => setRestockSupplier(e.target.value)}
-                      placeholder={isVi ? 'VD: Chợ Orussey' : 'e.g. Local Market'}
-                      className="w-full h-11 px-3.5 rounded-lg border border-stone-300 dark:border-[#24352C] bg-white dark:bg-[#0F1814] text-sm text-stone-900 dark:text-[#F1F5F3] focus:outline-none focus:ring-2 focus:ring-[#0F5C43] dark:focus:ring-[#10B981]"
-                    />
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
+                  {isVi ? 'Nhà cung cấp (tùy chọn)' : 'Supplier (Optional)'}
+                </label>
+                <input
+                  type="text"
+                  value={restockSupplier}
+                  onChange={(e) => setRestockSupplier(e.target.value)}
+                  placeholder={isVi ? 'VD: Chợ Orussey' : 'e.g. Local Market'}
+                  className="w-full h-11 px-3.5 rounded-lg border border-stone-300 dark:border-[#24352C] bg-white dark:bg-[#0F1814] text-sm text-stone-900 dark:text-[#F1F5F3] focus:outline-none focus:ring-2 focus:ring-[#0F5C43] dark:focus:ring-[#10B981]"
+                />
+              </div>
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
@@ -1484,15 +1384,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                   className="h-11 px-5 rounded-lg bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] text-sm font-semibold text-white inline-flex items-center gap-2 transition-colors disabled:opacity-60"
                 >
                   {restockSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>
-                    {restockTarget.classification === 'prepared_stock'
-                      ? isVi
-                        ? 'Xác nhận pha mẻ'
-                        : 'Confirm Batch Prep'
-                      : isVi
-                        ? 'Xác nhận nhập kho'
-                        : 'Confirm Restock'}
-                  </span>
+                  <span>{isVi ? 'Xác nhận nhập kho' : 'Confirm Restock'}</span>
                 </button>
               </div>
             </form>

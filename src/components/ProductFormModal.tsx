@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  CupSoda,
   Globe,
   HardDrive,
   ImagePlus,
@@ -535,11 +536,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       }
       return recipeCogs;
     }
-    const manualCost = Math.max(0, Number(costPriceKhr) || 0);
-    if (productType === 'PREPARED_STOCK' && manualCost <= 0 && recipe.length > 0) {
-      return recipeCogs;
-    }
-    return manualCost;
+    return Math.max(0, Number(costPriceKhr) || 0);
   }, [
     productType,
     variants,
@@ -547,7 +544,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     ingredients,
     recipeCogs,
     costPriceKhr,
-    recipe.length,
   ]);
 
   const liveSellingPrice = useMemo(() => {
@@ -791,9 +787,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     if (nextType === 'PACKAGED') {
       if (!['packaged', 'snack'].includes(category) && hasPackaged) setCategory('packaged');
       setVariants([]);
-    } else if (nextType === 'PREPARED_STOCK') {
-      if (['packaged', 'snack'].includes(category) && hasJuice) setCategory('juice');
-      setVariants([]);
     } else {
       if (['packaged', 'snack'].includes(category) && hasJuice) setCategory('juice');
     }
@@ -912,10 +905,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     const effectivePrice =
       cleanVariants.length > 0 ? cleanVariants[0].priceKhr : Math.max(0, Number(priceKhr) || 0);
 
-    const effectiveCost =
-      productType === 'PREPARED_STOCK' && Number(costPriceKhr) <= 0 && cleanRecipe.length > 0
-        ? Math.round(calculateRecipeCogs(cleanRecipe, ingredients))
-        : Math.max(0, Number(costPriceKhr) || 0);
+    const effectiveCost = Math.max(0, Number(costPriceKhr) || 0);
 
     const cleanUnitBarcode = normalizeBarcodeString(barcode);
     const cleanPackBarcodes = packagingBarcodes
@@ -1715,44 +1705,55 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               label={isVi ? 'Giải thích loại sản phẩm' : 'About Item Type'}
                               text={
                                 isVi
-                                  ? 'Quyết định cách trừ kho khi bán: Pha chế theo ly (trừ nguyên liệu theo công thức), Đóng gói sẵn (trừ số lượng chai/lon), hoặc Pha sẵn theo mẻ (trừ kho thành phẩm).'
-                                  : 'Controls how stock deducts on POS sales: Made-to-Order deducts raw ingredients via recipe, Packaged deducts unit stock directly, and Prepared Stock tracks pre-made batches.'
+                                  ? 'Quyết định cách trừ kho khi bán: Pha chế tại chỗ (trừ Nguyên liệu thô theo công thức) hoặc Đóng gói bán lẻ (trừ trực tiếp số lượng chai/lon).'
+                                  : 'Controls how stock deducts on POS sales: Made-to-Order deducts Raw Ingredients via recipe, while Retail Packaged deducts unit stock directly.'
                               }
                             />
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             {(
-                              ['PREPARED_TO_ORDER', 'PACKAGED', 'PREPARED_STOCK'] as ProductType[]
+                              ['PREPARED_TO_ORDER', 'PACKAGED'] as ProductType[]
                             ).map((pt) => {
                               const selected = productType === pt;
+                              const isMadeToOrder = pt === 'PREPARED_TO_ORDER';
+                              const IconComp = isMadeToOrder ? CupSoda : Package;
                               return (
                                 <button
                                   key={pt}
                                   type="button"
                                   onClick={() => handleProductTypeChange(pt)}
                                   aria-pressed={selected}
-                                  className={`min-h-[58px] px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                                  className={`min-h-[68px] px-3.5 py-3 rounded-xl border text-left transition-colors flex items-start gap-3 ${
                                     selected
-                                      ? 'border-[#0F5C43] bg-emerald-50/75 text-[#0F5C43] dark:border-[#10B981] dark:bg-[#064E3B] dark:text-[#6EE7B7]'
+                                      ? isMadeToOrder
+                                        ? 'border-emerald-600/60 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-300'
+                                        : 'border-sky-600/60 bg-sky-500/10 text-sky-700 dark:border-sky-500/60 dark:bg-sky-500/15 dark:text-sky-300'
                                       : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
                                   }`}
                                 >
-                                  <div className="text-xs font-semibold truncate">
-                                    {t.productTypes[pt]}
-                                  </div>
-                                  <div className="text-[11px] font-normal text-stone-500 dark:text-[#94A39B] mt-0.5 line-clamp-1">
-                                    {pt === 'PACKAGED'
-                                      ? isVi
-                                        ? 'Trừ trực tiếp chai/lon'
-                                        : 'Direct unit stock'
-                                      : pt === 'PREPARED_STOCK'
+                                  <span
+                                    className={`w-8 h-8 rounded-lg inline-flex items-center justify-center shrink-0 mt-0.5 ${
+                                      isMadeToOrder
+                                        ? 'text-emerald-600 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-500/15'
+                                        : 'text-sky-600 bg-sky-500/10 dark:text-sky-400 dark:bg-sky-500/15'
+                                    }`}
+                                  >
+                                    <IconComp className="w-4 h-4" />
+                                  </span>
+                                  <div className="min-w-0">
+                                    <div className="text-xs font-semibold truncate">
+                                      {t.productTypes[pt]}
+                                    </div>
+                                    <div className="text-[11px] font-normal text-stone-500 dark:text-[#94A39B] mt-0.5 leading-snug">
+                                      {isMadeToOrder
                                         ? isVi
-                                          ? 'Pha sẵn & trữ lạnh'
-                                          : 'Pre-made batch stock'
+                                          ? 'Pha chế trực tiếp theo đơn từ Nguyên liệu thô.'
+                                          : 'Freshly prepared per order using linked Raw Ingredients.'
                                         : isVi
-                                          ? 'Trừ nguyên liệu theo ly'
-                                          : 'Recipe ingredients'}
+                                          ? 'Nhập đóng gói sẵn từ nhà cung cấp và bán nguyên chai/lon (nước ngọt, nước suối, bánh kẹo).'
+                                          : 'Bought sealed from a supplier and sold as-is (e.g., canned drinks, water, snacks).'}
+                                    </div>
                                   </div>
                                 </button>
                               );
@@ -2122,8 +2123,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       </p>
                     )}
 
-                    {/* Optional Markup Auto-Pricing for Packaged / Prepared Stock */}
-                    {(productType === 'PACKAGED' || productType === 'PREPARED_STOCK') && (
+                    {/* Optional Markup Auto-Pricing for Retail Packaged */}
+                    {productType === 'PACKAGED' && (
                       <CollapsibleFieldset
                         id="pf-markup"
                         variant="nested"
@@ -2405,8 +2406,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     </fieldset>
                   )}
 
-                  {/* Packaging / Case Barcodes & Supplier for Packaged / Prepared Stock */}
-                  {(productType === 'PACKAGED' || productType === 'PREPARED_STOCK') && (
+                  {/* Packaging / Case Barcodes & Supplier for Retail Packaged */}
+                  {productType === 'PACKAGED' && (
                     <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 space-y-4">
                       <legend className="sr-only">
                         {isVi ? 'Đóng gói & Nhà cung cấp' : 'Packaging & Supplier'}
@@ -2550,7 +2551,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             </h3>
                             <InfoHint
                               compact
-                              label={isVi ? 'Giải thích trừ kho 3 cấp' : 'About 3-tier stock deduction'}
+                              label={isVi ? 'Giải thích trừ kho theo công thức' : 'About recipe stock deduction'}
                               text={
                                 isVi
                                   ? 'Với món Pha chế theo ly, mỗi lần bán trên POS sẽ tự động trừ nguyên liệu thô theo đúng định lượng công thức bạn gắn bên dưới.'
@@ -2839,14 +2840,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     </>
                   )}
 
-                  {/* MODE B: PACKAGED OR PREPARED STOCK (COST, STOCK, THRESHOLD, SUPPLIER/CASE) */}
-                  {(productType === 'PACKAGED' || productType === 'PREPARED_STOCK') && (
+                  {/* MODE B: RETAIL PACKAGED (COST, STOCK, THRESHOLD, SUPPLIER/CASE) */}
+                  {productType === 'PACKAGED' && (
                     <>
                       {/* Live Cost & Margin Summary Strip */}
                       <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5">
                         <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 border-b border-stone-100 dark:border-[#1F3028]">
                           <div className="flex items-center gap-1.5">
-                            <Package className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+                            <Package className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
                             <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                               {isVi ? 'Giá vốn & Tồn kho trực tiếp' : 'Unit Cost & Stock Tracking'}
                             </h3>
@@ -2854,13 +2855,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               compact
                               label={isVi ? 'Giải thích trừ kho trực tiếp' : 'About direct stock deduction'}
                               text={
-                                productType === 'PACKAGED'
-                                  ? isVi
-                                    ? 'Hàng đóng gói sẵn sẽ trừ trực tiếp số lượng tồn kho mỗi khi bán trên POS và cảnh báo khi xuống dưới mức tối thiểu.'
-                                    : 'Packaged goods deduct directly from stock quantity on every POS sale and trigger low-stock alerts below your threshold.'
-                                  : isVi
-                                    ? 'Đồ uống pha sẵn trừ kho thành phẩm khi bán trên POS. Bạn có thể gắn thêm công thức pha mẻ bên dưới để tự trừ nguyên liệu khi bấm "Pha mẻ mới".'
-                                    : 'Prepared stock deducts finished units on POS sales. Link an optional batch recipe below to deduct raw ingredients when running "Prepare Batch".'
+                                isVi
+                                  ? 'Hàng đóng gói bán lẻ sẽ trừ trực tiếp số lượng tồn kho mỗi khi bán trên POS và cảnh báo khi xuống dưới mức tối thiểu.'
+                                  : 'Retail Packaged goods deduct directly from stock quantity on every POS sale and trigger low-stock alerts below your threshold.'
                               }
                             />
                           </div>
@@ -3012,128 +3009,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Optional Batch Prep Recipe for PREPARED_STOCK */}
-                      {productType === 'PREPARED_STOCK' && (
-                        <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 space-y-3.5">
-                          <legend className="sr-only">
-                            {isVi ? 'Công thức pha mẻ' : 'Batch Prep Recipe'}
-                          </legend>
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1">
-                                <h4 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                                  {isVi
-                                    ? 'Công thức pha mẻ (cho 1 đơn vị thành phẩm)'
-                                    : 'Batch Prep Recipe (optional · per 1 finished unit)'}
-                                </h4>
-                                <InfoHint
-                                  compact
-                                  label={isVi ? 'Giải thích công thức pha mẻ' : 'About batch prep recipe'}
-                                  text={
-                                    isVi
-                                      ? 'Khi bạn bấm "Pha mẻ mới" trong Kho hàng, hệ thống tự động trừ nguyên liệu thô theo công thức này và cộng tồn kho thành phẩm.'
-                                      : 'Automatically deducts raw ingredients when you run "Prepare Batch" in Inventory and adds finished units to stock.'
-                                  }
-                                />
-                              </div>
-                              {recipe.length > 0 && (
-                                <span className="text-xs text-stone-500 dark:text-[#94A39B] block mt-0.5">
-                                  {isVi ? 'Giá vốn công thức ước tính:' : 'Est. batch recipe cost:'}{' '}
-                                  <strong className="font-mono-num text-stone-800 dark:text-[#F1F5F3]">
-                                    {formatKhr(recipeCogs)}
-                                  </strong>
-                                </span>
-                              )}
-                            </div>
-
-                            <button
-                              type="button"
-                              disabled={ingredients.length === 0}
-                              onClick={addRecipeRow}
-                              className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#064E3B]/50 disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
-                            >
-                              <Plus className="w-4 h-4" />
-                              {t.products.addIngredientRow}
-                            </button>
-                          </div>
-
-                          {recipe.length === 0 ? (
-                            <p className="text-xs text-stone-500 dark:text-[#94A39B]">
-                              {isVi
-                                ? 'Chưa gắn nguyên liệu pha mẻ. Bạn có thể bỏ qua hoặc thêm nguyên liệu nếu muốn trừ kho thô khi pha mẻ.'
-                                : 'No batch ingredients linked yet. Optional — add ingredients if you want raw stock deducted when preparing batches.'}
-                            </p>
-                          ) : (
-                            <div className="space-y-2">
-                              {recipe.map((row, index) => {
-                                const chosenIng = ingMap.get(row.ingredientId);
-                                const compatibleUnits = chosenIng
-                                  ? getCompatibleUnits(chosenIng.unit)
-                                  : (['pcs'] as IngredientUnit[]);
-                                const rowCost = computeRowCostKhr(row);
-                                return (
-                                  <div
-                                    key={index}
-                                    className="grid grid-cols-12 gap-2 items-center"
-                                  >
-                                    <select
-                                      value={row.ingredientId}
-                                      onChange={(e) =>
-                                        updateRecipeRow(index, { ingredientId: e.target.value })
-                                      }
-                                      className="col-span-12 sm:col-span-5 h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                                    >
-                                      {ingredients.map((ing) => (
-                                        <option key={ing.id} value={ing.id}>
-                                          {isVi ? ing.nameVi || ing.name : ing.name} ({ing.unit})
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <input
-                                      type="number"
-                                      min={0.001}
-                                      step="any"
-                                      value={row.quantity}
-                                      onChange={(e) =>
-                                        updateRecipeRow(index, {
-                                          quantity: Math.max(0, Number(e.target.value) || 0),
-                                        })
-                                      }
-                                      className="col-span-4 sm:col-span-2 h-11 px-2.5 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                                    />
-                                    <select
-                                      value={row.unit || chosenIng?.unit || 'pcs'}
-                                      onChange={(e) =>
-                                        updateRecipeRow(index, {
-                                          unit: e.target.value as IngredientUnit,
-                                        })
-                                      }
-                                      className="col-span-4 sm:col-span-2 h-11 px-2 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                                    >
-                                      {compatibleUnits.map((u) => (
-                                        <option key={u} value={u}>
-                                          {u}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <span className="col-span-3 sm:col-span-2 text-right font-mono-num text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] truncate">
-                                      {formatKhr(rowCost)}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => removeRecipeRow(index)}
-                                      className="col-span-1 h-11 flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] rounded-lg"
-                                      aria-label="Remove ingredient"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </fieldset>
-                      )}
                     </>
                   )}
                 </div>

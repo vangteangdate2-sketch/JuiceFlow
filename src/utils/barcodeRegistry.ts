@@ -705,12 +705,7 @@ export function generateUniqueInternalSku(options: {
     if (extra?.trim()) usedCodes.add(normalizeBarcodeString(extra).toUpperCase());
   }
 
-  const typePrefix =
-    options.productType === 'PACKAGED'
-      ? 'PKG'
-      : options.productType === 'PREPARED_STOCK'
-        ? 'PRP'
-        : 'MTO';
+  const typePrefix = options.productType === 'PACKAGED' ? 'PKG' : 'MTO';
 
   const cleanNameSlug = (options.name || '')
     .normalize('NFD')

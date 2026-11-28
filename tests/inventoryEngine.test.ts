@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import type { Expense, Ingredient, Product, PurchaseRecord, Sale } from '../src/types';
 import {
   buildAdjustmentPlan,
-  buildBatchPreparationPlan,
   buildCheckoutPlan,
   buildOpeningStockPlan,
   buildPartialReturnPlan,
@@ -11,6 +10,7 @@ import {
   buildVoidPlan,
   computeFinancialReport,
   getAvailableUnitsForProduct,
+  normalizeProduct,
   resolveBarcodeMatch,
 } from '../src/utils/inventoryEngine';
 import { convertUnitQty, formatDateInPhnomPenh } from '../src/utils/format';
@@ -157,7 +157,7 @@ function makeProducts(): Product[] {
       nameVi: 'Nước cam tươi đóng chai 330ml',
       brand: 'JuiceFlow',
       category: 'juice',
-      productType: 'PREPARED_STOCK',
+      productType: 'PACKAGED',
       priceKhr: 8000,
       costPriceKhr: 4500,
       imageUrl: '',
@@ -167,11 +167,8 @@ function makeProducts(): Product[] {
       stockQty: 10,
       reorderLevel: 4,
       unit: 'pcs',
-      supplier: 'In-house Batch',
-      recipe: [
-        { ingredientId: 'ing_orange', quantity: 500, unit: 'g' }, // 0.5 kg per bottle
-        { ingredientId: 'ing_bottle', quantity: 1, unit: 'pcs' },
-      ],
+      supplier: 'Local Bottler',
+      recipe: [],
       recipeVersion: 1,
       variants: [],
     },
@@ -303,12 +300,12 @@ test('3. Multi-variant drink (Small vs Large) charges variant price & deducts va
   assert.equal(cup.stockQty, 47);
 });
 
-test('4. Prepared stock sale deducts prepared stock ONLY & NEVER double-deducts raw ingredients', () => {
+test('4. Retail Packaged sale deducts packaged stock ONLY & never touches raw ingredients', () => {
   const products = makeProducts();
   const ingredients = makeIngredients();
 
   const res = buildCheckoutPlan({
-    clientTxId: 'tx_prep_sale_1',
+    clientTxId: 'tx_packaged_sale_1',
     orderNumber: 'JF-1004',
     saleDate: '2026-11-20',
     items: [{ productId: 'prod_bottled_oj', quantity: 4 }],
@@ -324,60 +321,36 @@ test('4. Prepared stock sale deducts prepared stock ONLY & NEVER double-deducts 
   const oj = res.updatedProducts!.find((p) => p.id === 'prod_bottled_oj')!;
   assert.equal(oj.stockQty, 6); // 10 - 4
 
-  // CRITICAL: Raw oranges and bottles must remain untouched (0 deduction at POS sale)
+  // Raw oranges and bottles must remain untouched (0 deduction at POS sale)
   const oranges = res.updatedIngredients!.find((i) => i.id === 'ing_orange')!;
   const bottles = res.updatedIngredients!.find((i) => i.id === 'ing_bottle')!;
   assert.equal(oranges.stockQty, 10);
   assert.equal(bottles.stockQty, 30);
   assert.equal(res.touchedIngredientIds!.length, 0);
   assert.equal(res.movements!.length, 1);
-  assert.equal(res.movements![0].itemClassification, 'prepared_stock');
+  assert.equal(res.movements![0].itemClassification, 'packaged');
 });
 
-test('5. Prepared stock batch creation supports BOTH Deduct Raw Ingredients & Direct Add modes', () => {
-  const products = makeProducts();
-  const ingredients = makeIngredients();
+test('5. Legacy PREPARED_STOCK items migrate safely to Made-to-Order (with recipe) or Retail Packaged (without recipe)', () => {
+  const withRecipe = normalizeProduct({
+    id: 'legacy_with_recipe',
+    name: 'Legacy Bottled Juice',
+    productType: 'PREPARED_STOCK',
+    priceKhr: 8000,
+    recipe: [{ ingredientId: 'ing_orange', quantity: 500, unit: 'g' }],
+  } as unknown as Partial<Product> & { id: string });
+  assert.equal(withRecipe.productType, 'PREPARED_TO_ORDER');
 
-  // Mode A: Deduct Raw Ingredients for 6 bottles (6 * 500g = 3kg oranges + 6 bottles)
-  const batchDeduct = buildBatchPreparationPlan({
-    productId: 'prod_bottled_oj',
-    batchQty: 6,
-    mode: 'deduct_ingredients',
-    recordedBy: 'Mom',
-    movementDate: '2026-11-20',
-    products,
-    ingredients,
-  });
-
-  assert.equal(batchDeduct.ok, true);
-  assert.equal(batchDeduct.updatedProduct!.stockQty, 16); // 10 + 6
-  // Batch unit cost = 0.5kg * 8000 (4000) + 1 bottle * 500 (500) = 4500 KHR
-  assert.equal(batchDeduct.batchUnitCostKhr, 4500);
-  const orangesAfter = batchDeduct.updatedIngredients!.find((i) => i.id === 'ing_orange')!;
-  const bottlesAfter = batchDeduct.updatedIngredients!.find((i) => i.id === 'ing_bottle')!;
-  assert.equal(orangesAfter.stockQty, 7); // 10 - 3
-  assert.equal(bottlesAfter.stockQty, 24); // 30 - 6
-  assert.equal(batchDeduct.movements!.filter((m) => m.movementType === 'batch_prep_consume').length, 2);
-  assert.equal(batchDeduct.movements!.filter((m) => m.movementType === 'batch_prep_in').length, 1);
-
-  // Mode B: Direct Add 4 more bottles (must NOT touch raw ingredients)
-  const batchDirect = buildBatchPreparationPlan({
-    productId: 'prod_bottled_oj',
-    batchQty: 4,
-    mode: 'direct_add',
-    directUnitCostKhr: 5000,
-    recordedBy: 'Mom',
-    movementDate: '2026-11-20',
-    products: batchDeduct.updatedProducts!,
-    ingredients: batchDeduct.updatedIngredients!,
-  });
-
-  assert.equal(batchDirect.ok, true);
-  assert.equal(batchDirect.updatedProduct!.stockQty, 20); // 16 + 4
-  assert.equal(batchDirect.touchedIngredientIds!.length, 0);
-  assert.equal(batchDirect.updatedIngredients!.find((i) => i.id === 'ing_orange')!.stockQty, 7);
-  // Weighted avg cost: (16 * 4500 + 4 * 5000) / 20 = 92,000 / 20 = 4,600 KHR
-  assert.equal(batchDirect.updatedProduct!.costPriceKhr, 4600);
+  const withoutRecipe = normalizeProduct({
+    id: 'legacy_without_recipe',
+    name: 'Legacy Canned Drink',
+    productType: 'PREPARED_STOCK',
+    priceKhr: 4000,
+    stockQty: 15,
+    recipe: [],
+  } as unknown as Partial<Product> & { id: string });
+  assert.equal(withoutRecipe.productType, 'PACKAGED');
+  assert.equal(withoutRecipe.stockQty, 15);
 });
 
 test('6. Insufficient stock blocks checkout by default AND allows override when enabled in Settings', () => {
@@ -840,7 +813,7 @@ test('13. Physical stock count variance & Damaged/Expired write-offs update stoc
   // Expired write-off on Bottled Orange Juice: 2 expired bottles (always negative delta)
   const expiredRes = buildAdjustmentPlan({
     itemId: 'prod_bottled_oj',
-    itemClassification: 'prepared_stock',
+    itemClassification: 'packaged',
     movementType: 'expired',
     deltaQty: 2, // positive input must still write off -2
     note: 'Past 48h freshness window',

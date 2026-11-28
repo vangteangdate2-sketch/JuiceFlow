@@ -13,9 +13,9 @@ export type PaymentMethod = 'cash' | 'khqr' | 'aba' | 'wing';
 
 export type IngredientUnit = 'g' | 'kg' | 'ml' | 'L' | 'pcs';
 
-export type ProductType = 'PACKAGED' | 'PREPARED_TO_ORDER' | 'PREPARED_STOCK';
+export type ProductType = 'PACKAGED' | 'PREPARED_TO_ORDER';
 
-export type StockClassification = 'packaged' | 'ingredient' | 'prepared_stock';
+export type StockClassification = 'packaged' | 'ingredient';
 
 export type DefaultProductCategory =
   | 'juice'
@@ -71,8 +71,6 @@ export type MovementType =
   | 'opening_stock'
   | 'purchase'
   | 'sale_consumption'
-  | 'batch_prep_in'
-  | 'batch_prep_consume'
   | 'void_restore'
   | 'return_restore'
   | 'stock_count'
@@ -117,15 +115,15 @@ export interface Product {
   manualPriceOverride?: boolean;
   imageUrl: string;
   active: boolean;
-  // Barcode & packaging identifiers (primarily for PACKAGED & PREPARED_STOCK)
+  // Barcode & packaging identifiers (primarily for PACKAGED retail items)
   barcode?: string;
   packagingBarcodes?: PackagingBarcode[];
-  // Direct stock balance for PACKAGED and PREPARED_STOCK items
+  // Direct stock balance for PACKAGED items
   stockQty: number;
   reorderLevel: number;
   unit: IngredientUnit;
   supplier: string;
-  // Default / batch recipe (for legacy single-variant or PREPARED_STOCK batch preparation)
+  // Default recipe for Made-to-Order items
   recipe: RecipeItem[];
   recipeVersion: number;
   // Multi-variant definitions (Small / Medium / Large or single Standard variant)

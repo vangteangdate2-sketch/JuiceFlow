@@ -100,7 +100,6 @@ import {
 export { normalizeName };
 import {
   buildAdjustmentPlan,
-  buildBatchPreparationPlan,
   buildCheckoutPlan,
   buildOpeningStockPlan,
   buildPartialReturnPlan,
@@ -112,7 +111,6 @@ import {
   normalizeSale,
   normalizeSettings,
   normalizeStockMovement,
-  type BatchPrepMode,
   type PartialReturnRequest,
   type StockShortage,
 } from '../utils/inventoryEngine';
@@ -259,7 +257,14 @@ function loadLocalSnapshot(): LocalSnapshot {
           ? parsed.expenses.filter((e): e is Expense => Boolean(e && typeof e === 'object' && e.id))
           : [];
         const purchases = Array.isArray(parsed.purchases)
-          ? parsed.purchases.filter((p): p is PurchaseRecord => Boolean(p && typeof p === 'object' && p.id))
+          ? parsed.purchases
+              .filter((p): p is PurchaseRecord => Boolean(p && typeof p === 'object' && p.id))
+              .map((p) => ({
+                ...p,
+                itemClassification: (String(p.itemClassification) === 'ingredient'
+                  ? 'ingredient'
+                  : 'packaged') as StockClassification,
+              }))
           : [];
         const stockMovements = Array.isArray(parsed.stockMovements)
           ? parsed.stockMovements
@@ -588,15 +593,6 @@ export interface RecordOpeningStockInput {
   movementDate?: string;
 }
 
-export interface PrepareBatchStockInput {
-  productId: string;
-  batchQty: number;
-  mode: BatchPrepMode;
-  directUnitCostKhr?: number;
-  note?: string;
-  movementDate?: string;
-}
-
 export interface RecordStockCountInput {
   itemId: string;
   itemClassification: StockClassification;
@@ -693,7 +689,6 @@ export interface StoreContextValue {
   recordIngredientPurchase: (input: RecordPurchaseInput) => Promise<OperationResult>;
   recordStockPurchase: (input: RecordStockPurchaseInput) => Promise<OperationResult>;
   recordOpeningStock: (input: RecordOpeningStockInput) => Promise<OperationResult>;
-  prepareBatchStock: (input: PrepareBatchStockInput) => Promise<OperationResult>;
   recordStockCount: (input: RecordStockCountInput) => Promise<OperationResult>;
   recordStockAdjustment: (input: RecordStockAdjustmentInput) => Promise<OperationResult>;
   adjustIngredientStock: (ingredientId: string, deltaQty: number, note: string) => Promise<OperationResult>;
@@ -1418,7 +1413,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               purchaseDate: String(d.purchaseDate || todayIso()),
               itemId: String(d.itemId || ''),
               itemName: String(d.itemName || ''),
-              itemClassification: d.itemClassification as StockClassification,
+              itemClassification: (String(d.itemClassification) === 'ingredient'
+                ? 'ingredient'
+                : 'packaged') as StockClassification,
               quantity: Number(d.quantity) || 0,
               ...(d.packCount !== undefined ? { packCount: Number(d.packCount) } : {}),
               ...(d.unitsPerPack !== undefined ? { unitsPerPack: Number(d.unitsPerPack) } : {}),
@@ -2915,7 +2912,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [user, cloudWorkspaceId]
   );
 
-  // Unified Stock-In / Purchase across Packaged, Ingredients, and Prepared Stock
+  // Unified Stock-In / Purchase across Retail Packaged items and Raw Ingredients
   // Writes to `purchases` + `stockMovements` (NEVER creates a duplicate operating Expense!)
   const recordStockPurchase = useCallback(
     async (input: RecordStockPurchaseInput): Promise<OperationResult> => {
@@ -3070,133 +3067,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       return { ok: true };
-    },
-    [user, cloudWorkspaceId, activeMemberUids]
-  );
-
-  // Prepared Stock Batch Preparation (Deduct Raw Ingredients OR Direct Add)
-  const prepareBatchStock = useCallback(
-    async (input: PrepareBatchStockInput): Promise<OperationResult> => {
-      const cur = latestRef.current;
-      const recordedBy = cur.settings.activeOperator || 'Family';
-
-      const applyLocal = (): OperationResult => {
-        const plan = buildBatchPreparationPlan({
-          productId: input.productId,
-          batchQty: input.batchQty,
-          mode: input.mode,
-          directUnitCostKhr: input.directUnitCostKhr,
-          note: input.note,
-          recordedBy,
-          movementDate: input.movementDate,
-          products: cur.products,
-          ingredients: cur.ingredients,
-          allowNegativeStock: Boolean(cur.settings.allowNegativeStock),
-        });
-        if (!plan.ok || !plan.updatedProduct || !plan.movements) {
-          return { ok: false, error: plan.error, shortages: plan.shortages };
-        }
-        setProducts(plan.updatedProducts!);
-        setIngredients(plan.updatedIngredients!);
-        setStockMovements((prev) => [...plan.movements!, ...prev]);
-        return { ok: true };
-      };
-
-      if (!user || !cloudWorkspaceId) {
-        return applyLocal();
-      }
-
-      const uids = activeMemberUids();
-      const prodPath = `workspaces/${cloudWorkspaceId}/products/${input.productId}`;
-      try {
-        let txResult: OperationResult = { ok: false };
-        await runTransaction(db, async (tx) => {
-          const prodRef = doc(db, 'workspaces', cloudWorkspaceId, 'products', input.productId);
-          const prodSnap = await tx.get(prodRef);
-          if (!prodSnap.exists()) {
-            txResult = { ok: false, error: 'Prepared product not found.' };
-            return;
-          }
-          const liveProd = normalizeProduct({
-            id: prodSnap.id,
-            ...prodSnap.data(),
-          } as Partial<Product> & { id: string });
-
-          const ingIds =
-            input.mode === 'deduct_ingredients'
-              ? Array.from(new Set((liveProd.recipe || []).map((r) => r.ingredientId)))
-              : [];
-
-          const liveIngredients: Ingredient[] = [];
-          for (const ingId of ingIds) {
-            const ingSnap = await tx.get(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ingId));
-            if (ingSnap.exists()) {
-              const d = ingSnap.data();
-              liveIngredients.push({
-                id: ingSnap.id,
-                name: String(d.name || ''),
-                nameVi: String(d.nameVi || ''),
-                unit: d.unit,
-                stockQty: Number(d.stockQty) || 0,
-                reorderLevel: Number(d.reorderLevel) || 0,
-                unitCostKhr: Number(d.unitCostKhr) || 0,
-                supplier: String(d.supplier || ''),
-              });
-            }
-          }
-
-          const plan = buildBatchPreparationPlan({
-            productId: liveProd.id,
-            batchQty: input.batchQty,
-            mode: input.mode,
-            directUnitCostKhr: input.directUnitCostKhr,
-            note: input.note,
-            recordedBy,
-            movementDate: input.movementDate,
-            products: [liveProd],
-            ingredients: liveIngredients,
-            allowNegativeStock: Boolean(cur.settings.allowNegativeStock),
-          });
-
-          if (!plan.ok || !plan.updatedProduct || !plan.movements) {
-            txResult = { ok: false, error: plan.error, shortages: plan.shortages };
-            return;
-          }
-
-          tx.update(prodRef, {
-            stockQty: plan.updatedProduct.stockQty,
-            costPriceKhr: plan.updatedProduct.costPriceKhr,
-            supplier: plan.updatedProduct.supplier,
-            updatedAt: serverTimestamp(),
-          });
-
-          for (const ingId of plan.touchedIngredientIds || []) {
-            const updatedIng = plan.updatedIngredients?.find((i) => i.id === ingId);
-            if (!updatedIng) continue;
-            tx.update(doc(db, 'workspaces', cloudWorkspaceId, 'ingredients', ingId), {
-              stockQty: updatedIng.stockQty,
-              updatedAt: serverTimestamp(),
-            });
-          }
-
-          for (const mov of plan.movements) {
-            tx.set(
-              doc(db, 'workspaces', cloudWorkspaceId, 'stockMovements', mov.id),
-              movementToFirestoreDoc(mov, cloudWorkspaceId, uids, user.uid)
-            );
-          }
-
-          txResult = { ok: true };
-        });
-
-        return txResult;
-      } catch (err) {
-        if (isOfflineNetworkError(err)) {
-          return applyLocal();
-        }
-        handleFirestoreError(err, OperationType.WRITE, prodPath);
-        return { ok: false, error: 'Failed to prepare batch stock.' };
-      }
     },
     [user, cloudWorkspaceId, activeMemberUids]
   );
@@ -4273,7 +4143,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       );
       setPurchases(
         Array.isArray(parsed.purchases)
-          ? parsed.purchases.filter((p): p is PurchaseRecord => Boolean(p && typeof p === 'object' && p.id))
+          ? parsed.purchases
+              .filter((p): p is PurchaseRecord => Boolean(p && typeof p === 'object' && p.id))
+              .map((p) => ({
+                ...p,
+                itemClassification: (String(p.itemClassification) === 'ingredient'
+                  ? 'ingredient'
+                  : 'packaged') as StockClassification,
+              }))
           : []
       );
       setStockMovements(
@@ -4529,7 +4406,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               purchaseDate: String(d.purchaseDate || todayIso()),
               itemId: String(d.itemId || ''),
               itemName: String(d.itemName || ''),
-              itemClassification: d.itemClassification as StockClassification,
+              itemClassification: (String(d.itemClassification) === 'ingredient'
+                ? 'ingredient'
+                : 'packaged') as StockClassification,
               quantity: Number(d.quantity) || 0,
               ...(d.packCount !== undefined ? { packCount: Number(d.packCount) } : {}),
               ...(d.unitsPerPack !== undefined ? { unitsPerPack: Number(d.unitsPerPack) } : {}),
@@ -4619,7 +4498,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     recordIngredientPurchase,
     recordStockPurchase,
     recordOpeningStock,
-    prepareBatchStock,
     recordStockCount,
     recordStockAdjustment,
     adjustIngredientStock,

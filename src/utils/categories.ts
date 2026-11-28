@@ -6,6 +6,7 @@ import type {
   Product,
   ProductType,
   SaleItem,
+  StockClassification,
 } from '../types';
 
 export const UNCATEGORIZED_ID = 'uncategorized';
@@ -366,27 +367,35 @@ export function resolveSaleItemCategoryId(
 }
 
 /**
- * Unified color-coded pill styling for ProductType across POS, Products, Inventory, and Reports:
- * - PREPARED_TO_ORDER (Made-to-Order): Emerald
- * - PACKAGED (Packaged Goods): Sky Blue
- * - PREPARED_STOCK (Prepared Stock / Batch): Purple
+ * Canonical color-coded styling for item types across POS, Products, Inventory, and Reports:
+ * - PREPARED_TO_ORDER (Made-to-Order): Emerald green (`text-emerald-600 bg-emerald-500/10`)
+ * - PACKAGED (Retail Packaged): Sky blue (`text-sky-600 bg-sky-500/10`)
+ * - ingredient (Raw Ingredients): Teal (`text-teal-600 bg-teal-500/10`)
  */
 export function getProductTypeBadgeClass(productType: ProductType): string {
   if (productType === 'PREPARED_TO_ORDER') {
-    return 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-[#064E3B]/60 dark:text-[#6EE7B7] dark:border-[#10B981]/30';
+    return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30';
   }
-  if (productType === 'PREPARED_STOCK') {
-    return 'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-500/35';
-  }
-  return 'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-500/35';
+  return 'bg-sky-500/10 text-sky-600 border-sky-500/20 dark:bg-sky-500/15 dark:text-sky-400 dark:border-sky-500/30';
 }
 
 export function getProductTypeDotClass(productType: ProductType): string {
   if (productType === 'PREPARED_TO_ORDER') {
-    return 'bg-emerald-600 dark:bg-[#10B981]';
+    return 'bg-emerald-600 dark:bg-emerald-400';
   }
-  if (productType === 'PREPARED_STOCK') {
-    return 'bg-purple-600 dark:bg-purple-400';
+  return 'bg-sky-600 dark:bg-sky-400';
+}
+
+export function getStockClassificationBadgeClass(classification: StockClassification): string {
+  if (classification === 'ingredient') {
+    return 'bg-teal-500/10 text-teal-600 border-teal-500/20 dark:bg-teal-500/15 dark:text-teal-400 dark:border-teal-500/30';
+  }
+  return 'bg-sky-500/10 text-sky-600 border-sky-500/20 dark:bg-sky-500/15 dark:text-sky-400 dark:border-sky-500/30';
+}
+
+export function getStockClassificationDotClass(classification: StockClassification): string {
+  if (classification === 'ingredient') {
+    return 'bg-teal-600 dark:bg-teal-400';
   }
   return 'bg-sky-600 dark:bg-sky-400';
 }
@@ -399,13 +408,10 @@ export function getProductTypeFilterPillClass(
     return 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]';
   }
   if (productType === 'PREPARED_TO_ORDER') {
-    return 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/50 font-semibold';
-  }
-  if (productType === 'PREPARED_STOCK') {
-    return 'bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/75 dark:text-purple-200 dark:border-purple-400/50 font-semibold';
+    return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/40 font-semibold';
   }
   if (productType === 'PACKAGED') {
-    return 'bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950/75 dark:text-sky-200 dark:border-sky-400/50 font-semibold';
+    return 'bg-sky-500/10 text-sky-600 border-sky-500/30 dark:bg-sky-500/15 dark:text-sky-400 dark:border-sky-500/40 font-semibold';
   }
   return 'bg-[#E6F2ED] text-[#0D5C3E] border-[#0D5C3E]/30 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/45 font-semibold';
 }

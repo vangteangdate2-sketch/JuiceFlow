@@ -460,8 +460,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
               }
               text={
                 isVi
-                  ? 'Tiền chi mua hàng tồn kho & nguyên liệu. Tính vào Dòng tiền chi ra nhưng KHÔNG cộng vào Chi phí vận hành để tránh tính trùng với giá vốn (COGS).'
-                  : 'Cash spent restocking packaged goods and raw ingredients. Tracked in Cash Flow only so it never double-counts against COGS.'
+                  ? 'Tiền chi nhập Đóng gói bán lẻ và Nguyên liệu thô. Tính vào Dòng tiền chi ra nhưng KHÔNG cộng vào Chi phí vận hành để tránh tính trùng với giá vốn (COGS).'
+                  : 'Cash spent restocking Retail Packaged items and Raw Ingredients. Tracked in Cash Flow only so it never double-counts against COGS.'
               }
             />
           </div>

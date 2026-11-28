@@ -178,18 +178,6 @@ export function calculateProductCogs(
   if (product.productType === 'PACKAGED') {
     return Math.max(0, Number(variant?.costPriceKhr ?? product.costPriceKhr) || 0);
   }
-  if (product.productType === 'PREPARED_STOCK') {
-    if ((Number(variant?.costPriceKhr ?? product.costPriceKhr) || 0) > 0) {
-      return Math.max(0, Number(variant?.costPriceKhr ?? product.costPriceKhr) || 0);
-    }
-    const recipe =
-      Array.isArray(variant?.recipe) && variant.recipe.length > 0
-        ? variant.recipe
-        : Array.isArray(product.recipe)
-          ? product.recipe
-          : [];
-    return calculateRecipeCogs(recipe, ingredients);
-  }
   const activeRecipe = Array.isArray(variant?.recipe)
     ? variant.recipe
     : Array.isArray(product.recipe)

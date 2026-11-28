@@ -53,7 +53,7 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
             text={
               isVi
                 ? 'Ảnh chụp nhanh hôm nay theo múi giờ Phnom Penh (ICT) cho doanh thu thuần, mặt hàng tồn kho hoạt động và tổng tiền chi.'
-                : "Live snapshot of today's net sales, active 3-tier stock items, and total cash spent (Asia/Phnom_Penh)."
+                : "Live snapshot of today's net sales, active stock items, and total cash spent (Asia/Phnom_Penh)."
             }
             label={isVi ? 'Thông tin tổng kết hôm nay' : 'About Daily Summary'}
           />
@@ -140,10 +140,10 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
                 compact
                 text={
                   isVi
-                    ? 'Tổng số sản phẩm đóng gói, hàng pha sẵn và nguyên liệu thô đang theo dõi tồn kho và cảnh báo sắp hết.'
-                    : 'Combined count of tracked Packaged products, Prepared Stock, and Raw Ingredients monitored for low-stock alerts.'
+                    ? 'Tổng số sản phẩm Đóng gói bán lẻ và Nguyên liệu thô đang theo dõi tồn kho và cảnh báo sắp hết.'
+                    : 'Combined count of tracked Retail Packaged items and Raw Ingredients monitored for low-stock alerts.'
                 }
-                label={isVi ? 'Giải thích tồn kho hoạt động' : 'About 3-Tier Stock Health'}
+                label={isVi ? 'Giải thích tồn kho hoạt động' : 'About Stock Health'}
               />
             </div>
             {onNavigate && <ArrowUpRight className="w-4 h-4 text-stone-400 dark:text-[#94A39B] shrink-0 mt-2" />}

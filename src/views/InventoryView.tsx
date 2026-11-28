@@ -4,11 +4,10 @@ import {
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
-  Clock,
   Edit2,
   History,
   Loader2,
-  PackageCheck,
+  Package,
   PackagePlus,
   Pencil,
   Plus,
@@ -16,6 +15,7 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  Wheat,
   X,
 } from 'lucide-react';
 import { normalizeName, useStore } from '../context/StoreContext';
@@ -30,8 +30,7 @@ import type {
   Product,
   StockClassification,
 } from '../types';
-import { calculateRecipeCogs, formatKhr, formatQty, todayIso } from '../utils/format';
-import { type BatchPrepMode, type StockShortage } from '../utils/inventoryEngine';
+import { formatKhr, formatQty, todayIso } from '../utils/format';
 import {
   findDuplicateBarcodeConflicts,
   formatBarcodeTypeLabel,
@@ -43,6 +42,7 @@ import {
   getCategoryById,
   getCategoryDisplayName,
   getCategoryDotClass,
+  getStockClassificationBadgeClass,
   resolveIngredientCategoryId,
   resolveProductCategoryId,
   UNCATEGORIZED_ID,
@@ -58,9 +58,9 @@ import { ModalPortal } from '../components/ModalPortal';
 
 const NEW_CATEGORY_OPTION_VALUE = '__new_category__';
 
-type InventoryTab = 'all' | 'ingredients' | 'prepared_stock' | 'packaged' | 'movements';
+type InventoryTab = 'all' | 'ingredients' | 'packaged' | 'movements';
 type StockStatusFilter = 'all' | 'healthy' | 'low' | 'out';
-type AttentionFilter = 'none' | 'all_urgent' | 'out' | 'low' | 'prepared_attention';
+type AttentionFilter = 'none' | 'all_urgent' | 'out' | 'low';
 type AdjustModalMode = 'waste' | 'count' | 'adjust' | 'opening';
 
 interface StockItemTarget {
@@ -92,21 +92,11 @@ interface UnifiedStockItem {
   barcode?: string;
   packSummary?: string;
   recipeCount?: number;
-  lastBatchPrepDate?: string | null;
-  daysSinceBatchPrep?: number | null;
   status: 'out' | 'low' | 'healthy';
-  isExpiringBatch: boolean;
   progressPct: number;
   target: StockItemTarget;
   sourceIngredient?: Ingredient;
   sourceProduct?: Product;
-}
-
-function daysBetweenIsoDates(fromIso: string, toIso: string): number {
-  const a = new Date(`${fromIso}T00:00:00Z`).getTime();
-  const b = new Date(`${toIso}T00:00:00Z`).getTime();
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
-  return Math.max(0, Math.floor((b - a) / (24 * 60 * 60 * 1000)));
 }
 
 function computeStockProgressPct(stockQty: number, reorderLevel: number): number {
@@ -143,7 +133,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     addCategory,
     recordStockPurchase,
     recordOpeningStock,
-    prepareBatchStock,
     recordStockCount,
     recordStockAdjustment,
     t,
@@ -346,7 +335,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     return null;
   }, [ingModalOpen, ingName, ingBarcode, ingredients, products, barcodeRegistry, editingIng?.id, editingIng?.name, isVi]);
 
-  // Stock-In / Quick Restock Purchase modal (supports all 3 tiers + pack/carton multiplication)
+  // Stock-In / Quick Restock Purchase modal (supports Raw Ingredients & Retail Packaged + pack/carton multiplication)
   const [purchaseTarget, setPurchaseTarget] = useState<StockItemTarget | null>(null);
   const [purchaseUsePacks, setPurchaseUsePacks] = useState(false);
   const [purchasePackCount, setPurchasePackCount] = useState('1');
@@ -357,15 +346,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [purchaseSupplier, setPurchaseSupplier] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(todayIso());
   const [purchaseNote, setPurchaseNote] = useState('');
-
-  // Prepared Stock Batch Prep modal (Deduct Raw Ingredients OR Direct Add)
-  const [batchProduct, setBatchProduct] = useState<Product | null>(null);
-  const [batchQty, setBatchQty] = useState('10');
-  const [batchMode, setBatchMode] = useState<BatchPrepMode>('deduct_ingredients');
-  const [batchDirectUnitCost, setBatchDirectUnitCost] = useState('');
-  const [batchNote, setBatchNote] = useState('');
-  const [batchError, setBatchError] = useState<string | null>(null);
-  const [batchShortages, setBatchShortages] = useState<StockShortage[]>([]);
 
   // Unified Adjust / Waste / Physical Count / Opening Stock Modal
   const [adjustModalTarget, setAdjustModalTarget] = useState<StockItemTarget | null>(null);
@@ -381,31 +361,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     () => products.filter((p) => p.productType === 'PACKAGED'),
     [products]
   );
-  const preparedStockProducts = useMemo(
-    () => products.filter((p) => p.productType === 'PREPARED_STOCK'),
-    [products]
-  );
-
-  // Track the latest batch_prep_in date per prepared_stock item for aging/expiry alerts
-  const latestBatchPrepByItem = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const m of stockMovements) {
-      if (m.movementType !== 'batch_prep_in') continue;
-      const itemId = m.itemId || m.ingredientId;
-      if (!itemId) continue;
-      const existing = map.get(itemId);
-      if (!existing || m.movementDate > existing) {
-        map.set(itemId, m.movementDate);
-      }
-    }
-    return map;
-  }, [stockMovements]);
 
   const toTargetFromProduct = (p: Product): StockItemTarget => ({
     id: p.id,
     name: p.name,
     nameVi: p.nameVi,
-    classification: p.productType === 'PACKAGED' ? 'packaged' : 'prepared_stock',
+    classification: 'packaged',
     unit: p.unit || 'pcs',
     stockQty: p.stockQty,
     reorderLevel: p.reorderLevel,
@@ -427,7 +388,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     supplier: i.supplier,
   });
 
-  // Unified 3-tier stock items list
+  // Unified 2-tier stock items list (Raw Ingredients & Retail Packaged)
   const allUnifiedItems = useMemo<UnifiedStockItem[]>(() => {
     const items: UnifiedStockItem[] = [];
 
@@ -447,39 +408,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         supplier: ing.supplier,
         barcode: ing.barcode || undefined,
         status,
-        isExpiringBatch: false,
         progressPct: computeStockProgressPct(ing.stockQty, ing.reorderLevel),
         target: toTargetFromIngredient(ing),
         sourceIngredient: ing,
-      });
-    }
-
-    for (const prod of preparedStockProducts) {
-      const status: UnifiedStockItem['status'] =
-        prod.stockQty <= 0 ? 'out' : prod.stockQty <= prod.reorderLevel ? 'low' : 'healthy';
-      const lastDate = latestBatchPrepByItem.get(prod.id) || null;
-      const daysOld = lastDate ? daysBetweenIsoDates(lastDate, today) : null;
-      const isExpiringBatch = prod.stockQty > 0 && daysOld !== null && daysOld >= 2;
-      items.push({
-        id: prod.id,
-        name: prod.name,
-        nameVi: prod.nameVi,
-        tier: 'prepared_stock',
-        categoryId: resolveProductCategoryId(prod, categories),
-        unit: prod.unit || 'pcs',
-        stockQty: prod.stockQty,
-        reorderLevel: prod.reorderLevel,
-        unitCostKhr: prod.costPriceKhr,
-        supplier: prod.supplier,
-        barcode: prod.barcode || undefined,
-        recipeCount: prod.recipe.length,
-        lastBatchPrepDate: lastDate,
-        daysSinceBatchPrep: daysOld,
-        status,
-        isExpiringBatch,
-        progressPct: computeStockProgressPct(prod.stockQty, prod.reorderLevel),
-        target: toTargetFromProduct(prod),
-        sourceProduct: prod,
       });
     }
 
@@ -502,40 +433,29 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           ? `${prod.packagingBarcodes[0].label}`
           : undefined,
         status,
-        isExpiringBatch: false,
         progressPct: computeStockProgressPct(prod.stockQty, prod.reorderLevel),
         target: toTargetFromProduct(prod),
         sourceProduct: prod,
       });
     }
 
-    // Sort urgently: Out of stock -> Low / Expiring -> Healthy, then alphabetical
+    // Sort urgently: Out of stock -> Low -> Healthy, then alphabetical
     const rank = (item: UnifiedStockItem) => {
       if (item.status === 'out') return 0;
       if (item.status === 'low') return 1;
-      if (item.isExpiringBatch) return 2;
-      return 3;
+      return 2;
     };
     return items.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
-  }, [ingredients, preparedStockProducts, packagedProducts, categories, latestBatchPrepByItem, today]);
+  }, [ingredients, packagedProducts, categories]);
 
-  // "Needs Attention Today" 3 priority buckets
+  // "Needs Attention Today" priority buckets
   const attentionItems = useMemo(() => {
     const outOfStock = allUnifiedItems.filter((item) => item.status === 'out');
-    const preparedAttention = allUnifiedItems.filter(
-      (item) =>
-        item.tier === 'prepared_stock' &&
-        item.stockQty > 0 &&
-        (item.status === 'low' || item.isExpiringBatch)
-    );
-    const lowStock = allUnifiedItems.filter(
-      (item) => item.tier !== 'prepared_stock' && item.status === 'low'
-    );
-    const combined = [...outOfStock, ...lowStock, ...preparedAttention];
+    const lowStock = allUnifiedItems.filter((item) => item.status === 'low');
+    const combined = [...outOfStock, ...lowStock];
     return {
       outOfStock,
       lowStock,
-      preparedAttention,
       combined,
     };
   }, [allUnifiedItems]);
@@ -546,8 +466,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     if (
       (attentionFilter === 'all_urgent' && attentionItems.combined.length === 0) ||
       (attentionFilter === 'out' && attentionItems.outOfStock.length === 0) ||
-      (attentionFilter === 'low' && attentionItems.lowStock.length === 0) ||
-      (attentionFilter === 'prepared_attention' && attentionItems.preparedAttention.length === 0)
+      (attentionFilter === 'low' && attentionItems.lowStock.length === 0)
     ) {
       setAttentionFilter('none');
     }
@@ -565,7 +484,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     });
   };
 
-  // Valuation KPIs across all 3 tiers
+  // Valuation KPIs across Raw Ingredients & Retail Packaged
   const valuation = useMemo(() => {
     const packagedVal = packagedProducts.reduce(
       (s, p) => s + Math.max(0, p.stockQty) * Math.max(0, p.costPriceKhr),
@@ -575,17 +494,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       (s, i) => s + Math.max(0, i.stockQty) * Math.max(0, i.unitCostKhr),
       0
     );
-    const prepVal = preparedStockProducts.reduce(
-      (s, p) => s + Math.max(0, p.stockQty) * Math.max(0, p.costPriceKhr),
-      0
-    );
     return {
       packagedVal,
       ingVal,
-      prepVal,
-      totalVal: packagedVal + ingVal + prepVal,
+      totalVal: packagedVal + ingVal,
     };
-  }, [packagedProducts, ingredients, preparedStockProducts]);
+  }, [packagedProducts, ingredients]);
 
   const showNotice = (kind: 'ok' | 'err', text: string) => {
     setFeedbackMsg({ kind, text });
@@ -615,36 +529,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     setPurchaseNote(usePacks && target.packLabel ? `Scanned ${target.packLabel}` : '');
   };
 
-  const openBatchPrepModal = (product: Product) => {
-    setBatchProduct(product);
-    const suggestedBatch =
-      product.stockQty <= product.reorderLevel && product.reorderLevel > 0
-        ? Math.max(5, Math.ceil(product.reorderLevel * 2 - Math.max(0, product.stockQty)))
-        : 10;
-    setBatchQty(String(suggestedBatch));
-    setBatchMode(product.recipe && product.recipe.length > 0 ? 'deduct_ingredients' : 'direct_add');
-    setBatchDirectUnitCost(
-      String(
-        product.costPriceKhr || Math.round(calculateRecipeCogs(product.recipe || [], ingredients))
-      )
-    );
-    setBatchNote('');
-    setBatchError(null);
-    setBatchShortages([]);
-  };
-
   const openQuickRestockForItem = (item: UnifiedStockItem) => {
-    if (item.tier === 'prepared_stock' && item.sourceProduct) {
-      openBatchPrepModal(item.sourceProduct);
-    } else {
-      openPurchaseModal(item.target);
-    }
+    openPurchaseModal(item.target);
   };
 
   const openAdjustWasteModal = (item: UnifiedStockItem, defaultMode: AdjustModalMode = 'waste') => {
     setAdjustModalTarget(item.target);
     setAdjustModalMode(defaultMode);
-    setWasteKind(item.tier === 'prepared_stock' ? 'expired' : 'damaged');
+    setWasteKind('damaged');
     setAdjustDelta('');
     setCountedQty(String(item.stockQty));
     setOpeningQty('');
@@ -712,7 +604,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       !ingBarcodeScannerOpen &&
       !purchaseTarget &&
       !ingModalOpen &&
-      !batchProduct &&
       !adjustModalTarget &&
       !quickRegisterOpen &&
       !editingStockProduct,
@@ -872,9 +763,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       triggerHighlightItem(prod.id);
       if (pendingTarget.mode === 'edit') {
         setEditingStockProduct(prod);
-      } else if (prod.productType === 'PREPARED_STOCK') {
-        setActiveTab('prepared_stock');
-        openBatchPrepModal(prod);
       } else if (prod.productType === 'PACKAGED') {
         setActiveTab('packaged');
         openPurchaseModal(toTargetFromProduct(prod));
@@ -884,8 +772,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         showNotice(
           'ok',
           isVi
-            ? `"${label}" là món pha chế theo đơn — hãy nhập kho các nguyên liệu thô bên dưới.`
-            : `"${label}" is Made-to-Order — restock its raw ingredients below.`
+            ? `"${label}" là món pha chế tại chỗ — hãy nhập kho các Nguyên liệu thô bên dưới.`
+            : `"${label}" is Made-to-Order — restock its Raw Ingredients below.`
         );
       }
     }
@@ -1039,41 +927,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     );
   };
 
-  const handleSaveBatchPrep = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!batchProduct) return;
-    setBatchError(null);
-    setBatchShortages([]);
-
-    const qty = Number(batchQty) || 0;
-    if (qty <= 0) return;
-
-    const res = await prepareBatchStock({
-      productId: batchProduct.id,
-      batchQty: qty,
-      mode: batchMode,
-      directUnitCostKhr:
-        batchMode === 'direct_add' ? Math.max(0, Number(batchDirectUnitCost) || 0) : undefined,
-      note: batchNote,
-    });
-
-    if (!res.ok) {
-      setBatchError(res.error || 'Could not prepare batch.');
-      setBatchShortages(res.shortages || []);
-      return;
-    }
-
-    setBatchProduct(null);
-    showNotice(
-      'ok',
-      isVi
-        ? `Đã thêm +${qty} ${batchProduct.unit} ${batchProduct.nameVi || batchProduct.name} vào kho pha sẵn.`
-        : `Prepared +${qty} ${batchProduct.unit} of ${batchProduct.name} (${
-            batchMode === 'deduct_ingredients' ? 'ingredients deducted' : 'direct add'
-          }).`
-    );
-  };
-
   const handleSaveUnifiedAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adjustModalTarget) return;
@@ -1168,31 +1021,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const filteredStockItems = useMemo(() => {
     return allUnifiedItems.filter((item) => {
       if (activeTab === 'ingredients' && item.tier !== 'ingredient') return false;
-      if (activeTab === 'prepared_stock' && item.tier !== 'prepared_stock') return false;
       if (activeTab === 'packaged' && item.tier !== 'packaged') return false;
 
       if (categoryFilter !== 'all' && item.categoryId !== categoryFilter) return false;
 
       if (attentionFilter === 'all_urgent') {
-        const isUrgent =
-          item.status === 'out' ||
-          item.status === 'low' ||
-          (item.tier === 'prepared_stock' && item.stockQty > 0 && item.isExpiringBatch);
+        const isUrgent = item.status === 'out' || item.status === 'low';
         if (!isUrgent) return false;
       } else if (attentionFilter === 'out') {
         if (item.status !== 'out') return false;
       } else if (attentionFilter === 'low') {
-        if (item.tier === 'prepared_stock' || item.status !== 'low') return false;
-      } else if (attentionFilter === 'prepared_attention') {
-        if (
-          !(
-            item.tier === 'prepared_stock' &&
-            item.stockQty > 0 &&
-            (item.status === 'low' || item.isExpiringBatch)
-          )
-        ) {
-          return false;
-        }
+        if (item.status !== 'low') return false;
       }
 
       if (statusFilter === 'out' && item.status !== 'out') return false;
@@ -1237,31 +1076,18 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const getTierMeta = (tier: StockClassification) => {
     if (tier === 'ingredient') {
       return {
-        label: isVi ? 'Nguyên liệu thô' : 'Raw Ingredient',
-        badgeClass:
-          'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-[#064E3B]/60 dark:text-[#6EE7B7] dark:border-[#10B981]/30',
-        dotClass: 'bg-emerald-600 dark:bg-[#10B981]',
+        label: isVi ? 'Nguyên liệu thô' : 'Raw Ingredients',
+        badgeClass: getStockClassificationBadgeClass('ingredient'),
+        icon: Wheat,
         hintText: isVi
-          ? 'Đo theo trọng lượng/thể tích. Tự động trừ theo công thức khi bán món pha chế theo ly hoặc khi pha mẻ.'
-          : 'Measured by weight or volume. Automatically deducted via recipe on Made-to-Order POS sales or batch prep.',
-      };
-    }
-    if (tier === 'prepared_stock') {
-      return {
-        label: isVi ? 'Mẻ pha sẵn' : 'Prepared Batch',
-        badgeClass:
-          'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/60 dark:text-purple-200 dark:border-purple-500/35',
-        dotClass: 'bg-purple-600 dark:bg-purple-400',
-        hintText: isVi
-          ? 'Thành phẩm pha theo mẻ trữ lạnh. Khi bán trên POS sẽ trừ trực tiếp số lượng mẻ sẵn có (không trừ trùng nguyên liệu).'
-          : 'Pre-blended bases or bottled chilled batches. Deducts ready units on POS sales without double-deducting raw ingredients.',
+          ? 'Đo theo trọng lượng/thể tích. Tự động trừ theo công thức khi bán món Pha chế tại chỗ trên POS.'
+          : 'Measured by weight or volume. Automatically deducted via recipe on Made-to-Order POS sales.',
       };
     }
     return {
-      label: isVi ? 'Hàng đóng gói' : 'Packaged Good',
-      badgeClass:
-        'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-500/35',
-      dotClass: 'bg-sky-600 dark:bg-sky-400',
+      label: isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged',
+      badgeClass: getStockClassificationBadgeClass('packaged'),
+      icon: Package,
       hintText: isVi
         ? 'Nước chai, lon, đồ ăn vặt quản lý theo đơn vị hoặc thùng. Trừ trực tiếp số lượng bán tại POS.'
         : 'Bottles, cans, and snacks tracked by unit or carton count. Deducted directly at POS checkout.',
@@ -1281,8 +1107,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               label={isVi ? 'Thông tin quản lý kho' : 'About Inventory Management'}
               text={
                 isVi
-                  ? 'Kiểm tra nhanh hàng sắp hết và quản lý đồng bộ 3 nhóm kho: Nguyên liệu thô, Mẻ pha sẵn và Hàng đóng gói.'
-                  : 'Daily stock checks and restocking across Raw Ingredients, Prepared Batches, and Packaged Goods.'
+                  ? 'Kiểm tra nhanh hàng sắp hết và quản lý đồng bộ 2 nhóm kho: Nguyên liệu thô và Đóng gói bán lẻ.'
+                  : 'Daily stock checks and restocking across Raw Ingredients and Retail Packaged goods.'
               }
             />
           </div>
@@ -1291,6 +1117,24 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               {t.inventory.stockValue}:{' '}
               <span className="font-semibold text-stone-700 dark:text-[#D5DFDA]">
                 {formatKhr(valuation.totalVal)}
+              </span>
+            </span>
+            <span className="text-stone-300 dark:text-[#2F463A]" aria-hidden="true">
+              ·
+            </span>
+            <span>
+              {isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}:{' '}
+              <span className="font-medium text-teal-700 dark:text-teal-400">
+                {formatKhr(valuation.ingVal)}
+              </span>
+            </span>
+            <span className="text-stone-300 dark:text-[#2F463A]" aria-hidden="true">
+              ·
+            </span>
+            <span>
+              {isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged'}:{' '}
+              <span className="font-medium text-sky-700 dark:text-sky-400">
+                {formatKhr(valuation.packagedVal)}
               </span>
             </span>
             <span className="text-stone-300 dark:text-[#2F463A]" aria-hidden="true">
@@ -1459,36 +1303,26 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               </>
             ) : scannedInventoryMatch.product ? (
               <>
-                {scannedInventoryMatch.product.productType !== 'PREPARED_TO_ORDER' && (
+                {scannedInventoryMatch.product.productType === 'PACKAGED' && (
                   <button
                     type="button"
                     onClick={() => {
                       const prod = scannedInventoryMatch.product!;
-                      if (prod.productType === 'PREPARED_STOCK') {
-                        openBatchPrepModal(prod);
-                      } else {
-                        const target: StockItemTarget = {
-                          ...toTargetFromProduct(prod),
-                          barcodeScanned: scannedInventoryMatch.code,
-                          packLabel: scannedInventoryMatch.packLabel,
-                        };
-                        openPurchaseModal(
-                          target,
-                          scannedInventoryMatch.unitsPerScan > 1
-                            ? scannedInventoryMatch.unitsPerScan
-                            : undefined
-                        );
-                      }
+                      const target: StockItemTarget = {
+                        ...toTargetFromProduct(prod),
+                        barcodeScanned: scannedInventoryMatch.code,
+                        packLabel: scannedInventoryMatch.packLabel,
+                      };
+                      openPurchaseModal(
+                        target,
+                        scannedInventoryMatch.unitsPerScan > 1
+                          ? scannedInventoryMatch.unitsPerScan
+                          : undefined
+                      );
                     }}
                     className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
                   >
-                    {scannedInventoryMatch.product.productType === 'PREPARED_STOCK'
-                      ? isVi
-                        ? '+ Pha mẻ'
-                        : '+ Prep Batch'
-                      : isVi
-                        ? '+ Nhập kho'
-                        : '+ Restock'}
+                    {isVi ? '+ Nhập kho' : '+ Restock'}
                   </button>
                 )}
                 <button
@@ -1635,24 +1469,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 <span className="font-mono-num opacity-80">({attentionItems.lowStock.length})</span>
               </button>
             )}
-
-            {attentionItems.preparedAttention.length > 0 && (
-              <button
-                type="button"
-                onClick={() => handleSelectAttentionFilter('prepared_attention')}
-                aria-pressed={attentionFilter === 'prepared_attention'}
-                className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-colors duration-150 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
-                  attentionFilter === 'prepared_attention'
-                    ? 'border-purple-600 bg-purple-600 text-white dark:border-purple-500 dark:bg-purple-500 dark:text-white'
-                    : 'border-purple-200/70 dark:border-purple-500/35 bg-purple-50/80 dark:bg-purple-950/35 text-purple-800 dark:text-purple-200 hover:bg-purple-100/80 dark:hover:bg-purple-950/60'
-                }`}
-              >
-                <span>{isVi ? 'Mẻ thấp' : 'Low Batch'}</span>
-                <span className="font-mono-num opacity-80">
-                  ({attentionItems.preparedAttention.length})
-                </span>
-              </button>
-            )}
           </div>
 
           {attentionFilter !== 'none' && (
@@ -1667,67 +1483,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </section>
       )}
 
-      {/* Row 2: Unboxed Single-Strip Segmented Tabs, Search & Filters (Identical to ProductsView) */}
+      {/* Row 2: Unboxed Single-Strip Toolbar (Search & Filters Left → Segmented Tabs Right, Identical to ProductsView) */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Left: Compact Segmented Pill Bar */}
-          <div className="min-w-0 max-w-full overflow-x-auto">
-            <div
-              role="tablist"
-              aria-label={isVi ? 'Phân nhóm kho hàng' : 'Inventory tiers'}
-              className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-xl"
-            >
-              {(
-                [
-                  {
-                    id: 'all',
-                    label: isVi ? 'Tất cả' : 'All',
-                    count: allUnifiedItems.length,
-                  },
-                  {
-                    id: 'ingredients',
-                    label: isVi ? 'Nguyên liệu' : 'Raw',
-                    count: ingredients.length,
-                  },
-                  {
-                    id: 'prepared_stock',
-                    label: isVi ? 'Mẻ pha sẵn' : 'Batches',
-                    count: preparedStockProducts.length,
-                  },
-                  {
-                    id: 'packaged',
-                    label: isVi ? 'Đóng gói' : 'Packaged',
-                    count: packagedProducts.length,
-                  },
-                ] as const
-              ).map((tab) => {
-                const active = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out whitespace-nowrap shrink-0 ${
-                      active
-                        ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] font-semibold shadow-2xs'
-                        : 'text-stone-500 dark:text-[#94A39B] font-medium hover:text-stone-900 dark:hover:text-[#F1F5F3]'
-                    }`}
-                  >
-                    <span>{tab.label}</span>
-                    <span className="font-mono-num text-[11px] opacity-65">
-                      {tab.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right: Search (with integrated barcode icon), Filters & Conditional Reset */}
-          <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-initial justify-end min-w-0">
-            <div className="relative flex-1 sm:flex-initial sm:w-60 lg:w-72 min-w-[180px]">
+          {/* Left Side: Search (with integrated barcode icon), Filters toggle & conditional Reset */}
+          <div className="flex items-center gap-2.5 flex-1 min-w-[260px] flex-wrap sm:flex-nowrap">
+            <div className="relative flex-1 max-w-md min-w-[160px]">
               <Search className="w-4 h-4 text-stone-400 dark:text-[#6E8278] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
@@ -1826,8 +1587,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 >
                   <option value="ALL">{isVi ? 'Mọi nhóm kho' : 'All Tiers'}</option>
                   <option value="ingredient">{isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}</option>
-                  <option value="prepared_stock">{isVi ? 'Mẻ pha sẵn' : 'Prepared Batches'}</option>
-                  <option value="packaged">{isVi ? 'Hàng đóng gói' : 'Packaged Goods'}</option>
+                  <option value="packaged">{isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged'}</option>
                 </select>
                 <select
                   value={movementTypeFilter}
@@ -1856,6 +1616,66 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 )}
               </>
             )}
+          </div>
+
+          {/* Right Side: Compact Segmented Item-Type Tabs */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="min-w-0 max-w-full overflow-x-auto">
+              <div
+                role="tablist"
+                aria-label={isVi ? 'Phân nhóm kho hàng' : 'Inventory tiers'}
+                className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-xl"
+              >
+                {(
+                  [
+                    {
+                      id: 'all',
+                      label: isVi ? 'Tất cả' : 'All',
+                      count: allUnifiedItems.length,
+                      icon: null,
+                      iconClass: '',
+                    },
+                    {
+                      id: 'ingredients',
+                      label: isVi ? 'Nguyên liệu thô' : 'Raw Ingredients',
+                      count: ingredients.length,
+                      icon: Wheat,
+                      iconClass: 'text-teal-600 dark:text-teal-400',
+                    },
+                    {
+                      id: 'packaged',
+                      label: isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged',
+                      count: packagedProducts.length,
+                      icon: Package,
+                      iconClass: 'text-sky-600 dark:text-sky-400',
+                    },
+                  ] as const
+                ).map((tab) => {
+                  const active = activeTab === tab.id;
+                  const TabIcon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out whitespace-nowrap shrink-0 ${
+                        active
+                          ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] font-semibold shadow-2xs'
+                          : 'text-stone-500 dark:text-[#94A39B] font-medium hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                      }`}
+                    >
+                      {TabIcon && <TabIcon className={`w-3.5 h-3.5 shrink-0 ${tab.iconClass}`} />}
+                      <span>{tab.label}</span>
+                      <span className="font-mono-num text-[11px] opacity-65">
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1941,13 +1761,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                       : 'Try clearing your search or changing the category or status filter.'
                     : activeTab === 'packaged'
                       ? isVi
-                        ? 'Thêm sản phẩm đóng gói ở mục Sản phẩm để theo dõi tồn kho tại đây.'
-                        : 'Add a Packaged product under Products to track its unit stock here.'
-                      : activeTab === 'prepared_stock'
-                        ? isVi
-                          ? 'Thêm sản phẩm loại "Hàng pha sẵn" ở mục Sản phẩm để quản lý mẻ pha.'
-                          : 'Add a Prepared Stock product under Products to track batches here.'
-                        : t.inventory.emptyStock}
+                        ? 'Thêm sản phẩm Đóng gói bán lẻ ở mục Sản phẩm để theo dõi tồn kho tại đây.'
+                        : 'Add a Retail Packaged product under Products to track its unit stock here.'
+                      : t.inventory.emptyStock}
                 </p>
               </div>
             ) : (
@@ -2001,30 +1817,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                       ? baseScopeCategories
                       : [catItem, ...baseScopeCategories];
 
-                    const packOrBatchDetail =
-                      item.tier === 'prepared_stock'
-                        ? [
-                            item.recipeCount !== undefined
-                              ? item.recipeCount > 0
-                                ? isVi
-                                  ? `Công thức ${item.recipeCount} nguyên liệu`
-                                  : `Recipe (${item.recipeCount} ingredients)`
-                                : isVi
-                                  ? 'Mẻ nhập trực tiếp'
-                                  : 'Direct batch prep'
-                              : '',
-                            item.daysSinceBatchPrep !== null && item.daysSinceBatchPrep !== undefined
-                              ? isVi
-                                ? `Pha cách đây ${item.daysSinceBatchPrep} ngày`
-                                : `Prepped ${item.daysSinceBatchPrep}d ago`
-                              : '',
-                            item.unit,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')
-                        : item.packSummary
-                          ? `${item.packSummary} (${item.unit})`
-                          : item.unit;
+                    const TierIcon = tierMeta.icon;
+                    const packUnitDetail = item.packSummary
+                      ? `${item.packSummary} (${item.unit})`
+                      : item.unit;
 
                     return (
                       <div
@@ -2077,28 +1873,23 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                               <h3 className="text-sm sm:text-[15px] font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
                                 {isVi ? item.nameVi || item.name : item.name}
                               </h3>
-                              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#94A39B] min-w-0">
+                              <div className="mt-1 flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#94A39B] min-w-0">
                                 <span
-                                  className={`w-2 h-2 rounded-full shrink-0 ${tierMeta.dotClass}`}
-                                  aria-hidden="true"
-                                />
-                                <span className="truncate">{tierMeta.label}</span>
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-medium shrink-0 ${tierMeta.badgeClass}`}
+                                >
+                                  <TierIcon className="w-3 h-3 shrink-0" aria-hidden="true" />
+                                  <span>{tierMeta.label}</span>
+                                </span>
                                 <span
                                   aria-hidden="true"
                                   className="text-stone-300 dark:text-[#344B3F] shrink-0"
                                 >
                                   ·
                                 </span>
-                                <span
-                                  className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(
-                                    catItem
-                                  )}`}
-                                  aria-hidden="true"
-                                />
                                 <span className="truncate">
                                   {getCategoryDisplayName(catItem, isVi)}
                                 </span>
-                              </p>
+                              </div>
                             </div>
                           </div>
 
@@ -2145,9 +1936,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                               <span
                                 className={`text-xs font-semibold whitespace-nowrap inline-flex items-center gap-1 shrink-0 ${statusTextClass}`}
                               >
-                                {item.isExpiringBatch && !isOut && (
-                                  <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                                )}
                                 {statusLabel}
                               </span>
                             </div>
@@ -2174,13 +1962,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                               onClick={() => openQuickRestockForItem(item)}
                               className="flex-1 lg:flex-none h-10 px-3 inline-flex items-center justify-center text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] rounded-lg transition-colors whitespace-nowrap"
                             >
-                              {item.tier === 'prepared_stock'
-                                ? isVi
-                                  ? '+ Pha mẻ'
-                                  : '+ Restock'
-                                : isVi
-                                  ? '+ Nhập thêm'
-                                  : '+ Restock'}
+                              {isVi ? '+ Nhập thêm' : '+ Restock'}
                             </button>
 
                             <button
@@ -2229,10 +2011,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
                               <div className="min-w-0">
                                 <p className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
-                                  {isVi ? 'Quy cách / Đơn vị mẻ' : 'Pack / Batch Unit'}
+                                  {isVi ? 'Quy cách / Đơn vị' : 'Pack / Unit'}
                                 </p>
                                 <p className="mt-0.5 text-stone-800 dark:text-[#F1F5F3] break-words">
-                                  {packOrBatchDetail}
+                                  {packUnitDetail}
                                 </p>
                               </div>
 
@@ -2298,8 +2080,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                           label={t.inventory.movementType}
                           text={
                             isVi
-                              ? 'Phân loại nguyên nhân biến động kho: nhập mua, đầu kỳ, bán POS, pha mẻ, kiểm kê hoặc hao hụt.'
-                              : 'Audit reason for each stock change: purchase, opening stock, POS sale, batch prep, count, or spoilage.'
+                              ? 'Phân loại nguyên nhân biến động kho: nhập mua, đầu kỳ, bán POS, kiểm kê hoặc hao hụt.'
+                              : 'Audit reason for each stock change: purchase, opening stock, POS sale, count, or spoilage.'
                           }
                         />
                       </span>
@@ -2454,8 +2236,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         setIngModalOpen(false);
                         if (ingDuplicateGuard.kind === 'ingredient') {
                           openPurchaseModal(toTargetFromIngredient(ingDuplicateGuard.ingredient));
-                        } else if (ingDuplicateGuard.product.productType === 'PREPARED_STOCK') {
-                          openBatchPrepModal(ingDuplicateGuard.product);
                         } else {
                           openPurchaseModal(toTargetFromProduct(ingDuplicateGuard.product));
                         }
@@ -2914,167 +2694,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       )}
 
       {/* ================================================================== */}
-      {/* MODAL 3: PREPARE BATCH MODAL (PREPARED STOCK)                      */}
-      {/* ================================================================== */}
-      {batchProduct && (
-        <ModalPortal>
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setBatchProduct(null);
-            }}
-          >
-            <div className="w-full max-w-md bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl overflow-hidden shadow-2xl animate-modal">
-            <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-x-1.5">
-                  <PackageCheck className="w-5 h-5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
-                  <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
-                    {isVi ? 'Pha mẻ mới' : 'Prepare Batch'}:{' '}
-                    {isVi ? batchProduct.nameVi || batchProduct.name : batchProduct.name}
-                  </h2>
-                  <InfoHint
-                    compact
-                    label={isVi ? 'Giải thích pha mẻ' : 'About Prepare Batch'}
-                    text={
-                      isVi
-                        ? 'Chọn "Trừ nguyên liệu theo mẻ" để tự trừ kho nguyên liệu theo công thức và tính giá vốn, hoặc "Thêm trực tiếp" nếu không cần trừ kho thô.'
-                        : 'Choose "Deduct Raw Ingredients" to consume ingredients via the batch recipe and recalculate unit cost, or "Direct Add" to add ready units directly.'
-                    }
-                  />
-                </div>
-                <p className="font-mono-num text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
-                  {isVi ? 'Hiện còn:' : 'Current:'}{' '}
-                  <strong className="text-stone-800 dark:text-[#F1F5F3]">
-                    {formatQty(batchProduct.stockQty, batchProduct.unit)}
-                  </strong>{' '}
-                  · {isVi ? 'Ngưỡng:' : 'Min:'}{' '}
-                  {formatQty(batchProduct.reorderLevel, batchProduct.unit)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setBatchProduct(null)}
-                className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors shrink-0"
-                aria-label={t.common.close}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <form onSubmit={handleSaveBatchPrep} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setBatchMode('deduct_ingredients')}
-                  className={`min-h-[48px] px-3 py-2.5 rounded-lg border text-left text-xs font-semibold transition-colors ${
-                    batchMode === 'deduct_ingredients'
-                      ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
-                      : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
-                  }`}
-                >
-                  {isVi ? 'Trừ nguyên liệu theo mẻ' : 'Deduct Raw Ingredients'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBatchMode('direct_add')}
-                  className={`min-h-[48px] px-3 py-2.5 rounded-lg border text-left text-xs font-semibold transition-colors ${
-                    batchMode === 'direct_add'
-                      ? 'border-[#0F5C43] bg-emerald-50/70 text-[#0F5C43] dark:border-[#10B981]/50 dark:bg-[#064E3B] dark:text-[#6EE7B7]'
-                      : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
-                  }`}
-                >
-                  {isVi ? 'Thêm trực tiếp thành phẩm' : 'Direct Add Finished Stock'}
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                    {isVi ? 'Số lượng thành phẩm' : 'Batch Yield'} ({batchProduct.unit})
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min={1}
-                    step="any"
-                    value={batchQty}
-                    onChange={(e) => setBatchQty(e.target.value)}
-                    className="w-full h-11 px-3.5 text-sm font-mono-num font-bold border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                  />
-                </div>
-                {batchMode === 'direct_add' && (
-                  <div>
-                    <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                      {isVi ? 'Giá vốn / đơn vị (KHR)' : 'Unit Cost (KHR)'}
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      step={100}
-                      value={batchDirectUnitCost}
-                      onChange={(e) => setBatchDirectUnitCost(e.target.value)}
-                      className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                  {t.common.note}
-                </label>
-                <input
-                  type="text"
-                  maxLength={180}
-                  value={batchNote}
-                  onChange={(e) => setBatchNote(e.target.value)}
-                  placeholder="Morning chill batch"
-                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                />
-              </div>
-
-              {batchError && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/40 rounded-lg text-xs text-red-900 dark:text-red-200 space-y-1">
-                  <div className="flex items-center gap-1.5 font-semibold">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>{batchError}</span>
-                  </div>
-                  {batchShortages.length > 0 && (
-                    <ul className="pl-5 list-disc font-mono-num">
-                      {batchShortages.map((s) => (
-                        <li key={s.itemId}>
-                          {s.itemName}: need {formatQty(s.requiredQty, s.unit)}, have{' '}
-                          {formatQty(s.availableQty, s.unit)}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-stone-200 dark:border-[#24352C] flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setBatchProduct(null)}
-                  className="h-12 px-4 text-sm font-medium text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors"
-                >
-                  {t.common.cancel}
-                </button>
-                <button
-                  type="submit"
-                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
-                >
-                  {isVi ? 'Hoàn tất mẻ pha' : 'Confirm Batch'}
-                </button>
-              </div>
-            </form>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
-
-      {/* ================================================================== */}
-      {/* MODAL 4: UNIFIED ADJUST / WASTE / COUNT / OPENING STOCK MODAL      */}
+      {/* MODAL 3: UNIFIED ADJUST / WASTE / COUNT / OPENING STOCK MODAL      */}
       {/* ================================================================== */}
       {adjustModalTarget && (
         <ModalPortal>
@@ -3344,8 +2964,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               ? `Đã đăng ký "${displayName}" — sẵn sàng nhập kho & bán POS.`
               : `Registered "${displayName}" — ready for Stock-In & POS.`
           );
-          if (newProd.productType === 'PACKAGED' || newProd.productType === 'PREPARED_STOCK') {
-            setActiveTab(newProd.productType === 'PACKAGED' ? 'packaged' : 'prepared_stock');
+          if (newProd.productType === 'PACKAGED') {
+            setActiveTab('packaged');
             openPurchaseModal(toTargetFromProduct(newProd));
           }
         }}
@@ -3357,9 +2977,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         onRestockExisting={(prod) => {
           setQuickRegisterOpen(false);
           setUnknownStockBarcode(null);
-          if (prod.productType === 'PREPARED_STOCK') {
-            openBatchPrepModal(prod);
-          } else if (prod.productType === 'PACKAGED') {
+          if (prod.productType === 'PACKAGED') {
             openPurchaseModal(toTargetFromProduct(prod));
           } else {
             setActiveTab('ingredients');
@@ -3378,7 +2996,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         onClose={() => setQuickRegisterOpen(false)}
       />
 
-      {/* Edit Packaged / Prepared Stock Product Directly From Inventory */}
+      {/* Edit Retail Packaged Product Directly From Inventory */}
       <ProductFormModal
         open={Boolean(editingStockProduct)}
         editingProduct={editingStockProduct}
@@ -3399,9 +3017,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         onEditExisting={(prod) => setEditingStockProduct(prod)}
         onRestockExisting={(prod) => {
           setEditingStockProduct(null);
-          if (prod.productType === 'PREPARED_STOCK') {
-            openBatchPrepModal(prod);
-          } else if (prod.productType === 'PACKAGED') {
+          if (prod.productType === 'PACKAGED') {
             openPurchaseModal(toTargetFromProduct(prod));
           } else {
             setActiveTab('ingredients');
@@ -3443,7 +3059,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           ingModalOpen ||
           ingBarcodeScannerOpen ||
           Boolean(purchaseTarget) ||
-          Boolean(batchProduct) ||
           Boolean(adjustModalTarget) ||
           scannerOpen ||
           quickRegisterOpen ||

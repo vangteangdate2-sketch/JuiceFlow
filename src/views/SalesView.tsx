@@ -4,10 +4,12 @@ import {
   Banknote,
   Check,
   ChevronDown,
+  CupSoda,
   Eye,
   EyeOff,
   Loader2,
   Minus,
+  Package,
   Plus,
   Printer,
   RotateCcw,
@@ -62,12 +64,9 @@ import { CategoryFilterPills } from '../components/CategoryFilterPills';
 import { ModalPortal } from '../components/ModalPortal';
 import {
   getCategoriesForScope,
-  getCategoryBadgeClass,
   getCategoryById,
   getCategoryDisplayName,
-  getCategoryDotClass,
   getProductTypeBadgeClass,
-  getProductTypeDotClass,
   getProductTypeFilterPillClass,
   resolveProductCategoryId,
 } from '../utils/categories';
@@ -910,33 +909,39 @@ export const SalesView: React.FC<SalesViewProps> = ({
                         {isVi ? 'Loại hàng' : 'Item Type'}
                       </span>
                       <div className="flex flex-nowrap items-center gap-2 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        {(['ALL', 'PREPARED_TO_ORDER', 'PACKAGED', 'PREPARED_STOCK'] as const).map(
-                          (pt) => {
-                            const active = typeFilter === pt;
-                            return (
-                              <button
-                                key={pt}
-                                type="button"
-                                onClick={() => setTypeFilter(pt)}
-                                aria-pressed={active}
-                                className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors duration-200 ease-out whitespace-nowrap shrink-0 border ${getProductTypeFilterPillClass(
-                                  pt,
-                                  active
-                                )}`}
-                              >
-                                {pt !== 'ALL' && (
-                                  <span
-                                    className={`w-2 h-2 rounded-full shrink-0 ${getProductTypeDotClass(
-                                      pt
-                                    )}`}
-                                    aria-hidden="true"
-                                  />
-                                )}
-                                <span>{pt === 'ALL' ? t.common.all : t.productTypes[pt]}</span>
-                              </button>
-                            );
-                          }
-                        )}
+                        {(['ALL', 'PREPARED_TO_ORDER', 'PACKAGED'] as const).map((pt) => {
+                          const active = typeFilter === pt;
+                          return (
+                            <button
+                              key={pt}
+                              type="button"
+                              onClick={() => setTypeFilter(pt)}
+                              aria-pressed={active}
+                              className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors duration-200 ease-out whitespace-nowrap shrink-0 border ${getProductTypeFilterPillClass(
+                                pt,
+                                active
+                              )}`}
+                            >
+                              {pt === 'PREPARED_TO_ORDER' && (
+                                <CupSoda
+                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                    active ? 'text-current' : 'text-emerald-600 dark:text-emerald-400'
+                                  }`}
+                                  aria-hidden="true"
+                                />
+                              )}
+                              {pt === 'PACKAGED' && (
+                                <Package
+                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                    active ? 'text-current' : 'text-sky-600 dark:text-sky-400'
+                                  }`}
+                                  aria-hidden="true"
+                                />
+                              )}
+                              <span>{pt === 'ALL' ? t.common.all : t.productTypes[pt]}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -1034,16 +1039,15 @@ export const SalesView: React.FC<SalesViewProps> = ({
                         <div className="flex items-start justify-between gap-2 text-[11px]">
                           <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                             <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border whitespace-nowrap ${getProductTypeBadgeClass(
                                 product.productType
                               )}`}
                             >
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${getProductTypeDotClass(
-                                  product.productType
-                                )}`}
-                                aria-hidden="true"
-                              />
+                              {product.productType === 'PREPARED_TO_ORDER' ? (
+                                <CupSoda className="w-3 h-3 shrink-0" aria-hidden="true" />
+                              ) : (
+                                <Package className="w-3 h-3 shrink-0" aria-hidden="true" />
+                              )}
                               {t.productTypes[product.productType] || product.productType}
                             </span>
                             {(() => {
@@ -1052,24 +1056,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
                                 categories
                               );
                               return (
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${getCategoryBadgeClass(
-                                    catItem
-                                  )}`}
-                                >
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${getCategoryDotClass(
-                                      catItem
-                                    )}`}
-                                    aria-hidden="true"
-                                  />
-                                  {getCategoryDisplayName(catItem, isVi)}
+                                <span className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B] truncate">
+                                  · {getCategoryDisplayName(catItem, isVi)}
                                 </span>
                               );
                             })()}
                             {hasMultiVariants && (
                               <span className="text-stone-500 dark:text-[#94A39B] truncate">
-                                {productVariants.length} {isVi ? 'cỡ' : 'sizes'}
+                                · {productVariants.length} {isVi ? 'cỡ' : 'sizes'}
                               </span>
                             )}
                           </div>

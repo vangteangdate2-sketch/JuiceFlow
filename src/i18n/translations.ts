@@ -74,9 +74,8 @@ export const TRANSLATIONS = {
       snack: 'Snacks & Food',
     } as Record<ProductCategory, string>,
     productTypes: {
-      PACKAGED: 'Packaged',
+      PACKAGED: 'Retail Packaged',
       PREPARED_TO_ORDER: 'Made-to-Order',
-      PREPARED_STOCK: 'Prepared Stock',
     } as Record<ProductType, string>,
     expenseCategories: {
       ingredients: 'Ingredients',
@@ -93,8 +92,6 @@ export const TRANSLATIONS = {
       opening_stock: 'Opening Stock',
       purchase: 'Purchase / Stock-In',
       sale_consumption: 'Sale Deduction',
-      batch_prep_in: 'Batch Prepared (In)',
-      batch_prep_consume: 'Batch Prep (Ingredients)',
       void_restore: 'Void Restore',
       return_restore: 'Return Restore',
       stock_count: 'Stock Count',
@@ -407,9 +404,8 @@ export const TRANSLATIONS = {
       snack: 'Đồ ăn vặt & Đóng gói',
     } as Record<ProductCategory, string>,
     productTypes: {
-      PACKAGED: 'Đóng gói sẵn',
-      PREPARED_TO_ORDER: 'Pha chế theo đơn',
-      PREPARED_STOCK: 'Pha sẵn trữ lạnh',
+      PACKAGED: 'Đóng gói bán lẻ',
+      PREPARED_TO_ORDER: 'Pha chế tại chỗ',
     } as Record<ProductType, string>,
     expenseCategories: {
       ingredients: 'Nguyên liệu',
@@ -426,8 +422,6 @@ export const TRANSLATIONS = {
       opening_stock: 'Tồn kho đầu kỳ',
       purchase: 'Nhập kho mua hàng',
       sale_consumption: 'Trừ kho bán hàng',
-      batch_prep_in: 'Nhập mẻ pha sẵn',
-      batch_prep_consume: 'Trừ NL pha mẻ',
       void_restore: 'Hoàn kho hủy đơn',
       return_restore: 'Hoàn kho trả hàng',
       stock_count: 'Kiểm kê thực tế',

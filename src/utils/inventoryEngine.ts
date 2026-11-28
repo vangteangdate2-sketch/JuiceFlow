@@ -22,7 +22,6 @@ import type {
 import {
   BUSINESS_TIMEZONE,
   calculateProductCogs,
-  calculateRecipeCogs,
   convertUnitQty,
   generateId,
   normalizeName,
@@ -87,13 +86,6 @@ export function normalizeIngredient(raw: Partial<Ingredient> & { id: string }): 
 }
 
 export function normalizeProduct(raw: Partial<Product> & { id: string }): Product {
-  const productType: ProductType =
-    raw.productType === 'PACKAGED' ||
-    raw.productType === 'PREPARED_STOCK' ||
-    raw.productType === 'PREPARED_TO_ORDER'
-      ? raw.productType
-      : 'PREPARED_TO_ORDER';
-
   const baseRecipe: RecipeItem[] = Array.isArray(raw.recipe)
     ? raw.recipe
         .filter((r) => Boolean(r && typeof r === 'object' && r.ingredientId && Number(r.quantity) > 0))
@@ -129,6 +121,24 @@ export function normalizeProduct(raw: Partial<Product> & { id: string }): Produc
             recipeVersion: Math.max(1, Number(v.recipeVersion ?? raw.recipeVersion ?? 1) || 1),
           }))
       : [];
+
+  const hasLinkedRecipe =
+    baseRecipe.length > 0 || variants.some((v) => Array.isArray(v.recipe) && v.recipe.length > 0);
+  const rawType = String((raw as { productType?: string }).productType || '')
+    .trim()
+    .toUpperCase();
+  // Safe migration: legacy PREPARED_STOCK / prepared / batch items with linked recipe ingredients
+  // become Made-to-Order (PREPARED_TO_ORDER); standalone stocked items become Retail Packaged (PACKAGED).
+  const productType: ProductType =
+    rawType === 'PACKAGED'
+      ? 'PACKAGED'
+      : rawType === 'PREPARED_TO_ORDER'
+        ? 'PREPARED_TO_ORDER'
+        : rawType === 'PREPARED_STOCK' || rawType === 'PREPARED' || rawType === 'BATCH'
+          ? hasLinkedRecipe
+            ? 'PREPARED_TO_ORDER'
+            : 'PACKAGED'
+          : 'PREPARED_TO_ORDER';
 
   const rawCategoryId =
     typeof raw.categoryId === 'string' && raw.categoryId.trim().length > 0
@@ -217,21 +227,53 @@ export function normalizeSale(raw: Partial<Sale> & { id: string }): Sale {
   const items: SaleItem[] = Array.isArray(raw.items)
     ? raw.items
         .filter((item): item is SaleItem => Boolean(item && typeof item === 'object'))
-        .map((item, idx) => ({
-          ...item,
-          lineId: String(item.lineId || `${raw.id}_line_${idx}`),
-          productId: String(item.productId || ''),
-          ...(item.categoryId ? { categoryId: String(item.categoryId).trim() } : {}),
-          productName: String(item.productName || 'Item'),
-          productNameVi: String(item.productNameVi || item.productName || 'Sản phẩm'),
-          ...(item.variantName ? { variantName: String(item.variantName) } : {}),
-          quantity: Math.max(0, Number(item.quantity ?? 0) || 0),
-          unitPriceKhr: Math.max(0, Number(item.unitPriceKhr ?? 0) || 0),
-          unitCogsKhr: Math.max(0, Number(item.unitCogsKhr ?? 0) || 0),
-          lineTotalKhr: Math.max(0, Number(item.lineTotalKhr ?? 0) || 0),
-          returnedQty: Math.max(0, Number(item.returnedQty ?? 0) || 0),
-          deductions: Array.isArray(item.deductions) ? item.deductions : [],
-        }))
+        .map((item, idx) => {
+          const normalizedDeductions: SaleDeductionSnapshot[] = Array.isArray(item.deductions)
+            ? item.deductions.map((d) => ({
+                ...d,
+                itemClassification:
+                  String(d.itemClassification) === 'packaged' ||
+                  String(d.itemClassification) === 'prepared_stock'
+                    ? 'packaged'
+                    : 'ingredient',
+              }))
+            : [];
+          const rawItemType = String((item as { productType?: string }).productType || '')
+            .trim()
+            .toUpperCase();
+          const hasIngredientDeduction = normalizedDeductions.some(
+            (d) => d.itemClassification === 'ingredient'
+          );
+          const safeItemProductType: ProductType | undefined =
+            rawItemType === 'PACKAGED'
+              ? 'PACKAGED'
+              : rawItemType === 'PREPARED_TO_ORDER'
+                ? 'PREPARED_TO_ORDER'
+                : rawItemType === 'PREPARED_STOCK' ||
+                    rawItemType === 'PREPARED' ||
+                    rawItemType === 'BATCH'
+                  ? hasIngredientDeduction
+                    ? 'PREPARED_TO_ORDER'
+                    : 'PACKAGED'
+                  : undefined;
+
+          return {
+            ...item,
+            ...(safeItemProductType ? { productType: safeItemProductType } : {}),
+            lineId: String(item.lineId || `${raw.id}_line_${idx}`),
+            productId: String(item.productId || ''),
+            ...(item.categoryId ? { categoryId: String(item.categoryId).trim() } : {}),
+            productName: String(item.productName || 'Item'),
+            productNameVi: String(item.productNameVi || item.productName || 'Sản phẩm'),
+            ...(item.variantName ? { variantName: String(item.variantName) } : {}),
+            quantity: Math.max(0, Number(item.quantity ?? 0) || 0),
+            unitPriceKhr: Math.max(0, Number(item.unitPriceKhr ?? 0) || 0),
+            unitCogsKhr: Math.max(0, Number(item.unitCogsKhr ?? 0) || 0),
+            lineTotalKhr: Math.max(0, Number(item.lineTotalKhr ?? 0) || 0),
+            returnedQty: Math.max(0, Number(item.returnedQty ?? 0) || 0),
+            deductions: normalizedDeductions,
+          };
+        })
     : [];
 
   const paymentMethod: PaymentMethod =
@@ -294,15 +336,28 @@ export function normalizeSale(raw: Partial<Sale> & { id: string }): Sale {
   };
 }
 
+const VALID_MOVEMENT_TYPES = new Set<MovementType>([
+  'purchase',
+  'opening_stock',
+  'sale_consumption',
+  'return_restore',
+  'void_restore',
+  'adjustment',
+  'damaged',
+  'expired',
+  'stock_count',
+]);
+
 export function normalizeStockMovement(raw: Partial<StockMovement> & { id: string }): StockMovement {
   const itemId = String(raw.itemId || raw.ingredientId || '');
   const itemName = String(raw.itemName || raw.ingredientName || 'Unknown Item');
+  const rawClass = String((raw as { itemClassification?: string }).itemClassification || '');
   const itemClassification: StockClassification =
-    raw.itemClassification === 'packaged' ||
-    raw.itemClassification === 'prepared_stock' ||
-    raw.itemClassification === 'ingredient'
-      ? raw.itemClassification
-      : 'ingredient';
+    rawClass === 'packaged' || rawClass === 'prepared_stock' ? 'packaged' : 'ingredient';
+  const movementType: MovementType =
+    raw.movementType && VALID_MOVEMENT_TYPES.has(raw.movementType)
+      ? raw.movementType
+      : 'adjustment';
 
   return {
     id: String(raw.id),
@@ -311,7 +366,7 @@ export function normalizeStockMovement(raw: Partial<StockMovement> & { id: strin
     itemClassification,
     ingredientId: String(raw.ingredientId || itemId),
     ingredientName: String(raw.ingredientName || itemName),
-    movementType: raw.movementType || 'adjustment',
+    movementType,
     deltaQty: Number.isFinite(Number(raw.deltaQty)) ? Number(raw.deltaQty) : 0,
     unit: raw.unit && VALID_UNITS.has(raw.unit) ? raw.unit : 'pcs',
     unitCostKhr:
@@ -488,7 +543,7 @@ export function getAvailableUnitsForProduct(
   if (!product) {
     return { availableUnits: 0, status: 'out' };
   }
-  if (product.productType === 'PACKAGED' || product.productType === 'PREPARED_STOCK') {
+  if (product.productType === 'PACKAGED') {
     const stockQty = Number.isFinite(Number(product.stockQty)) ? Number(product.stockQty) : 0;
     const reorderLevel = Number.isFinite(Number(product.reorderLevel)) ? Number(product.reorderLevel) : 0;
     const qty = Math.floor(Math.max(0, stockQty));
@@ -589,7 +644,7 @@ export function validateCheckoutStock(
     const prod = prodMap.get(line.productId);
     if (!prod) continue;
 
-    if (prod.productType === 'PACKAGED' || prod.productType === 'PREPARED_STOCK') {
+    if (prod.productType === 'PACKAGED') {
       requiredProducts.set(prod.id, roundQty((requiredProducts.get(prod.id) ?? 0) + qty));
     } else {
       // PREPARED_TO_ORDER -> deduct ingredients via active variant/product recipe
@@ -615,7 +670,7 @@ export function validateCheckoutStock(
         itemId: prod.id,
         itemName: prod.name,
         itemNameVi: prod.nameVi,
-        itemClassification: prod.productType === 'PACKAGED' ? 'packaged' : 'prepared_stock',
+        itemClassification: 'packaged',
         requiredQty: roundQty(reqQty),
         availableQty: roundQty(prod.stockQty),
         unit: prod.unit,
@@ -750,9 +805,8 @@ export function buildCheckoutPlan(params: CheckoutPlanParams): CheckoutPlanResul
     const lineId = `${saleId}_l${idx + 1}`;
     const deductions: SaleDeductionSnapshot[] = [];
 
-    if (prod.productType === 'PACKAGED' || prod.productType === 'PREPARED_STOCK') {
-      const classification: StockClassification =
-        prod.productType === 'PACKAGED' ? 'packaged' : 'prepared_stock';
+    if (prod.productType === 'PACKAGED') {
+      const classification: StockClassification = 'packaged';
       const deductQty = roundQty(req.quantity);
       prod.stockQty = roundQty(prod.stockQty - deductQty);
       touchedProductIds.add(prod.id);
@@ -1036,7 +1090,7 @@ export function buildVoidPlan(params: {
   }
 
   for (const entry of restoreEntries) {
-    if (entry.itemClassification === 'packaged' || entry.itemClassification === 'prepared_stock') {
+    if (entry.itemClassification === 'packaged') {
       const prod = prodMap.get(entry.itemId);
       if (prod) {
         prod.stockQty = roundQty(prod.stockQty + entry.qty);
@@ -1185,7 +1239,7 @@ export function buildPartialReturnPlan(params: {
         const restoreQty = roundQty(snap.qtyPerSaleUnit * req.quantity);
         if (restoreQty <= 0) continue;
 
-        if (snap.itemClassification === 'packaged' || snap.itemClassification === 'prepared_stock') {
+        if (snap.itemClassification === 'packaged') {
           const prod = prodMap.get(snap.itemId);
           if (prod) {
             prod.stockQty = roundQty(prod.stockQty + restoreQty);
@@ -1259,192 +1313,7 @@ export function buildPartialReturnPlan(params: {
 }
 
 // ---------------------------------------------------------------------------
-// Prepared Stock Batch Preparation (Deduct Raw Ingredients OR Direct Add)
-// ---------------------------------------------------------------------------
-
-export type BatchPrepMode = 'deduct_ingredients' | 'direct_add';
-
-export interface BatchPrepPlanResult {
-  ok: boolean;
-  error?: string;
-  shortages?: StockShortage[];
-  updatedProduct?: Product;
-  updatedProducts?: Product[];
-  updatedIngredients?: Ingredient[];
-  movements?: StockMovement[];
-  touchedIngredientIds?: string[];
-  batchUnitCostKhr?: number;
-}
-
-export function buildBatchPreparationPlan(params: {
-  productId: string;
-  batchQty: number;
-  mode: BatchPrepMode;
-  directUnitCostKhr?: number;
-  note?: string;
-  recordedBy: string;
-  movementDate?: string;
-  createdAt?: string;
-  products: Product[];
-  ingredients: Ingredient[];
-  allowNegativeStock?: boolean;
-}): BatchPrepPlanResult {
-  const batchQty = roundQty(Number(params.batchQty) || 0);
-  if (batchQty <= 0) {
-    return { ok: false, error: 'Batch quantity must be greater than 0.' };
-  }
-
-  const product = params.products.find((p) => p.id === params.productId);
-  if (!product) {
-    return { ok: false, error: 'Prepared product not found.' };
-  }
-  if (product.productType !== 'PREPARED_STOCK') {
-    return { ok: false, error: `${product.name} is not classified as Prepared Stock.` };
-  }
-
-  const movementDate = params.movementDate || todayIso();
-  const createdAt = params.createdAt || new Date().toISOString();
-  const recordedBy = sanitizeString(params.recordedBy || 'Family', 80) || 'Family';
-  const batchId = generateId('batch');
-  const note = sanitizeString(params.note || '', 180);
-
-  const ingMap = new Map(params.ingredients.map((i) => [i.id, { ...i }]));
-  const movements: StockMovement[] = [];
-  const touchedIngredientIds: string[] = [];
-
-  let batchTotalIngredientCost = 0;
-
-  if (params.mode === 'deduct_ingredients') {
-    const recipe = product.recipe || [];
-    if (recipe.length === 0) {
-      return {
-        ok: false,
-        error: `${product.name} has no batch recipe configured. Add a recipe or use Direct Add mode.`,
-      };
-    }
-
-    // Validate raw ingredient stock first
-    const shortages: StockShortage[] = [];
-    for (const r of recipe) {
-      const ing = ingMap.get(r.ingredientId);
-      if (!ing) continue;
-      const reqBase = roundQty(convertUnitQty(r.quantity * batchQty, r.unit ?? ing.unit, ing.unit));
-      if (ing.stockQty + 1e-9 < reqBase) {
-        shortages.push({
-          itemId: ing.id,
-          itemName: ing.name,
-          itemNameVi: ing.nameVi,
-          itemClassification: 'ingredient',
-          requiredQty: reqBase,
-          availableQty: roundQty(ing.stockQty),
-          unit: ing.unit,
-        });
-      }
-    }
-
-    if (!params.allowNegativeStock && shortages.length > 0) {
-      return {
-        ok: false,
-        error: `Insufficient ingredients to prepare ${batchQty} ${product.unit}: ${shortages
-          .map((s) => s.itemName)
-          .join(', ')}.`,
-        shortages,
-      };
-    }
-
-    // Deduct ingredients
-    for (const r of recipe) {
-      const ing = ingMap.get(r.ingredientId);
-      if (!ing) continue;
-      const deductBase = roundQty(convertUnitQty(r.quantity * batchQty, r.unit ?? ing.unit, ing.unit));
-      if (deductBase <= 0) continue;
-
-      ing.stockQty = roundQty(ing.stockQty - deductBase);
-      touchedIngredientIds.push(ing.id);
-
-      const lineCost = roundKhr(ing.unitCostKhr * deductBase);
-      batchTotalIngredientCost += lineCost;
-
-      movements.push({
-        id: generateId('mov'),
-        itemId: ing.id,
-        itemName: ing.name,
-        itemClassification: 'ingredient',
-        ingredientId: ing.id,
-        ingredientName: ing.name,
-        movementType: 'batch_prep_consume',
-        deltaQty: -deductBase,
-        unit: ing.unit,
-        unitCostKhr: ing.unitCostKhr,
-        totalCostKhr: lineCost,
-        referenceId: batchId,
-        movementDate,
-        note: `Batch prep ${batchQty} ${product.unit} ${product.name}${note ? ` - ${note}` : ''}`,
-        recordedBy,
-        createdAt,
-      });
-    }
-  }
-
-  const batchUnitCostKhr =
-    params.mode === 'deduct_ingredients'
-      ? roundKhr(batchTotalIngredientCost / batchQty)
-      : roundKhr(
-          params.directUnitCostKhr !== undefined && params.directUnitCostKhr >= 0
-            ? params.directUnitCostKhr
-            : product.costPriceKhr || calculateRecipeCogs(product.recipe, params.ingredients)
-        );
-
-  const oldQty = Math.max(0, product.stockQty);
-  const oldVal = oldQty * Math.max(0, product.costPriceKhr);
-  const newTotalQty = roundQty(product.stockQty + batchQty);
-  const newWeightedUnitCost =
-    oldQty + batchQty > 0
-      ? roundKhr((oldVal + batchQty * batchUnitCostKhr) / (oldQty + batchQty))
-      : batchUnitCostKhr;
-
-  const updatedProduct: Product = {
-    ...product,
-    stockQty: newTotalQty,
-    costPriceKhr: newWeightedUnitCost,
-    updatedAt: createdAt,
-  };
-
-  movements.push({
-    id: generateId('mov'),
-    itemId: product.id,
-    itemName: product.name,
-    itemClassification: 'prepared_stock',
-    ingredientId: product.id,
-    ingredientName: product.name,
-    movementType: 'batch_prep_in',
-    deltaQty: batchQty,
-    unit: product.unit,
-    unitCostKhr: batchUnitCostKhr,
-    totalCostKhr: roundKhr(batchUnitCostKhr * batchQty),
-    referenceId: batchId,
-    movementDate,
-    note:
-      params.mode === 'deduct_ingredients'
-        ? `Batch prepared (ingredients deducted)${note ? ` - ${note}` : ''}`
-        : `Batch added directly${note ? ` - ${note}` : ''}`,
-    recordedBy,
-    createdAt,
-  });
-
-  return {
-    ok: true,
-    updatedProduct,
-    updatedProducts: params.products.map((p) => (p.id === product.id ? updatedProduct : p)),
-    updatedIngredients: params.ingredients.map((i) => ingMap.get(i.id) || i),
-    movements,
-    touchedIngredientIds,
-    batchUnitCostKhr,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Stock-In / Purchases (All 3 Tiers + Carton Multiplication, NO Expense Double-Count)
+// Stock-In / Purchases (Raw Ingredients & Retail Packaged, NO Expense Double-Count)
 // ---------------------------------------------------------------------------
 
 export interface PurchasePlanResult {
@@ -1550,7 +1419,7 @@ export function buildPurchasePlan(params: {
     return { ok: true, purchase, movement, updatedIngredient };
   }
 
-  // Packaged or Prepared Stock
+  // Retail Packaged product
   const prod = params.products.find((p) => p.id === params.itemId);
   if (!prod) return { ok: false, error: 'Product not found.' };
 
@@ -1951,11 +1820,10 @@ export interface FinancialReportSummary {
   operatingExpensesCashOutKhr: number;
   householdExpensesCashOutKhr: number;
   businessNetCashFlowKhr: number;
-  // Current Inventory Valuation across all 3 tiers (Opening stock included here, NOT in expenses)
+  // Current Inventory Valuation across Raw Ingredients & Retail Packaged (Opening stock included here, NOT in expenses)
   inventoryValuation: {
     packagedValueKhr: number;
     ingredientsValueKhr: number;
-    preparedStockValueKhr: number;
     totalInventoryValueKhr: number;
   };
   // Grouped Series, Category Breakdown & Product Profitability
@@ -2245,15 +2113,12 @@ export function computeFinancialReport(params: {
     netRevenueKhr - inventoryPurchasesCashOutKhr - operatingExpensesKhr
   );
 
-  // Inventory Valuation across all 3 tiers (current on-hand; opening stock lives here!)
+  // Inventory Valuation across Retail Packaged & Raw Ingredients (current on-hand; opening stock lives here!)
   let packagedValueKhr = 0;
-  let preparedStockValueKhr = 0;
   for (const prod of params.products) {
     const qty = Math.max(0, prod.stockQty);
     if (prod.productType === 'PACKAGED') {
       packagedValueKhr += qty * Math.max(0, prod.costPriceKhr);
-    } else if (prod.productType === 'PREPARED_STOCK') {
-      preparedStockValueKhr += qty * Math.max(0, prod.costPriceKhr);
     }
   }
   const ingredientsValueKhr = params.ingredients.reduce(
@@ -2311,8 +2176,7 @@ export function computeFinancialReport(params: {
     inventoryValuation: {
       packagedValueKhr: roundKhr(packagedValueKhr),
       ingredientsValueKhr: roundKhr(ingredientsValueKhr),
-      preparedStockValueKhr: roundKhr(preparedStockValueKhr),
-      totalInventoryValueKhr: roundKhr(packagedValueKhr + ingredientsValueKhr + preparedStockValueKhr),
+      totalInventoryValueKhr: roundKhr(packagedValueKhr + ingredientsValueKhr),
     },
     series,
     categoryBreakdown,
