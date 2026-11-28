@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Briefcase,
   ChevronDown,
+  Copy,
   Edit2,
   Home,
+  MoreVertical,
   Plus,
   Search,
   SlidersHorizontal,
@@ -99,6 +101,82 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const [highlightedExpenseId, setHighlightedExpenseId] = useState<string | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
+
+  // Floating row action menu state (matches ProductsView)
+  const [openMenuExpenseId, setOpenMenuExpenseId] = useState<string | null>(null);
+  const [menuCoords, setMenuCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    right: number;
+    placement: 'down' | 'up';
+  } | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const closeRowActionMenu = () => {
+    setOpenMenuExpenseId(null);
+    setMenuCoords(null);
+  };
+
+  const toggleRowActionMenu = (expenseId: string, triggerEl: HTMLButtonElement) => {
+    if (openMenuExpenseId === expenseId) {
+      closeRowActionMenu();
+      return;
+    }
+    const rect = triggerEl.getBoundingClientRect();
+    const estimatedMenuHeight = 164;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placement: 'down' | 'up' =
+      spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight ? 'up' : 'down';
+    const right = Math.max(12, window.innerWidth - rect.right);
+
+    setOpenMenuExpenseId(expenseId);
+    setMenuCoords(
+      placement === 'down'
+        ? { top: rect.bottom + 6, right, placement }
+        : { bottom: window.innerHeight - rect.top + 6, right, placement }
+    );
+  };
+
+  const activeMenuExpense = useMemo(
+    () => (openMenuExpenseId ? expenses.find((e) => e.id === openMenuExpenseId) || null : null),
+    [openMenuExpenseId, expenses]
+  );
+
+  useEffect(() => {
+    if (!openMenuExpenseId) return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (actionMenuRef.current?.contains(target)) return;
+      if (target.closest('[data-row-menu-trigger="true"]')) return;
+      closeRowActionMenu();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeRowActionMenu();
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      closeRowActionMenu();
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown, { passive: true });
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [openMenuExpenseId]);
 
   const triggerHighlightExpense = (id: string) => {
     setHighlightedExpenseId(id);
@@ -282,6 +360,21 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     setPaymentMethod(preset.paymentMethod);
     setVendor(preset.vendor);
     setNote('');
+    setFormOpen(true);
+    window.requestAnimationFrame(() => titleInputRef.current?.focus());
+  };
+
+  const openDuplicate = (exp: Expense) => {
+    setEditing(null);
+    setTitle(exp.title);
+    setScope(exp.scope);
+    setCategory(exp.category);
+    setCurrency('KHR');
+    setAmountKhr(Math.max(0, Math.round(exp.amountKhr || 0)));
+    setExpenseDate(todayIso());
+    setPaymentMethod(exp.paymentMethod);
+    setVendor(exp.vendor || '');
+    setNote(exp.note || '');
     setFormOpen(true);
     window.requestAnimationFrame(() => titleInputRef.current?.focus());
   };
@@ -770,27 +863,29 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                           {formatUsdRef(exp.amountKhr, usdRate)}
                         </span>
                       </td>
-                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(exp)}
-                            className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-400 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors"
-                            aria-label={t.common.edit}
-                            title={t.common.edit}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteWithUndo(exp)}
-                            className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-400 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                            aria-label={t.common.delete}
-                            title={t.common.delete}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                      <td className="w-14 py-3.5 px-5 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          data-row-menu-trigger="true"
+                          aria-haspopup="menu"
+                          aria-expanded={openMenuExpenseId === exp.id}
+                          aria-label={
+                            isKm
+                              ? `សកម្មភាពសម្រាប់ ${exp.title}`
+                              : `Actions for ${exp.title}`
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRowActionMenu(exp.id, e.currentTarget);
+                          }}
+                          className={`w-10 h-10 inline-flex items-center justify-center rounded-xl border transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981] ${
+                            openMenuExpenseId === exp.id
+                              ? 'bg-[#E6F2ED] border-[#0F5C43]/40 text-[#0F5C43] dark:bg-[#064E3B] dark:border-[#10B981]/50 dark:text-[#6EE7B7]'
+                              : 'bg-white dark:bg-[#18251F] border-stone-200 dark:border-[#24352C] text-stone-600 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:border-stone-300 dark:hover:border-[#344E41]'
+                          }`}
+                        >
+                          <MoreVertical className="w-4 h-4 shrink-0" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -1101,6 +1196,75 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
             </div>
           </div>
         </ModalPortal>
+      )}
+
+      {/* Floating Row Action Menu Popover (Viewport-Aware, Never Clipped) */}
+      {activeMenuExpense && menuCoords && (
+        <div
+          ref={actionMenuRef}
+          key={activeMenuExpense.id}
+          role="menu"
+          aria-label={
+            isKm
+              ? `សកម្មភាពសម្រាប់ ${activeMenuExpense.title}`
+              : `Actions for ${activeMenuExpense.title}`
+          }
+          style={{
+            top: menuCoords.top,
+            bottom: menuCoords.bottom,
+            right: menuCoords.right,
+          }}
+          className={`fixed z-50 min-w-[168px] p-1.5 rounded-xl bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border border-stone-200/90 dark:border-[#24352C] shadow-xl animate-popover ${
+            menuCoords.placement === 'up' ? 'origin-bottom-right' : 'origin-top-right'
+          }`}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const target = activeMenuExpense;
+              closeRowActionMenu();
+              openEdit(target);
+            }}
+            className="w-full h-11 px-3.5 inline-flex items-center gap-2.5 rounded-lg text-sm font-medium text-stone-700 dark:text-[#E2ECE7] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-950 dark:hover:text-white transition-colors"
+          >
+            <Edit2 className="w-4 h-4 text-stone-500 dark:text-[#94A39B] shrink-0" />
+            <span>{t.common.edit}</span>
+          </button>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const target = activeMenuExpense;
+              closeRowActionMenu();
+              openDuplicate(target);
+            }}
+            className="w-full h-11 px-3.5 inline-flex items-center gap-2.5 rounded-lg text-sm font-medium text-stone-700 dark:text-[#E2ECE7] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-950 dark:hover:text-white transition-colors"
+          >
+            <Copy className="w-4 h-4 text-stone-500 dark:text-[#94A39B] shrink-0" />
+            <span>{isKm ? 'ចម្លងបន្ថែម' : 'Duplicate'}</span>
+          </button>
+
+          <div
+            role="separator"
+            className="my-1 border-t border-stone-100 dark:border-[#1F3028]"
+          />
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const target = activeMenuExpense;
+              closeRowActionMenu();
+              void handleDeleteWithUndo(target);
+            }}
+            className="w-full h-11 px-3.5 inline-flex items-center gap-2.5 rounded-lg text-sm font-medium text-red-700 dark:text-[#F87171] hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors"
+          >
+            <Trash2 className="w-4 h-4 shrink-0" />
+            <span>{t.common.delete}</span>
+          </button>
+        </div>
       )}
 
       {/* Bottom-Right Floating Action Button + Scroll-to-Top Pill */}

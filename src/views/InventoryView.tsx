@@ -7,6 +7,7 @@ import {
   Edit2,
   History,
   Loader2,
+  MoreVertical,
   Package,
   PackagePlus,
   Pencil,
@@ -15,6 +16,7 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   Wheat,
   X,
 } from 'lucide-react';
@@ -137,8 +139,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     barcodeRegistry,
     stockMovements,
     saveProduct,
+    deleteProduct,
     lookupBarcode,
     saveIngredient,
+    deleteIngredient,
     addCategory,
     recordStockPurchase,
     recordOpeningStock,
@@ -150,10 +154,81 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const getLocalizedName = (name: string, nameVi?: string) =>
     isKm && nameVi && /[\u1780-\u17FF]/.test(nameVi) ? nameVi : name;
   const today = todayIso();
-  const { showNoticeToast } = useUndoToast();
+  const { showNoticeToast, showUndoToast } = useUndoToast();
   const ingNameInputRef = useRef<HTMLInputElement | null>(null);
   const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
+
+  // Floating row action menu state (matches ProductsView)
+  const [openMenuRowKey, setOpenMenuRowKey] = useState<string | null>(null);
+  const [menuCoords, setMenuCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    right: number;
+    placement: 'down' | 'up';
+  } | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const closeRowActionMenu = () => {
+    setOpenMenuRowKey(null);
+    setMenuCoords(null);
+  };
+
+  const toggleRowActionMenu = (rowKey: string, triggerEl: HTMLButtonElement) => {
+    if (openMenuRowKey === rowKey) {
+      closeRowActionMenu();
+      return;
+    }
+    const rect = triggerEl.getBoundingClientRect();
+    const estimatedMenuHeight = 164;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placement: 'down' | 'up' =
+      spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight ? 'up' : 'down';
+    const right = Math.max(12, window.innerWidth - rect.right);
+
+    setOpenMenuRowKey(rowKey);
+    setMenuCoords(
+      placement === 'down'
+        ? { top: rect.bottom + 6, right, placement }
+        : { bottom: window.innerHeight - rect.top + 6, right, placement }
+    );
+  };
+
+  useEffect(() => {
+    if (!openMenuRowKey) return;
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (actionMenuRef.current?.contains(target)) return;
+      if (target.closest('[data-row-menu-trigger="true"]')) return;
+      closeRowActionMenu();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeRowActionMenu();
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      closeRowActionMenu();
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown, { passive: true });
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [openMenuRowKey]);
 
   const triggerHighlightItem = (id: string) => {
     setHighlightedItemId(id);
@@ -600,6 +675,46 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     setOpeningQty('');
     setOpeningUnitCost(String(item.unitCostKhr));
     setAdjustNote('');
+  };
+
+  const activeMenuItem = useMemo(
+    () =>
+      openMenuRowKey
+        ? allUnifiedItems.find((i) => `${i.tier}-${i.id}` === openMenuRowKey) || null
+        : null,
+    [openMenuRowKey, allUnifiedItems]
+  );
+
+  useEffect(() => {
+    closeRowActionMenu();
+  }, [activeTab]);
+
+  const handleMenuDeleteItem = async (item: UnifiedStockItem) => {
+    closeRowActionMenu();
+    const displayName = getLocalizedName(item.name, item.nameVi);
+    if (item.tier === 'ingredient' && item.sourceIngredient) {
+      const backup = item.sourceIngredient;
+      await deleteIngredient(item.id);
+      showUndoToast({
+        message: isKm ? `បានលុប "${displayName}"` : `Deleted "${displayName}"`,
+        detail: isKm ? 'បានដកចេញពីវត្ថុធាតុដើម' : 'Removed from raw ingredients',
+        onUndo: async () => {
+          await saveIngredient(backup);
+          triggerHighlightItem(backup.id);
+        },
+      });
+    } else if (item.tier === 'packaged' && item.sourceProduct) {
+      const backup = item.sourceProduct;
+      await deleteProduct(item.id);
+      showUndoToast({
+        message: isKm ? `បានលុប "${displayName}"` : `Deleted "${displayName}"`,
+        detail: isKm ? 'បានដកចេញពីទំនិញវេចខ្ចប់ស្រាប់' : 'Removed from retail packaged stock',
+        onUndo: async () => {
+          await saveProduct(backup);
+          triggerHighlightItem(backup.id);
+        },
+      });
+    }
   };
 
   const handleStockInBarcode = async (rawCode: string) => {
@@ -2052,7 +2167,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                             </div>
                           </div>
 
-                          {/* Column 4: Clean Touch Actions (Always 100% Visible) */}
+                          {/* Column 4: Restock Primary Action + Compact 40x40 MoreVertical Menu Trigger */}
                           <div className="pl-9 lg:pl-0 flex items-center justify-end gap-1.5 shrink-0">
                             <button
                               type="button"
@@ -2064,22 +2179,25 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
                             <button
                               type="button"
-                              onClick={() => openAdjustWasteModal(item)}
-                              title={isKm ? 'កែសម្រួល / ខូចខាត' : 'Adjust / Waste'}
-                              aria-label={isKm ? 'កែសម្រួល / ខូចខាត' : 'Adjust / Waste'}
-                              className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-all active:scale-[0.97] shrink-0"
+                              data-row-menu-trigger="true"
+                              aria-haspopup="menu"
+                              aria-expanded={openMenuRowKey === rowKey}
+                              aria-label={
+                                isKm
+                                  ? `សកម្មភាពសម្រាប់ ${getLocalizedName(item.name, item.nameVi)}`
+                                  : `Actions for ${item.name}`
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleRowActionMenu(rowKey, e.currentTarget);
+                              }}
+                              className={`w-10 h-10 inline-flex items-center justify-center rounded-xl border transition-all duration-150 active:scale-95 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981] ${
+                                openMenuRowKey === rowKey
+                                  ? 'bg-[#E6F2ED] border-[#0F5C43]/40 text-[#0F5C43] dark:bg-[#064E3B] dark:border-[#10B981]/50 dark:text-[#6EE7B7]'
+                                  : 'bg-white dark:bg-[#18251F] border-stone-200 dark:border-[#24352C] text-stone-600 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:border-stone-300 dark:hover:border-[#344E41]'
+                              }`}
                             >
-                              <SlidersHorizontal className="w-4 h-4" />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => openEditItem(item)}
-                              title={t.common.edit}
-                              aria-label={t.common.edit}
-                              className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-all active:scale-[0.97] shrink-0"
-                            >
-                              <Edit2 className="w-4 h-4" />
+                              <MoreVertical className="w-4 h-4 shrink-0" />
                             </button>
                           </div>
                         </div>
@@ -3342,6 +3460,71 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         }}
         onClose={() => setIngBarcodeScannerOpen(false)}
       />
+
+      {/* Floating Row Action Menu Popover (Viewport-Aware, Never Clipped) */}
+      {activeMenuItem && menuCoords && (
+        <div
+          ref={actionMenuRef}
+          key={`${activeMenuItem.tier}-${activeMenuItem.id}`}
+          role="menu"
+          aria-label={
+            isKm
+              ? `សកម្មភាពសម្រាប់ ${getLocalizedName(activeMenuItem.name, activeMenuItem.nameVi)}`
+              : `Actions for ${activeMenuItem.name}`
+          }
+          style={{
+            top: menuCoords.top,
+            bottom: menuCoords.bottom,
+            right: menuCoords.right,
+          }}
+          className={`fixed z-50 min-w-[176px] p-1.5 rounded-xl bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border border-stone-200/90 dark:border-[#24352C] shadow-xl animate-popover ${
+            menuCoords.placement === 'up' ? 'origin-bottom-right' : 'origin-top-right'
+          }`}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const target = activeMenuItem;
+              closeRowActionMenu();
+              openAdjustWasteModal(target);
+            }}
+            className="w-full h-11 px-3.5 inline-flex items-center gap-2.5 rounded-lg text-sm font-medium text-stone-700 dark:text-[#E2ECE7] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-950 dark:hover:text-white transition-colors"
+          >
+            <SlidersHorizontal className="w-4 h-4 text-stone-500 dark:text-[#94A39B] shrink-0" />
+            <span>{isKm ? 'កែសម្រួល / ខូចខាត' : 'Adjust / Waste'}</span>
+          </button>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const target = activeMenuItem;
+              closeRowActionMenu();
+              openEditItem(target);
+            }}
+            className="w-full h-11 px-3.5 inline-flex items-center gap-2.5 rounded-lg text-sm font-medium text-stone-700 dark:text-[#E2ECE7] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-950 dark:hover:text-white transition-colors"
+          >
+            <Edit2 className="w-4 h-4 text-stone-500 dark:text-[#94A39B] shrink-0" />
+            <span>{t.common.edit}</span>
+          </button>
+
+          <div
+            role="separator"
+            className="my-1 border-t border-stone-100 dark:border-[#1F3028]"
+          />
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => void handleMenuDeleteItem(activeMenuItem)}
+            className="w-full h-11 px-3.5 inline-flex items-center gap-2.5 rounded-lg text-sm font-medium text-red-700 dark:text-[#F87171] hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors"
+          >
+            <Trash2 className="w-4 h-4 shrink-0" />
+            <span>{t.common.delete}</span>
+          </button>
+        </div>
+      )}
 
       {/* Bottom-Right Floating Action Button + Scroll-to-Top Pill */}
       <FloatingActionBar
