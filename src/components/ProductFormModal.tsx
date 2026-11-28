@@ -56,7 +56,6 @@ import {
 } from '../utils/categories';
 import {
   calculateRecipeCogs,
-  computePriceFromMarkup,
   convertUnitQty,
   formatKhr,
   formatQty,
@@ -84,10 +83,24 @@ import { BarcodeLabelModal } from './BarcodeLabelModal';
 import { CurrencyInput } from './CurrencyInput';
 
 type WizardStep = 1 | 2 | 3;
+type BuyMode = 'carton' | 'unit';
+type StockEntryMode = 'carton' | 'pcs';
 
 const NEW_CATEGORY_SENTINEL = '__new_category__';
 
-const ALL_UNITS: IngredientUnit[] = ['pcs', 'ml', 'L', 'g', 'kg'];
+const AccordionReveal: React.FC<{ open: boolean; children: React.ReactNode }> = ({
+  open,
+  children,
+}) => (
+  <div
+    className={`grid transition-[grid-template-rows,opacity] duration-[180ms] ease-out motion-reduce:transition-none ${
+      open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none'
+    }`}
+    aria-hidden={!open}
+  >
+    <div className={`overflow-hidden ${open ? 'visible' : 'invisible'}`}>{children}</div>
+  </div>
+);
 
 interface CollapsibleFieldsetProps {
   id: string;
@@ -245,8 +258,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [category, setCategory] = useState<ProductCategory>('juice');
   const [costPriceKhr, setCostPriceKhr] = useState('0');
   const [markupPercent, setMarkupPercent] = useState('');
-  const [manualPriceOverride, setManualPriceOverride] = useState(false);
+  const [manualPriceOverride, setManualPriceOverride] = useState(true);
   const [allowSingleUnitSale, setAllowSingleUnitSale] = useState(true);
+  const [sellByCarton, setSellByCarton] = useState(false);
+  const [buyMode, setBuyMode] = useState<BuyMode>('unit');
+  const [stockEntryMode, setStockEntryMode] = useState<StockEntryMode>('pcs');
+  const [stockCartonsInput, setStockCartonsInput] = useState('');
   const [priceKhr, setPriceKhr] = useState('8000');
   const [barcode, setBarcode] = useState('');
   const [barcodeSource, setBarcodeSource] = useState<BarcodeSource | undefined>(undefined);
@@ -261,7 +278,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [variants, setVariants] = useState<ProductVariant[]>([]);
 
   const [showSecondaryNaming, setShowSecondaryNaming] = useState(false);
-  const [showMarkupCalc, setShowMarkupCalc] = useState(false);
+  const buyModeTouchedRef = useRef(false);
 
   const [prefillBanner, setPrefillBanner] = useState<'none' | 'off_prefill' | 'manual_new'>('none');
   const [lookingUpExternal, setLookingUpExternal] = useState(false);
@@ -305,6 +322,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setCurrentStep(initialFocusSection === 'recipe' ? 3 : 1);
 
     if (activeEditingProduct) {
+      const existingPacks = getProductPackSizes(activeEditingProduct).map((pk) => ({
+        ...pk,
+        sellableOnPos: pk.sellableOnPos !== undefined ? Boolean(pk.sellableOnPos) : pk.priceKhr > 0,
+      }));
+      const hasSellablePack = existingPacks.some((pk) => pk.sellableOnPos !== false && pk.priceKhr > 0);
+      const hasAnyPack = existingPacks.length > 0;
+
       setName(activeEditingProduct.name);
       setNameVi(activeEditingProduct.nameVi);
       setBrand(activeEditingProduct.brand || '');
@@ -316,21 +340,23 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           ? String(activeEditingProduct.markupPercent)
           : ''
       );
-      setManualPriceOverride(Boolean(activeEditingProduct.manualPriceOverride));
+      setManualPriceOverride(Boolean(activeEditingProduct.manualPriceOverride ?? true));
       setAllowSingleUnitSale(
         activeEditingProduct.productType === 'PACKAGED'
           ? activeEditingProduct.allowSingleUnitSale !== false
           : true
       );
+      setSellByCarton(activeEditingProduct.productType === 'PACKAGED' && hasSellablePack);
+      setBuyMode(
+        activeEditingProduct.productType === 'PACKAGED' && hasAnyPack ? 'carton' : 'unit'
+      );
+      setStockEntryMode('pcs');
+      setStockCartonsInput('');
+      buyModeTouchedRef.current = activeEditingProduct.productType === 'PACKAGED';
       setPriceKhr(String(activeEditingProduct.priceKhr));
       setBarcode(activeEditingProduct.barcode || '');
       setBarcodeSource(undefined);
-      setPackSizes(
-        getProductPackSizes(activeEditingProduct).map((pk) => ({
-          ...pk,
-          sellableOnPos: pk.sellableOnPos !== undefined ? Boolean(pk.sellableOnPos) : pk.priceKhr > 0,
-        }))
-      );
+      setPackSizes(existingPacks);
       setStockQty(String(activeEditingProduct.stockQty ?? 0));
       setReorderLevel(String(activeEditingProduct.reorderLevel ?? 10));
       setUnit(activeEditingProduct.unit || 'pcs');
@@ -353,7 +379,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           activeEditingProduct.nameVi.trim() !== activeEditingProduct.name.trim()
       );
       setShowSecondaryNaming(hasDistinctVi || Boolean(activeEditingProduct.brand));
-      setShowMarkupCalc(activeEditingProduct.markupPercent !== undefined);
       setPrefillBanner('none');
     } else {
       const cleanInitCode = normalizeBarcodeString(initialPrefill?.barcode || initialBarcode || '');
@@ -369,8 +394,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       // External prefill NEVER sets local KHR selling price, unit cost, or stock quantity
       setCostPriceKhr('0');
       setMarkupPercent('');
-      setManualPriceOverride(false);
+      setManualPriceOverride(true);
       setAllowSingleUnitSale(true);
+      setSellByCarton(false);
+      setBuyMode('carton');
+      setStockEntryMode('carton');
+      setStockCartonsInput('');
+      buyModeTouchedRef.current = false;
       setPriceKhr(hasScannedInit ? '' : '8000');
       setBarcode(cleanInitCode);
       setBarcodeSource(initialPrefill ? 'open_food_facts' : undefined);
@@ -385,7 +415,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setRecipe([]);
       setVariants([]);
       setShowSecondaryNaming(Boolean(initialPrefill?.nameVi || initialPrefill?.brand));
-      setShowMarkupCalc(false);
       setPrefillBanner(
         initialPrefill
           ? 'off_prefill'
@@ -434,6 +463,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   }, [open, drivePickerOpen, scannerTarget, labelModalOpen, onClose]);
 
   // Real-time duplicate active barcode validation across products, variants, cartons, and ingredients
+  const activePacksForValidation = useMemo(
+    () => (productType === 'PACKAGED' && (sellByCarton || buyMode === 'carton') ? packSizes : []),
+    [productType, sellByCarton, buyMode, packSizes]
+  );
+
   const barcodeConflicts = useMemo(
     () =>
       findDuplicateBarcodeConflicts(
@@ -443,7 +477,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           name: name.trim() || activeEditingProduct?.name || 'This product',
           barcode,
           variants: productType === 'PREPARED_TO_ORDER' ? variants : [],
-          packSizes: productType === 'PACKAGED' ? packSizes : [],
+          packSizes: activePacksForValidation,
         },
         existingProducts,
         barcodeRegistry,
@@ -455,7 +489,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       barcode,
       productType,
       variants,
-      packSizes,
+      activePacksForValidation,
       existingProducts,
       barcodeRegistry,
       ingredients,
@@ -546,6 +580,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     [recipe, ingredients]
   );
 
+  const unitCostKhr = Math.max(0, Number(costPriceKhr) || 0);
+  const basePriceNum = Math.max(0, Number(priceKhr) || 0);
+
+  // Primary carton live state (synced across Step 2 Selling & Step 3 Buying)
+  const primaryPack = packSizes[0] ?? null;
+  const cartonLabel = primaryPack?.label ?? '';
+  const cartonUnits = Math.max(1, Math.round(Number(primaryPack?.unitsPerPack) || 24));
+  const cartonSellingPriceKhr = Math.max(0, Number(primaryPack?.priceKhr) || 0);
+  const cartonCostKhr = Math.max(0, Number(primaryPack?.costKhr) || 0);
+  const cartonBarcode = primaryPack?.barcode ?? '';
+  const unitLabel = unit || 'pcs';
+
+  const suggestedUnitCostKhr =
+    cartonCostKhr > 0 && cartonUnits > 0 ? Math.round(cartonCostKhr / cartonUnits) : 0;
+
   const liveUnitCost = useMemo(() => {
     if (productType === 'PREPARED_TO_ORDER') {
       if (variants.length > 0) {
@@ -554,14 +603,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       }
       return recipeCogs;
     }
-    return Math.max(0, Number(costPriceKhr) || 0);
+    return unitCostKhr;
   }, [
     productType,
     variants,
     activeVariantRecipeIdx,
     ingredients,
     recipeCogs,
-    costPriceKhr,
+    unitCostKhr,
   ]);
 
   const liveSellingPrice = useMemo(() => {
@@ -569,14 +618,32 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       const target = variants[activeVariantRecipeIdx] || variants[0];
       return Math.max(0, Number(target.priceKhr) || 0);
     }
-    return Math.max(0, Number(priceKhr) || 0);
-  }, [productType, variants, activeVariantRecipeIdx, priceKhr]);
+    if (productType === 'PACKAGED' && !allowSingleUnitSale && sellByCarton) {
+      return cartonSellingPriceKhr;
+    }
+    return basePriceNum;
+  }, [
+    productType,
+    variants,
+    activeVariantRecipeIdx,
+    allowSingleUnitSale,
+    sellByCarton,
+    cartonSellingPriceKhr,
+    basePriceNum,
+  ]);
 
-  const liveProfit = liveSellingPrice - liveUnitCost;
-  const liveMarginPct =
-    liveSellingPrice > 0 ? Math.round((liveProfit / liveSellingPrice) * 100) : 0;
+  // Direct live margin calculations bound to unitCostKhr & cartonCostKhr
+  const unitProfitKhr = basePriceNum - unitCostKhr;
+  const unitMarginPct =
+    basePriceNum > 0 ? Math.round((unitProfitKhr / basePriceNum) * 100) : 0;
+  const hasLiveUnitMargin = allowSingleUnitSale && basePriceNum > 0 && unitCostKhr > 0;
 
-  const basePriceNum = Math.max(0, Number(priceKhr) || 0);
+  const cartonProfitKhr = cartonSellingPriceKhr - cartonCostKhr;
+  const cartonMarginPct =
+    cartonSellingPriceKhr > 0 ? Math.round((cartonProfitKhr / cartonSellingPriceKhr) * 100) : 0;
+  const hasLiveCartonMargin = sellByCarton && cartonSellingPriceKhr > 0 && cartonCostKhr > 0;
+
+  const stockQtyNum = Math.max(0, Number(stockQty) || 0);
   const hasVariantsEnabled = productType === 'PREPARED_TO_ORDER' && variants.length > 0;
 
   const draftProductForLabels = useMemo<Product>(
@@ -685,9 +752,32 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               : `Please enter a valid selling price (> 0 KHR) for "${v.name.trim()}".`;
           }
         }
-      } else if (productType === 'PACKAGED' && !allowSingleUnitSale) {
-        // Carton/Pack-Only wholesale mode: single-unit selling price is optional;
-        // sellable carton pricing is validated in Step 3 / on Save.
+      } else if (productType === 'PACKAGED') {
+        if (!allowSingleUnitSale && !sellByCarton) {
+          return isKm
+            ? 'សូមបើកជម្រើសលក់យ៉ាងហោចណាស់ ១ (លក់រាយ ឬ លក់ជាកេស)។'
+            : 'Enable at least one selling option (Single Unit or Carton / Pack).';
+        }
+        if (allowSingleUnitSale) {
+          const parsed = Number(priceKhr);
+          if (priceKhr.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) {
+            return isKm
+              ? 'សូមបញ្ចូលតម្លៃលក់រាយធំជាង 0 ៛។'
+              : 'Enter a single-unit selling price greater than 0.';
+          }
+        }
+        if (sellByCarton) {
+          if (cartonUnits < 1) {
+            return isKm
+              ? 'ចំនួនក្នុង ១ កេសត្រូវតែធំជាង ឬស្មើ ១។'
+              : 'Units per carton must be at least 1.';
+          }
+          if (cartonSellingPriceKhr <= 0) {
+            return isKm
+              ? 'សូមបញ្ចូលតម្លៃលក់កេសធំជាង 0 ៛។'
+              : 'Enter a carton selling price greater than 0.';
+          }
+        }
       } else {
         const parsed = Number(priceKhr);
         if (priceKhr.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) {
@@ -749,7 +839,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const handleNextStep = () => {
     setStepError('');
     setSaveError('');
-    if (!isEditing || duplicateGuard) {
+    const mustValidate =
+      !isEditing ||
+      Boolean(duplicateGuard) ||
+      (currentStep === 2 && productType === 'PACKAGED');
+    if (mustValidate) {
       const err = validateStep(currentStep);
       if (err) {
         setStepError(err);
@@ -846,23 +940,125 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     }
   };
 
-  const handleCostOrMarkupChange = (
-    nextCostStr: string,
-    nextMarkupStr: string,
-    overrideFlag = manualPriceOverride
-  ) => {
-    setCostPriceKhr(nextCostStr);
-    setMarkupPercent(nextMarkupStr);
-    const costNum = Number(nextCostStr);
-    const markupNum = Number(nextMarkupStr);
-    if (
-      !overrideFlag &&
-      nextMarkupStr !== '' &&
-      Number.isFinite(costNum) &&
-      costNum > 0 &&
-      Number.isFinite(markupNum)
-    ) {
-      setPriceKhr(String(computePriceFromMarkup(costNum, markupNum)));
+  // Primary carton helpers (100% manual cost & price — never auto-overwrite)
+  const updatePrimaryPack = (patch: Partial<PackOption>) => {
+    setPackSizes((prev) => {
+      if (prev.length === 0) {
+        return [
+          {
+            id: generateId('pack'),
+            label: 'Carton',
+            unitsPerPack: 24,
+            costKhr: 0,
+            priceKhr: 0,
+            sellableOnPos: sellByCarton,
+            barcode: '',
+            ...patch,
+          },
+        ];
+      }
+      return prev.map((pk, idx) => (idx === 0 ? { ...pk, ...patch } : pk));
+    });
+    if (stepError) setStepError('');
+    if (saveError) setSaveError('');
+  };
+
+  const handleToggleSellSingleUnit = () => {
+    setAllowSingleUnitSale((prev) => !prev);
+    if (stepError) setStepError('');
+    if (saveError) setSaveError('');
+  };
+
+  const handleToggleSellByCarton = () => {
+    const next = !sellByCarton;
+    setSellByCarton(next);
+    if (next) {
+      setPackSizes((prev) => {
+        if (prev.length === 0) {
+          return [
+            {
+              id: generateId('pack'),
+              label: 'Carton',
+              unitsPerPack: 24,
+              costKhr: 0,
+              priceKhr: 0,
+              sellableOnPos: true,
+              barcode: '',
+            },
+          ];
+        }
+        return prev.map((pk, idx) => (idx === 0 ? { ...pk, sellableOnPos: true } : pk));
+      });
+      if (!buyModeTouchedRef.current) {
+        setBuyMode('carton');
+      }
+    } else {
+      setPackSizes((prev) =>
+        prev.map((pk, idx) => (idx === 0 ? { ...pk, sellableOnPos: false } : pk))
+      );
+    }
+    if (stepError) setStepError('');
+    if (saveError) setSaveError('');
+  };
+
+  const handleSelectBuyMode = (nextMode: BuyMode) => {
+    buyModeTouchedRef.current = true;
+    setBuyMode(nextMode);
+    if (nextMode === 'carton') {
+      setPackSizes((prev) =>
+        prev.length === 0
+          ? [
+              {
+                id: generateId('pack'),
+                label: 'Carton',
+                unitsPerPack: 24,
+                costKhr: 0,
+                priceKhr: 0,
+                sellableOnPos: sellByCarton,
+                barcode: '',
+              },
+            ]
+          : prev
+      );
+    } else {
+      setStockEntryMode('pcs');
+    }
+  };
+
+  const handleStockEntryModeSwitch = (nextMode: StockEntryMode) => {
+    if (nextMode === stockEntryMode) return;
+    setStockEntryMode(nextMode);
+    if (nextMode === 'carton') {
+      const currentPcs = Math.max(0, Number(stockQty) || 0);
+      const cartons = cartonUnits > 0 ? currentPcs / cartonUnits : 0;
+      const cleanCartons = Math.round(cartons * 100) / 100;
+      setStockCartonsInput(cleanCartons > 0 ? String(cleanCartons) : '');
+    }
+  };
+
+  const handleStockCartonsChange = (raw: string) => {
+    const cleaned = raw.replace(/[\u17E0-\u17E9]/g, (ch) =>
+      String(ch.charCodeAt(0) - 0x17e0)
+    );
+    if (!/^\d*\.?\d*$/.test(cleaned)) return;
+    setStockCartonsInput(cleaned);
+    const parsed = parseFloat(cleaned);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setStockQty('0');
+      return;
+    }
+    const basePcs = Math.round(parsed * cartonUnits * 100) / 100;
+    setStockQty(String(basePcs));
+  };
+
+  const handleCartonUnitsChange = (nextUnitsRaw: string) => {
+    const parsed = Math.max(1, Math.round(Number(nextUnitsRaw) || 1));
+    updatePrimaryPack({ unitsPerPack: parsed });
+    if (buyMode === 'carton' && stockEntryMode === 'carton') {
+      const c = parseFloat(stockCartonsInput);
+      if (Number.isFinite(c) && c > 0) {
+        setStockQty(String(Math.round(c * parsed * 100) / 100));
+      }
     }
   };
 
@@ -938,37 +1134,51 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     const effectiveCost = Math.max(0, Number(costPriceKhr) || 0);
 
     const cleanUnitBarcode = normalizeBarcodeString(barcode);
-    const cleanPackSizes: PackOption[] =
-      productType === 'PACKAGED'
+    const shouldPersistCarton = productType === 'PACKAGED' && (sellByCarton || buyMode === 'carton');
+    const sourcePacksForSave: PackOption[] = shouldPersistCarton
+      ? packSizes.length > 0
         ? packSizes
-            .map((pk, idx) => {
-              const units = Math.max(1, Math.round(Number(pk.unitsPerPack) || 1));
-              const bc = normalizeBarcodeString(pk.barcode);
-              const packPrice = Math.max(0, Math.round(Number(pk.priceKhr) || 0));
-              const sellableOnPos = pk.sellableOnPos !== false;
-              return {
-                id: pk.id?.trim() || generateId(`pack_${idx}`),
-                label: pk.label.trim() || `Carton (${units} ${unit})`,
-                unitsPerPack: units,
-                costKhr: Math.max(0, Math.round(Number(pk.costKhr) || 0)),
-                priceKhr: packPrice,
-                sellableOnPos,
-                ...(bc ? { barcode: bc } : {}),
-              };
-            })
-            .filter((pk) => pk.unitsPerPack >= 1)
-        : [];
+        : [
+            {
+              id: generateId('pack'),
+              label: 'Carton',
+              unitsPerPack: cartonUnits,
+              costKhr: cartonCostKhr,
+              priceKhr: sellByCarton ? cartonSellingPriceKhr : 0,
+              sellableOnPos: sellByCarton,
+              barcode: cartonBarcode,
+            },
+          ]
+      : [];
+
+    const cleanPackSizes: PackOption[] = sourcePacksForSave
+      .map((pk, idx) => {
+        const units = Math.max(1, Math.round(Number(pk.unitsPerPack) || 1));
+        const bc = normalizeBarcodeString(pk.barcode);
+        const isRowSellable = idx === 0 ? sellByCarton : pk.sellableOnPos !== false;
+        const packPrice = isRowSellable ? Math.max(0, Math.round(Number(pk.priceKhr) || 0)) : 0;
+        return {
+          id: pk.id?.trim() || generateId(`pack_${idx}`),
+          label: pk.label.trim() || 'Carton',
+          unitsPerPack: units,
+          costKhr: Math.max(0, Math.round(Number(pk.costKhr) || 0)),
+          priceKhr: packPrice,
+          sellableOnPos: isRowSellable,
+          ...(bc ? { barcode: bc } : {}),
+        };
+      })
+      .filter((pk) => pk.unitsPerPack >= 1);
 
     if (productType === 'PACKAGED' && !allowSingleUnitSale) {
       const hasSellablePack = cleanPackSizes.some(
         (pk) => pk.sellableOnPos !== false && pk.priceKhr > 0
       );
       if (!hasSellablePack) {
-        setCurrentStep(3);
+        setCurrentStep(2);
         setSaveError(
           isKm
-            ? 'ទំនិញលក់តែជាកេសត្រូវមានយ៉ាងហោចណាស់កេស ១ ដែលបើកលក់លើ POS និងមានតម្លៃលក់ធំជាង 0។'
-            : 'Carton-only products require at least one carton/pack enabled for POS with a selling price greater than 0.'
+            ? 'ទំនិញលក់តែជាកេសត្រូវបើកការលក់ជាកេស និងមានតម្លៃលក់ធំជាង 0 ៛។'
+            : 'Carton-only products require Sell by Carton enabled with a selling price greater than 0.'
         );
         return;
       }
@@ -1040,10 +1250,15 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         setBarcodeSource(undefined);
         setPackSizes([]);
         setStockQty('0');
+        setStockCartonsInput('');
+        setStockEntryMode('carton');
+        setBuyMode('carton');
+        buyModeTouchedRef.current = false;
         setCostPriceKhr('0');
         setMarkupPercent('');
-        setManualPriceOverride(false);
+        setManualPriceOverride(true);
         setAllowSingleUnitSale(true);
+        setSellByCarton(false);
         setPriceKhr(productType === 'PACKAGED' ? '' : '8000');
         setImageUrl(DRINK_IMAGE_PRESETS[0].url);
         setPhotoError('');
@@ -1051,7 +1266,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         setVariants([]);
         setActiveVariantRecipeIdx(0);
         setShowSecondaryNaming(false);
-        setShowMarkupCalc(false);
         setPrefillBanner('none');
         setExternalLookupNote('');
         setStepError('');
@@ -1103,32 +1317,26 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setRecipe((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  // Carton / Pack selling option helpers (manual cost & selling price)
-  const addPackOption = () => {
-    setPackSizes((prev) => [
-      ...prev,
-      {
-        id: generateId('pack'),
-        label: prev.length === 0 ? `Carton (24 ${unit})` : `6-Pack`,
-        unitsPerPack: prev.length === 0 ? 24 : 6,
-        costKhr: 0,
-        priceKhr: 0,
-        sellableOnPos: true,
-        barcode: '',
-      },
-    ]);
-  };
-
   const updatePackOption = (index: number, patch: Partial<PackOption>) => {
-    setPackSizes((prev) =>
-      prev.map((pk, idx) => (idx === index ? { ...pk, ...patch } : pk))
-    );
+    setPackSizes((prev) => {
+      if (index === 0 && prev.length === 0) {
+        return [
+          {
+            id: generateId('pack'),
+            label: 'Carton',
+            unitsPerPack: 24,
+            costKhr: 0,
+            priceKhr: 0,
+            sellableOnPos: sellByCarton,
+            barcode: '',
+            ...patch,
+          },
+        ];
+      }
+      return prev.map((pk, idx) => (idx === index ? { ...pk, ...patch } : pk));
+    });
     setStepError('');
     setSaveError('');
-  };
-
-  const removePackOption = (index: number) => {
-    setPackSizes((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   // Size variant helpers
@@ -1355,19 +1563,33 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     {
       step: 2,
       shortLabel: isKm ? 'តម្លៃ' : 'Pricing',
-      fullLabel: isKm ? 'តម្លៃ និងទំហំ' : 'Pricing & Variants',
+      fullLabel:
+        productType === 'PACKAGED'
+          ? isKm
+            ? 'តម្លៃលក់'
+            : 'Pricing'
+          : isKm
+            ? 'តម្លៃ និងទំហំ'
+            : 'Pricing & Variants',
     },
     {
       step: 3,
-      shortLabel: isKm ? 'រូបមន្ត/ស្តុក' : 'Recipe & Stock',
+      shortLabel:
+        productType === 'PACKAGED'
+          ? isKm
+            ? 'ថ្លៃដើម/ស្តុក'
+            : 'Cost & Stock'
+          : isKm
+            ? 'រូបមន្ត/ស្តុក'
+            : 'Recipe & Stock',
       fullLabel:
         productType === 'PREPARED_TO_ORDER'
           ? isKm
             ? 'រូបមន្ត និងថ្លៃដើម'
             : 'Recipe & Stock'
           : isKm
-            ? 'ស្តុក និងថ្លៃដើម'
-            : 'Recipe & Stock',
+            ? 'ថ្លៃដើម និងស្តុក'
+            : 'Cost & Stock',
     },
   ];
 
@@ -1479,7 +1701,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
           <form onSubmit={handleFormSubmit} noValidate className="flex-1 flex flex-col min-h-0">
             {/* Scrollable Step Content Body */}
-            <div ref={scrollBodyRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+            <div
+              ref={scrollBodyRef}
+              className={`flex-1 overflow-y-auto space-y-5 ${
+                productType === 'PACKAGED' && (currentStep === 2 || currentStep === 3)
+                  ? 'bg-white dark:bg-[#111A16] px-5 sm:px-7 py-6'
+                  : 'p-4 sm:p-6'
+              }`}
+            >
               {/* Step Validation or Save / Barcode Conflict Error Banner */}
               {(stepError || saveError || barcodeConflicts.length > 0) && (
                 <div
@@ -2138,195 +2367,262 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               {/* ============================================================ */}
               {currentStep === 2 && (
                 <div className="space-y-5">
-                  {/* Primary Selling Price Card with Live USD Conversion */}
-                  <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 space-y-4">
-                    <legend className="sr-only">
-                      {isKm ? 'តម្លៃលក់មូលដ្ឋាន' : 'Base Selling Price'}
-                    </legend>
-                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-[#1F3028]">
-                      <div className="flex items-center gap-1">
-                        <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                          {isKm ? 'តម្លៃលក់ (KHR)' : 'Base Selling Price'}
+                  {productType === 'PACKAGED' ? (
+                    /* ULTRA-MINIMALIST RETAIL PACKAGED PRICING (FLAT CANVAS + HAIRLINE DIVIDERS) */
+                    <div className="space-y-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                          {isKm ? 'តម្លៃលក់' : 'Pricing'}
                         </h3>
-                        <InfoHint
-                          compact
-                          label={isKm ? 'អំពីការបម្លែងប្រាក់ដុល្លារ' : 'About USD conversion'}
-                          text={
-                            isKm
-                              ? `បង្ហាញតម្លៃដុល្លារប្រហាក់ប្រហែលតាមអត្រាប្ដូរប្រាក់ POS (${exchangeRate.toLocaleString('en-US')} ៛/$)។ តម្លៃវិក្កយបត្រនៅតែគិតជាប្រាក់រៀល។`
-                              : `Shows live USD reference using your POS exchange rate (${exchangeRate.toLocaleString('en-US')} ៛/$). Register totals remain in KHR.`
-                          }
-                        />
+                        <span className="font-mono-num text-xs text-slate-400 dark:text-slate-500">
+                          {exchangeRate.toLocaleString('en-US')} ៛ / $1
+                        </span>
                       </div>
-                      <span className="font-mono-num text-xs text-stone-500 dark:text-[#94A39B]">
-                        {exchangeRate.toLocaleString('en-US')} ៛ / $1
-                      </span>
-                    </div>
 
-                    {/* Retail Packaged: Single-Unit Sale Mode Toggle */}
-                    {productType === 'PACKAGED' && (
-                      <div className="flex items-center justify-between gap-4 px-3.5 py-2.5 rounded-lg bg-stone-50/80 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C]">
-                        <div className="min-w-0">
-                          <span className="block text-xs font-semibold text-stone-800 dark:text-[#F1F5F3]">
-                            {isKm ? 'លក់រាយជាឯកតា (ដប/កំប៉ុង) លើ POS' : 'Sell Individual Units on POS'}
-                          </span>
-                          <span className="block text-[11px] text-stone-500 dark:text-[#94A39B] mt-0.5">
-                            {allowSingleUnitSale
-                              ? isKm
-                                ? 'បើក៖ អាចលក់រាយជាឯកតា ឬលក់ទាំងរាយ និងជាកេស។'
-                                : 'Enabled: sell single units, or both single units & cartons.'
-                              : isKm
-                                ? 'បិទ៖ លក់តែជាកេស / យួរប៉ុណ្ណោះ (កំណត់តម្លៃកេសនៅជំហានទី ៣)។'
-                                : 'Off: Carton / Pack Only mode — configure sellable carton price in Step 3.'}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={allowSingleUnitSale}
-                          onClick={() => {
-                            setAllowSingleUnitSale((prev) => !prev);
-                            if (stepError) setStepError('');
-                            if (saveError) setSaveError('');
-                          }}
-                          className="min-h-[44px] min-w-[52px] inline-flex items-center justify-end shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981] rounded-lg"
-                          aria-label={isKm ? 'លក់រាយជាឯកតាលើ POS' : 'Sell Individual Units on POS'}
-                        >
-                          <span
-                            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                              allowSingleUnitSale
-                                ? 'bg-[#0F5C43] dark:bg-[#10B981]'
-                                : 'bg-stone-300 dark:bg-[#24352C]'
-                            }`}
+                      {/* Row 1 — Sell Single Unit (1 pc) */}
+                      <div className="pt-5 border-t border-slate-200/60 dark:border-emerald-950/50">
+                        <div className="flex items-center justify-between gap-4">
+                          <label
+                            htmlFor="pf-toggle-single-unit"
+                            className="text-sm font-medium text-slate-900 dark:text-slate-100 cursor-pointer select-none"
+                          >
+                            {isKm
+                              ? `លក់រាយ (១ ${unitLabel})`
+                              : `Sell Single Unit (1 ${unitLabel === 'pcs' ? 'pc' : unitLabel})`}
+                          </label>
+                          <button
+                            id="pf-toggle-single-unit"
+                            type="button"
+                            role="switch"
+                            aria-checked={allowSingleUnitSale}
+                            onClick={handleToggleSellSingleUnit}
+                            className="min-h-[44px] min-w-[52px] inline-flex items-center justify-end shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:focus-visible:ring-emerald-500 rounded-lg"
                           >
                             <span
-                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
-                                allowSingleUnitSale ? 'translate-x-6' : 'translate-x-1'
+                              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-150 ${
+                                allowSingleUnitSale
+                                  ? 'bg-[#0F5C43] dark:bg-[#10B981]'
+                                  : 'bg-slate-200 dark:bg-[#1E2E26]'
                               }`}
-                            />
-                          </span>
-                        </button>
-                      </div>
-                    )}
-
-                    <div className={productType === 'PACKAGED' && !allowSingleUnitSale ? 'opacity-65' : ''}>
-                      <label
-                        htmlFor="pf-price"
-                        className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
-                      >
-                        {productType === 'PACKAGED'
-                          ? isKm
-                            ? `តម្លៃលក់រាយ (${unit})`
-                            : `Single-Unit Selling Price (per ${unit})`
-                          : t.products.sellingPrice}{' '}
-                        {!hasVariantsEnabled && (productType !== 'PACKAGED' || allowSingleUnitSale) ? '*' : ''}
-                      </label>
-                      <CurrencyInput
-                        id="pf-price"
-                        size="lg"
-                        valueKhr={basePriceNum}
-                        onChangeKhr={(nextKhr) => {
-                          setManualPriceOverride(true);
-                          setPriceKhr(nextKhr > 0 ? String(nextKhr) : '');
-                          if (stepError) setStepError('');
-                        }}
-                        exchangeRate={exchangeRate}
-                        disabled={productType === 'PACKAGED' && !allowSingleUnitSale}
-                        placeholderKhr="8000"
-                        placeholderUsd="2.00"
-                        helperExtra={
-                          productType === 'PACKAGED' && !allowSingleUnitSale ? (
-                            <span className="text-amber-700 dark:text-amber-300 font-medium">
-                              {isKm ? 'កំណត់តម្លៃកេសនៅជំហានទី ៣' : 'Set carton selling price in Step 3'}
-                            </span>
-                          ) : undefined
-                        }
-                      />
-                    </div>
-
-                    {hasVariantsEnabled && (
-                      <p className="text-xs text-stone-500 dark:text-[#94A39B]">
-                        {isKm
-                          ? 'កំពុងបើកទំហំច្រើនខាងក្រោម — បុគ្គលិក POS នឹងជ្រើសរើសតម្លៃតាមទំហំកែវនីមួយៗ។'
-                          : 'Size variants are enabled below — POS cashiers will ring up each size at its variant price.'}
-                      </p>
-                    )}
-
-                    {/* Optional Markup Auto-Pricing for Retail Packaged */}
-                    {productType === 'PACKAGED' && allowSingleUnitSale && (
-                      <CollapsibleFieldset
-                        id="pf-markup"
-                        variant="nested"
-                        title={
-                          isKm
-                            ? 'គណនាតម្លៃស្វ័យប្រវត្តិតាម % ចំណេញ (ស្រេចចិត្ត)'
-                            : 'Markup Auto-Pricing Calculator (optional)'
-                        }
-                        summary={markupPercent ? `+${markupPercent}%` : undefined}
-                        open={showMarkupCalc}
-                        onToggle={() => setShowMarkupCalc((prev) => !prev)}
-                      >
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
-                          <div>
-                            <label
-                              htmlFor="pf-cost-step2"
-                              className="block text-xs font-medium text-stone-600 dark:text-[#D5DFDA] mb-1.5"
                             >
-                              {isKm ? 'ថ្លៃដើមយោង (KHR / USD)' : 'Unit Cost Reference'}
+                              <span
+                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-xs transition-transform duration-150 ${
+                                  allowSingleUnitSale ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </span>
+                          </button>
+                        </div>
+
+                        <AccordionReveal open={allowSingleUnitSale}>
+                          <div className="pt-3.5 pb-1 px-0.5 max-w-md">
+                            <label
+                              htmlFor="pf-price"
+                              className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
+                            >
+                              {isKm ? 'តម្លៃលក់រាយ' : 'Unit Selling Price'}
                             </label>
                             <CurrencyInput
-                              id="pf-cost-step2"
-                              valueKhr={Math.max(0, Number(costPriceKhr) || 0)}
-                              onChangeKhr={(nextKhr) =>
-                                handleCostOrMarkupChange(String(nextKhr), markupPercent)
-                              }
-                              exchangeRate={exchangeRate}
-                              placeholderKhr="1000"
-                              placeholderUsd="0.25"
-                            />
-                          </div>
-                          <div>
-                            <label
-                              htmlFor="pf-markup-input"
-                              className="block text-xs font-medium text-stone-600 dark:text-[#D5DFDA] mb-1.5"
-                            >
-                              {isKm ? 'ភាគរយចំណេញគោលដៅ (%)' : 'Target Markup (%)'}
-                            </label>
-                            <input
-                              id="pf-markup-input"
-                              type="number"
-                              min={0}
-                              step={5}
-                              placeholder="e.g. 50"
-                              value={markupPercent}
-                              onChange={(e) => {
-                                setManualPriceOverride(false);
-                                handleCostOrMarkupChange(costPriceKhr, e.target.value, false);
+                              id="pf-price"
+                              size="lg"
+                              valueKhr={basePriceNum}
+                              onChangeKhr={(nextKhr) => {
+                                setManualPriceOverride(true);
+                                setPriceKhr(nextKhr > 0 ? String(nextKhr) : '');
+                                if (stepError) setStepError('');
                               }}
-                              className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
+                              exchangeRate={exchangeRate}
+                              placeholderKhr="0"
+                              placeholderUsd="0.00"
                             />
                           </div>
+                        </AccordionReveal>
+                      </div>
+
+                      {/* Row 2 — Sell by Carton / Pack */}
+                      <div className="pt-5 border-t border-slate-200/60 dark:border-emerald-950/50">
+                        <div className="flex items-center justify-between gap-4">
+                          <label
+                            htmlFor="pf-toggle-carton-sale"
+                            className="text-sm font-medium text-slate-900 dark:text-slate-100 cursor-pointer select-none"
+                          >
+                            {isKm ? 'លក់ជាកេស / យួរ' : 'Sell by Carton / Pack'}
+                          </label>
+                          <button
+                            id="pf-toggle-carton-sale"
+                            type="button"
+                            role="switch"
+                            aria-checked={sellByCarton}
+                            onClick={handleToggleSellByCarton}
+                            className="min-h-[44px] min-w-[52px] inline-flex items-center justify-end shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:focus-visible:ring-emerald-500 rounded-lg"
+                          >
+                            <span
+                              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-150 ${
+                                sellByCarton
+                                  ? 'bg-[#0F5C43] dark:bg-[#10B981]'
+                                  : 'bg-slate-200 dark:bg-[#1E2E26]'
+                              }`}
+                            >
+                              <span
+                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-xs transition-transform duration-150 ${
+                                  sellByCarton ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </span>
+                          </button>
                         </div>
-                        <label className="min-h-[44px] mt-2 inline-flex items-center gap-2.5 text-xs text-stone-600 dark:text-[#D5DFDA] cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={manualPriceOverride}
-                            onChange={(e) => {
-                              const nextOverride = e.target.checked;
-                              setManualPriceOverride(nextOverride);
-                              if (!nextOverride) {
-                                handleCostOrMarkupChange(costPriceKhr, markupPercent, false);
-                              }
-                            }}
-                            className="w-5 h-5 accent-[#0F5C43] dark:accent-[#10B981] rounded"
+
+                        <AccordionReveal open={sellByCarton}>
+                          <div className="pt-3.5 pb-1 px-0.5 grid grid-cols-1 sm:grid-cols-12 gap-4 items-start">
+                            {/* Pack Name */}
+                            <div className="sm:col-span-7">
+                              <label
+                                htmlFor="pf-pack-name"
+                                className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
+                              >
+                                {isKm ? 'ឈ្មោះកេស' : 'Pack Name'}
+                              </label>
+                              <input
+                                id="pf-pack-name"
+                                type="text"
+                                maxLength={60}
+                                value={cartonLabel}
+                                onChange={(e) => updatePrimaryPack({ label: e.target.value })}
+                                placeholder={isKm ? 'កេស' : 'Carton'}
+                                className="w-full h-11 px-3.5 text-sm border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
+                              />
+                            </div>
+
+                            {/* Units / Carton */}
+                            <div className="sm:col-span-5">
+                              <label
+                                htmlFor="pf-pack-units-step2"
+                                className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
+                              >
+                                {isKm ? 'ចំនួន / កេស' : 'Units / Carton'}
+                              </label>
+                              <input
+                                id="pf-pack-units-step2"
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={cartonUnits}
+                                onChange={(e) => handleCartonUnitsChange(e.target.value)}
+                                placeholder="24"
+                                className="w-full h-11 px-3.5 text-sm font-semibold tabular-nums border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
+                              />
+                            </div>
+
+                            {/* Carton Selling Price */}
+                            <div className="sm:col-span-7">
+                              <label
+                                htmlFor="pf-carton-price"
+                                className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
+                              >
+                                {isKm ? 'តម្លៃលក់កេស' : 'Carton Selling Price'}
+                              </label>
+                              <CurrencyInput
+                                id="pf-carton-price"
+                                valueKhr={cartonSellingPriceKhr}
+                                onChangeKhr={(nextKhr) =>
+                                  updatePrimaryPack({ priceKhr: nextKhr, sellableOnPos: true })
+                                }
+                                exchangeRate={exchangeRate}
+                                placeholderKhr="0"
+                                placeholderUsd="0.00"
+                              />
+                            </div>
+
+                            {/* Carton Barcode (optional, inline scan icon inside right edge) */}
+                            <div className="sm:col-span-5">
+                              <label
+                                htmlFor="pf-carton-barcode"
+                                className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
+                              >
+                                {isKm ? 'បាកូដកេស' : 'Carton Barcode'}
+                              </label>
+                              <div className="relative flex items-center">
+                                <input
+                                  id="pf-carton-barcode"
+                                  type="text"
+                                  maxLength={64}
+                                  value={cartonBarcode}
+                                  onChange={(e) => updatePrimaryPack({ barcode: e.target.value })}
+                                  placeholder={isKm ? 'ស្រេចចិត្ត' : 'Optional'}
+                                  className="w-full h-11 pl-3.5 pr-11 text-sm font-mono-num border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setScannerTarget({ kind: 'pack', index: 0 })}
+                                  aria-label={isKm ? 'ស្កេនបាកូដកេស' : 'Scan carton barcode'}
+                                  title={isKm ? 'ស្កេនបាកូដកេស' : 'Scan carton barcode'}
+                                  className="absolute right-0.5 w-10 h-10 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-lg transition-colors"
+                                >
+                                  <ScanBarcode className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </AccordionReveal>
+                      </div>
+                    </div>
+                  ) : (
+                    /* MADE-TO-ORDER BASE SELLING PRICE */
+                    <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 space-y-4">
+                      <legend className="sr-only">
+                        {isKm ? 'តម្លៃលក់មូលដ្ឋាន' : 'Base Selling Price'}
+                      </legend>
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-[#1F3028]">
+                        <div className="flex items-center gap-1">
+                          <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                            {isKm ? 'តម្លៃលក់ (KHR)' : 'Base Selling Price'}
+                          </h3>
+                          <InfoHint
+                            compact
+                            label={isKm ? 'អំពីការបម្លែងប្រាក់ដុល្លារ' : 'About USD conversion'}
+                            text={
+                              isKm
+                                ? `បង្ហាញតម្លៃដុល្លារប្រហាក់ប្រហែលតាមអត្រាប្ដូរប្រាក់ POS (${exchangeRate.toLocaleString('en-US')} ៛/$)។ តម្លៃវិក្កយបត្រនៅតែគិតជាប្រាក់រៀល។`
+                                : `Shows live USD reference using your POS exchange rate (${exchangeRate.toLocaleString('en-US')} ៛/$). Register totals remain in KHR.`
+                            }
                           />
-                          {isKm
-                            ? 'រក្សាតម្លៃលក់ដែលវាយបញ្ចូលដោយដៃ (មិនប្តូរតាម % ចំណេញ)'
-                            : 'Keep manual selling price override'}
+                        </div>
+                        <span className="font-mono-num text-xs text-stone-500 dark:text-[#94A39B]">
+                          {exchangeRate.toLocaleString('en-US')} ៛ / $1
+                        </span>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="pf-price"
+                          className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                        >
+                          {t.products.sellingPrice} {!hasVariantsEnabled ? '*' : ''}
                         </label>
-                      </CollapsibleFieldset>
-                    )}
-                  </fieldset>
+                        <CurrencyInput
+                          id="pf-price"
+                          size="lg"
+                          valueKhr={basePriceNum}
+                          onChangeKhr={(nextKhr) => {
+                            setManualPriceOverride(true);
+                            setPriceKhr(nextKhr > 0 ? String(nextKhr) : '');
+                            if (stepError) setStepError('');
+                          }}
+                          exchangeRate={exchangeRate}
+                          placeholderKhr="0"
+                          placeholderUsd="0.00"
+                        />
+                      </div>
+
+                      {hasVariantsEnabled && (
+                        <p className="text-xs text-stone-500 dark:text-[#94A39B]">
+                          {isKm
+                            ? 'កំពុងបើកទំហំច្រើនខាងក្រោម — បុគ្គលិក POS នឹងជ្រើសរើសតម្លៃតាមទំហំកែវនីមួយៗ។'
+                            : 'Size variants are enabled below — POS cashiers will ring up each size at its variant price.'}
+                        </p>
+                      )}
+                    </fieldset>
+                  )}
 
                   {/* Size Variants Section for Made-to-Order Items */}
                   {productType === 'PREPARED_TO_ORDER' && (
@@ -2841,81 +3137,322 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     </>
                   )}
 
-                  {/* MODE B: RETAIL PACKAGED (COST, STOCK, THRESHOLD, SUPPLIER/CASE) */}
+                  {/* MODE B: RETAIL PACKAGED — ULTRA-MINIMALIST COST & STOCK */}
                   {productType === 'PACKAGED' && (
-                    <>
-                      {/* Live Cost & Margin Summary Strip */}
-                      <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5">
-                        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 border-b border-stone-100 dark:border-[#1F3028]">
-                          <div className="flex items-center gap-1.5">
-                            <Package className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                            <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                              {isKm ? 'ថ្លៃដើម និងការតាមដានស្តុក' : 'Unit Cost & Stock Tracking'}
-                            </h3>
-                            <InfoHint
-                              compact
-                              label={isKm ? 'អំពីការកាត់ស្តុកផ្ទាល់' : 'About direct stock deduction'}
-                              text={
-                                isKm
-                                  ? 'ទំនិញវេចខ្ចប់ស្រាប់នឹងកាត់ស្តុកចំនួនឯកតាដោយផ្ទាល់លើរាល់ការលក់ POS ហើយជូនដំណឹងពេលស្តុកទាបជាងកម្រិតកំណត់។'
-                                  : 'Retail Packaged goods deduct directly from stock quantity on every POS sale and trigger low-stock alerts below your threshold.'
-                              }
-                            />
-                          </div>
-                          <span className="font-mono-num text-xs font-semibold text-emerald-700 dark:text-[#34D399]">
-                            {!allowSingleUnitSale
-                              ? isKm
-                                ? 'លក់តែជាកេស / យួរ'
-                                : 'Carton-Only Mode'
-                              : liveSellingPrice > 0
-                                ? `${liveMarginPct}% ${isKm ? 'ចំណេញ' : 'margin'} · ${formatKhr(liveProfit)}`
-                                : formatKhr(liveUnitCost)}
-                          </span>
+                    <div className="space-y-5">
+                      {/* Top Bar: Buying Mode Segmented Control + Live Margin Readout */}
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div
+                          role="tablist"
+                          aria-label={isKm ? 'របៀបទិញចូល' : 'Buying mode'}
+                          className="inline-flex items-center p-1 rounded-xl bg-slate-100/90 dark:bg-[#0B1712] border border-slate-200/60 dark:border-emerald-950/60"
+                        >
+                          <button
+                            type="button"
+                            role="tab"
+                            aria-selected={buyMode === 'carton'}
+                            onClick={() => handleSelectBuyMode('carton')}
+                            className={`h-10 px-4 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                              buyMode === 'carton'
+                                ? 'bg-white dark:bg-[#162820] text-slate-900 dark:text-slate-100 shadow-xs'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            {isKm ? 'ទិញជាកេស' : 'Buy by Carton'}
+                          </button>
+                          <button
+                            type="button"
+                            role="tab"
+                            aria-selected={buyMode === 'unit'}
+                            onClick={() => handleSelectBuyMode('unit')}
+                            className={`h-10 px-4 rounded-lg text-xs font-semibold transition-all duration-150 whitespace-nowrap ${
+                              buyMode === 'unit'
+                                ? 'bg-white dark:bg-[#162820] text-slate-900 dark:text-slate-100 shadow-xs'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            {isKm ? 'ទិញរាយ' : 'Buy by Single Unit'}
+                          </button>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-start">
-                          <div className="lg:col-span-5">
+                        {/* Live Margin Readout (Bound Directly to unitCostKhr & cartonCostKhr) */}
+                        <div className="flex items-center gap-2 text-xs font-mono-num">
+                          {hasLiveUnitMargin && (
+                            <span
+                              className={`font-semibold ${
+                                unitProfitKhr >= 0
+                                  ? 'text-emerald-700 dark:text-[#34D399]'
+                                  : 'text-rose-600 dark:text-rose-400'
+                              }`}
+                            >
+                              {isKm ? `${unitMarginPct}% ចំណេញ` : `${unitMarginPct}% margin`}
+                            </span>
+                          )}
+                          {hasLiveUnitMargin && hasLiveCartonMargin && (
+                            <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">
+                              ·
+                            </span>
+                          )}
+                          {hasLiveCartonMargin && (
+                            <span
+                              className={`font-semibold ${
+                                cartonProfitKhr >= 0
+                                  ? 'text-sky-700 dark:text-sky-400'
+                                  : 'text-rose-600 dark:text-rose-400'
+                              }`}
+                            >
+                              {isKm
+                                ? `កេស ${cartonMarginPct}%`
+                                : hasLiveUnitMargin
+                                  ? `Carton ${cartonMarginPct}%`
+                                  : `Carton ${cartonMarginPct}% margin`}
+                            </span>
+                          )}
+                          {!hasLiveUnitMargin && !hasLiveCartonMargin && (
+                            <span className="text-slate-400 dark:text-slate-500">—</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {buyMode === 'carton' ? (
+                        <>
+                          {/* Primary 3-Column Row: Units/Carton · Carton Cost · Stock Qty (Cartons | pcs) */}
+                          <div className="pt-5 border-t border-slate-200/60 dark:border-emerald-950/50 grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                            {/* Units / Carton */}
+                            <div className="md:col-span-2">
+                              <label
+                                htmlFor="pf-pack-units-step3"
+                                className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
+                              >
+                                {isKm ? 'ចំនួន / កេស' : 'Units / Carton'}
+                              </label>
+                              <input
+                                id="pf-pack-units-step3"
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={cartonUnits}
+                                onChange={(e) => handleCartonUnitsChange(e.target.value)}
+                                placeholder="24"
+                                className="w-full h-11 px-3.5 text-sm font-semibold tabular-nums border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
+                              />
+                            </div>
+
+                            {/* Carton Cost */}
+                            <div className="md:col-span-5">
+                              <label
+                                htmlFor="pf-carton-cost"
+                                className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
+                              >
+                                {isKm ? 'ថ្លៃដើមកេស' : 'Carton Cost'}
+                              </label>
+                              <CurrencyInput
+                                id="pf-carton-cost"
+                                valueKhr={cartonCostKhr}
+                                onChangeKhr={(nextKhr) => updatePrimaryPack({ costKhr: nextKhr })}
+                                exchangeRate={exchangeRate}
+                                placeholderKhr="0"
+                                placeholderUsd="0.00"
+                              />
+                            </div>
+
+                            {/* Stock Qty with compact Cartons | pcs toggle */}
+                            <div className="md:col-span-5">
+                              <label
+                                htmlFor="pf-stock"
+                                className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
+                              >
+                                {isKm ? 'បរិមាណស្តុក' : 'Stock Qty'}
+                              </label>
+                              <div className="flex items-center h-11 w-full rounded-xl border border-slate-200/80 dark:border-emerald-950/70 hover:border-slate-300 dark:hover:border-emerald-900/80 bg-white dark:bg-[#0B1712] focus-within:border-emerald-600 dark:focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15 transition-colors">
+                                <input
+                                  id="pf-stock"
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={
+                                    stockEntryMode === 'carton'
+                                      ? stockCartonsInput
+                                      : stockQty === '0'
+                                        ? ''
+                                        : stockQty
+                                  }
+                                  onChange={(e) => {
+                                    if (stockEntryMode === 'carton') {
+                                      handleStockCartonsChange(e.target.value);
+                                    } else {
+                                      const cleaned = e.target.value.replace(
+                                        /[\u17E0-\u17E9]/g,
+                                        (ch) => String(ch.charCodeAt(0) - 0x17e0)
+                                      );
+                                      if (!/^\d*\.?\d*$/.test(cleaned)) return;
+                                      setStockQty(cleaned === '' ? '0' : cleaned);
+                                    }
+                                  }}
+                                  placeholder="0"
+                                  className="w-full min-w-0 h-full bg-transparent pl-3.5 pr-2 text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:outline-none"
+                                />
+                                <div
+                                  role="group"
+                                  aria-label={isKm ? 'ឯកតាស្តុក' : 'Stock unit'}
+                                  className="flex items-center p-0.5 mr-1.5 rounded-lg bg-slate-100/90 dark:bg-[#13221B] shrink-0"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStockEntryModeSwitch('carton')}
+                                    className={`px-2 h-7 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap ${
+                                      stockEntryMode === 'carton'
+                                        ? 'bg-white dark:bg-emerald-600 text-slate-900 dark:text-white shadow-xs'
+                                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                                    }`}
+                                  >
+                                    {isKm ? 'កេស' : 'Cartons'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStockEntryModeSwitch('pcs')}
+                                    className={`px-2 h-7 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap ${
+                                      stockEntryMode === 'pcs'
+                                        ? 'bg-white dark:bg-emerald-600 text-slate-900 dark:text-white shadow-xs'
+                                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                                    }`}
+                                  >
+                                    {unitLabel}
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+                                {stockEntryMode === 'carton'
+                                  ? `= ${formatQty(stockQtyNum, unitLabel)}`
+                                  : stockQtyNum > 0 && cartonUnits > 1
+                                    ? `= ${(Math.round((stockQtyNum / cartonUnits) * 100) / 100).toLocaleString('en-US')} ${isKm ? 'កេស' : 'cartons'}`
+                                    : `${formatQty(stockQtyNum, unitLabel)}`}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Conditional Single-Unit Cost (ONLY if Sell Single Unit is ON in Step 2) */}
+                          {allowSingleUnitSale && (
+                            <div className="pt-5 border-t border-slate-200/60 dark:border-emerald-950/50 max-w-md">
+                              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                                <label
+                                  htmlFor="pf-cost"
+                                  className="block text-xs font-medium text-slate-600 dark:text-slate-400"
+                                >
+                                  {isKm ? 'ថ្លៃដើមរាយ' : 'Single-Unit Cost'}
+                                </label>
+                                {suggestedUnitCostKhr > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setCostPriceKhr(String(suggestedUnitCostKhr))}
+                                    className="px-2.5 py-1 rounded-full text-[11px] font-medium tabular-nums text-emerald-700 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/60 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer whitespace-nowrap"
+                                  >
+                                    {formatKhr(suggestedUnitCostKhr)} (
+                                    {cartonCostKhr.toLocaleString('en-US')} ÷ {cartonUnits})
+                                  </button>
+                                )}
+                              </div>
+                              <CurrencyInput
+                                id="pf-cost"
+                                valueKhr={unitCostKhr}
+                                onChangeKhr={(nextKhr) => setCostPriceKhr(String(nextKhr))}
+                                exchangeRate={exchangeRate}
+                                placeholderKhr="0"
+                                placeholderUsd="0.00"
+                              />
+                            </div>
+                          )}
+
+                          {/* Low-Stock Alert (pcs) & Supplier */}
+                          <div className="pt-5 border-t border-slate-200/60 dark:border-emerald-950/50 grid grid-cols-1 sm:grid-cols-12 gap-4 items-start">
+                            <div className="sm:col-span-5">
+                              <label
+                                htmlFor="pf-reorder"
+                                className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
+                              >
+                                {isKm
+                                  ? `ជូនដំណឹងស្តុកទាប (${unitLabel})`
+                                  : `Low-Stock Alert (${unitLabel})`}
+                              </label>
+                              <input
+                                id="pf-reorder"
+                                type="number"
+                                min={0}
+                                step="any"
+                                value={reorderLevel}
+                                onChange={(e) => setReorderLevel(e.target.value)}
+                                placeholder="12"
+                                className="w-full h-11 px-3.5 text-sm font-semibold tabular-nums border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-7">
+                              <label
+                                htmlFor="pf-supplier"
+                                className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
+                              >
+                                {isKm ? 'អ្នកផ្គត់ផ្គង់' : 'Supplier'}
+                              </label>
+                              <input
+                                id="pf-supplier"
+                                type="text"
+                                maxLength={100}
+                                value={supplier}
+                                onChange={(e) => setSupplier(e.target.value)}
+                                placeholder={isKm ? 'ស្រេចចិត្ត' : 'Optional'}
+                                className="w-full h-11 px-3.5 text-sm border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        /* BUY BY SINGLE UNIT: ONE CLEAN ROW */
+                        <div className="pt-5 border-t border-slate-200/60 dark:border-emerald-950/50 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-start">
+                          <div className="sm:col-span-2 lg:col-span-4">
                             <label
                               htmlFor="pf-cost"
-                              className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                              className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
                             >
-                              {isKm ? `ថ្លៃដើមរាយ (/${unit})` : `Single-Unit Cost (per ${unit})`}
+                              {isKm ? 'ថ្លៃដើមរាយ' : 'Single-Unit Cost'}
                             </label>
                             <CurrencyInput
                               id="pf-cost"
-                              valueKhr={Math.max(0, Number(costPriceKhr) || 0)}
-                              onChangeKhr={(nextKhr) =>
-                                handleCostOrMarkupChange(String(nextKhr), markupPercent)
-                              }
+                              valueKhr={unitCostKhr}
+                              onChangeKhr={(nextKhr) => setCostPriceKhr(String(nextKhr))}
                               exchangeRate={exchangeRate}
-                              placeholderKhr="1000"
-                              placeholderUsd="0.25"
-                            />
-                          </div>
-
-                          <div className="lg:col-span-3">
-                            <label
-                              htmlFor="pf-stock"
-                              className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
-                            >
-                              {isKm ? 'បរិមាណស្តុកបច្ចុប្បន្ន' : 'Current Stock Qty'}
-                            </label>
-                            <input
-                              id="pf-stock"
-                              type="number"
-                              step="any"
-                              value={stockQty}
-                              onChange={(e) => setStockQty(e.target.value)}
-                              className="w-full h-11 px-3 text-sm font-mono-num font-semibold border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                              placeholderKhr="0"
+                              placeholderUsd="0.00"
                             />
                           </div>
 
                           <div className="lg:col-span-2">
                             <label
-                              htmlFor="pf-reorder"
-                              className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                              htmlFor="pf-stock"
+                              className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 whitespace-nowrap"
                             >
-                              {isKm ? 'កម្រិតជូនដំណឹងស្តុកជិតអស់' : 'Low-Stock Alert'}
+                              {isKm ? `ស្តុក (${unitLabel})` : `Stock Qty (${unitLabel})`}
+                            </label>
+                            <input
+                              id="pf-stock"
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={stockQty === '0' ? '' : stockQty}
+                              onChange={(e) =>
+                                setStockQty(e.target.value === '' ? '0' : e.target.value)
+                              }
+                              placeholder="0"
+                              className="w-full h-11 px-3.5 text-sm font-semibold tabular-nums border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
+                            />
+                          </div>
+
+                          <div className="lg:col-span-3">
+                            <label
+                              htmlFor="pf-reorder"
+                              className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 whitespace-nowrap"
+                            >
+                              {isKm
+                                ? `ជូនដំណឹងស្តុកទាប (${unitLabel})`
+                                : `Low-Stock Alert (${unitLabel})`}
                             </label>
                             <input
                               id="pf-reorder"
@@ -2924,313 +3461,31 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               step="any"
                               value={reorderLevel}
                               onChange={(e) => setReorderLevel(e.target.value)}
-                              className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                              placeholder="12"
+                              className="w-full h-11 px-3.5 text-sm font-semibold tabular-nums border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
                             />
                           </div>
 
-                          <div className="lg:col-span-2">
+                          <div className="sm:col-span-2 lg:col-span-3">
                             <label
-                              htmlFor="pf-unit"
-                              className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                              htmlFor="pf-supplier"
+                              className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5"
                             >
-                              {t.inventory.unit}
+                              {isKm ? 'អ្នកផ្គត់ផ្គង់' : 'Supplier'}
                             </label>
-                            <select
-                              id="pf-unit"
-                              value={unit}
-                              onChange={(e) => setUnit(e.target.value as IngredientUnit)}
-                              className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-                            >
-                              {ALL_UNITS.map((u) => (
-                                <option key={u} value={u}>
-                                  {u}
-                                </option>
-                              ))}
-                            </select>
+                            <input
+                              id="pf-supplier"
+                              type="text"
+                              maxLength={100}
+                              value={supplier}
+                              onChange={(e) => setSupplier(e.target.value)}
+                              placeholder={isKm ? 'ស្រេចចិត្ត' : 'Optional'}
+                              className="w-full h-11 px-3.5 text-sm border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
+                            />
                           </div>
                         </div>
-
-                        {/* Supplier Row */}
-                        <div className="mt-4 pt-4 border-t border-stone-100 dark:border-[#1F3028]">
-                          <label
-                            htmlFor="pf-supplier"
-                            className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
-                          >
-                            {isKm ? 'អ្នកផ្គត់ផ្គង់ / ផ្សារ' : 'Supplier / Market'}
-                          </label>
-                          <input
-                            id="pf-supplier"
-                            type="text"
-                            maxLength={100}
-                            value={supplier}
-                            onChange={(e) => setSupplier(e.target.value)}
-                            placeholder={
-                              isKm
-                                ? 'ឧ. ដេប៉ូចែកចាយភេសជ្ជៈភ្នំពេញ (ស្រេចចិត្ត)'
-                                : 'e.g. Beverage Distributor / Makro (optional)'
-                            }
-                            className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Consolidated Carton / Pack Selling Options */}
-                      <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 space-y-4">
-                        <legend className="sr-only">
-                          {isKm ? 'ជម្រើសលក់ជាកេស / យួរ' : 'Carton / Pack Selling Options'}
-                        </legend>
-                        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-[#1F3028]">
-                          <div className="flex items-center gap-1.5">
-                            <Layers className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
-                            <div>
-                              <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                                {isKm ? 'ជម្រើសលក់ជាកេស / យួរ' : 'Carton / Pack Selling Options'}
-                              </h3>
-                              <p className="text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
-                                {isKm
-                                  ? `ស្តុកត្រូវបានរាប់ជាឯកតារាយ (${unit})។ បញ្ចូលថ្លៃដើម និងតម្លៃលក់កេសដោយដៃសម្រាប់ការលក់ដុំ។`
-                                  : `Stock is tracked in individual base units (${unit}). Enter manual wholesale cost and selling price per carton/pack.`}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={addPackOption}
-                            className="h-11 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] bg-emerald-50/70 dark:bg-[#064E3B]/50 border border-emerald-200 dark:border-[#10B981]/40 hover:bg-emerald-100/70 dark:hover:bg-[#064E3B] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
-                          >
-                            <Plus className="w-4 h-4" />
-                            {isKm ? 'បន្ថែមកេស / យួរ' : 'Add Carton / Pack'}
-                          </button>
-                        </div>
-
-                        {packSizes.length === 0 ? (
-                          <p className="text-xs text-stone-500 dark:text-[#94A39B]">
-                            {isKm
-                              ? 'មិនទាន់មានជម្រើសលក់ជាកេសទេ។ ចុច "បន្ថែមកេស / យួរ" ដើម្បីកំណត់តម្លៃលក់ដុំ ថ្លៃដើម និងបាកូដកេស (ឧ. កេស ២៤)។'
-                              : 'No carton or multi-pack pricing configured. Click "Add Carton / Pack" to sell wholesale cartons with independent cost, price, and barcode.'}
-                          </p>
-                        ) : (
-                          <div className="space-y-3">
-                            {packSizes.map((pk, idx) => {
-                              const packCost = Math.max(0, Number(pk.costKhr) || 0);
-                              const packPrice = Math.max(0, Number(pk.priceKhr) || 0);
-                              const isSellable = pk.sellableOnPos !== false;
-                              const packProfit = packPrice - packCost;
-                              const packMarginPct =
-                                packPrice > 0 ? Math.round((packProfit / packPrice) * 100) : 0;
-                              const packBarcodeClean = normalizeBarcodeString(pk.barcode);
-                              const packBarcodeConflict = packBarcodeClean
-                                ? barcodeConflicts.find((c) => c.code === packBarcodeClean)
-                                : undefined;
-                              const impliedUnitCost =
-                                pk.unitsPerPack > 0 && packCost > 0
-                                  ? Math.round(packCost / pk.unitsPerPack)
-                                  : 0;
-
-                              return (
-                                <div
-                                  key={pk.id || idx}
-                                  className="p-4 rounded-xl bg-stone-50/70 dark:bg-[#0F1814] border border-stone-200 dark:border-[#24352C] space-y-3"
-                                >
-                                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-stone-200/70 dark:border-[#1F3028]">
-                                    <div className="flex flex-wrap items-center gap-2 min-w-0">
-                                      <span className="text-xs font-semibold text-stone-800 dark:text-[#F1F5F3]">
-                                        {isKm ? `កេស / យួរ #${idx + 1}` : `Pack Option #${idx + 1}`}
-                                      </span>
-                                      {isSellable && packPrice > 0 && (
-                                        <>
-                                          <span className="text-stone-300 dark:text-stone-600" aria-hidden="true">·</span>
-                                          <span
-                                            className={`font-mono-num text-xs font-semibold ${
-                                              packProfit >= 0
-                                                ? 'text-emerald-700 dark:text-[#34D399]'
-                                                : 'text-rose-600 dark:text-rose-400'
-                                            }`}
-                                          >
-                                            {isKm
-                                              ? `ចំណេញកេស ${packMarginPct}% (${formatKhr(packProfit)})`
-                                              : `Carton Margin ${packMarginPct}% (${formatKhr(packProfit)})`}
-                                          </span>
-                                        </>
-                                      )}
-                                      {!isSellable && (
-                                        <>
-                                          <span className="text-stone-300 dark:text-stone-600" aria-hidden="true">·</span>
-                                          <span className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-                                            {isKm ? 'សម្រាប់តែនាំចូលស្តុក' : 'Restock-only'}
-                                          </span>
-                                        </>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <label className="inline-flex items-center gap-2 h-9 px-2.5 rounded-lg bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] text-xs font-medium text-stone-700 dark:text-[#D5DFDA] cursor-pointer select-none whitespace-nowrap">
-                                        <input
-                                          type="checkbox"
-                                          checked={isSellable}
-                                          onChange={(e) =>
-                                            updatePackOption(idx, { sellableOnPos: e.target.checked })
-                                          }
-                                          className="w-4 h-4 accent-[#0F5C43] dark:accent-[#10B981] rounded"
-                                        />
-                                        <span>{isKm ? 'លក់លើ POS' : 'Sell on POS'}</span>
-                                      </label>
-                                      <button
-                                        type="button"
-                                        onClick={() => removePackOption(idx)}
-                                        className="h-9 px-2.5 inline-flex items-center gap-1 text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
-                                        aria-label={isKm ? 'លុបជម្រើសកេស' : 'Remove carton option'}
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                        <span>{isKm ? 'លុប' : 'Remove'}</span>
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                                    <div className="sm:col-span-5">
-                                      <label className="block text-[11px] font-semibold text-stone-600 dark:text-[#94A39B] mb-1">
-                                        {isKm ? 'ឈ្មោះកេស / យួរ' : 'Pack Name'}
-                                      </label>
-                                      <input
-                                        type="text"
-                                        maxLength={60}
-                                        placeholder={isKm ? 'ឧ. កេស (២៤ ដប)' : 'e.g. Carton (24 pcs)'}
-                                        value={pk.label}
-                                        onChange={(e) =>
-                                          updatePackOption(idx, { label: e.target.value })
-                                        }
-                                        className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-                                      />
-                                    </div>
-
-                                    <div className="sm:col-span-2">
-                                      <label className="block text-[11px] font-semibold text-stone-600 dark:text-[#94A39B] mb-1">
-                                        {isKm ? `ចំនួន (${unit})` : `Units / Pack`}
-                                      </label>
-                                      <input
-                                        type="number"
-                                        min={1}
-                                        step={1}
-                                        value={pk.unitsPerPack}
-                                        onChange={(e) =>
-                                          updatePackOption(idx, {
-                                            unitsPerPack: Math.max(1, Math.round(Number(e.target.value) || 1)),
-                                          })
-                                        }
-                                        className="w-full h-11 px-3 text-sm font-mono-num font-semibold border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-                                      />
-                                    </div>
-
-                                    <div className="sm:col-span-5">
-                                      <label className="block text-[11px] font-semibold text-stone-600 dark:text-[#94A39B] mb-1">
-                                        {isKm ? 'បាកូដកេស (ស្រេចចិត្ត)' : 'Carton Barcode (Optional)'}
-                                      </label>
-                                      <div className="flex items-center gap-1.5">
-                                        <input
-                                          type="text"
-                                          maxLength={64}
-                                          placeholder={isKm ? 'ស្កេន ឬវាយបាកូដកេស' : 'Scan or enter carton barcode'}
-                                          value={pk.barcode || ''}
-                                          onChange={(e) =>
-                                            updatePackOption(idx, { barcode: e.target.value })
-                                          }
-                                          className={`flex-1 min-w-0 h-11 px-3 text-xs font-mono-num border rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 ${
-                                            packBarcodeConflict
-                                              ? 'border-rose-400 focus-visible:ring-rose-500'
-                                              : 'border-stone-200 dark:border-[#24352C] focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
-                                          }`}
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => setScannerTarget({ kind: 'pack', index: idx })}
-                                          className="w-11 h-11 shrink-0 inline-flex items-center justify-center border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-600 dark:text-[#D5DFDA] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:border-emerald-300 rounded-lg transition-colors"
-                                          title={isKm ? 'ស្កេនបាកូដកេស' : 'Scan carton barcode'}
-                                        >
-                                          <ScanBarcode className="w-4 h-4" />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    <div className={isSellable ? 'sm:col-span-6' : 'sm:col-span-12'}>
-                                      <div className="flex items-center justify-between gap-2 mb-1">
-                                        <label className="block text-[11px] font-semibold text-stone-600 dark:text-[#94A39B]">
-                                          {isKm ? 'ថ្លៃដើមកេស' : 'Carton Cost'}
-                                        </label>
-                                        {impliedUnitCost > 0 && pk.unitsPerPack > 1 && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setCostPriceKhr(String(impliedUnitCost));
-                                            }}
-                                            className="text-[11px] font-semibold text-[#0F5C43] dark:text-[#34D399] hover:underline whitespace-nowrap"
-                                          >
-                                            {isKm
-                                              ? `ប្រើ ${formatKhr(impliedUnitCost)}/${unit} ជាថ្លៃដើមរាយ`
-                                              : `Apply ${formatKhr(impliedUnitCost)}/${unit} to unit cost`}
-                                          </button>
-                                        )}
-                                      </div>
-                                      <CurrencyInput
-                                        valueKhr={packCost}
-                                        onChangeKhr={(nextKhr) =>
-                                          updatePackOption(idx, { costKhr: nextKhr })
-                                        }
-                                        exchangeRate={exchangeRate}
-                                        placeholderKhr="24000"
-                                        placeholderUsd="6.00"
-                                        helperExtra={
-                                          impliedUnitCost > 0
-                                            ? `${formatKhr(impliedUnitCost)} / ${unit}`
-                                            : undefined
-                                        }
-                                      />
-                                    </div>
-
-                                    {isSellable && (
-                                      <div className="sm:col-span-6">
-                                        <label className="block text-[11px] font-semibold text-stone-600 dark:text-[#94A39B] mb-1">
-                                          {isKm ? 'តម្លៃលក់កេស' : 'Carton Selling Price'}
-                                          {!allowSingleUnitSale ? ' *' : ''}
-                                        </label>
-                                        <CurrencyInput
-                                          valueKhr={packPrice}
-                                          onChangeKhr={(nextKhr) =>
-                                            updatePackOption(idx, { priceKhr: nextKhr })
-                                          }
-                                          exchangeRate={exchangeRate}
-                                          placeholderKhr="30000"
-                                          placeholderUsd="7.50"
-                                          helperExtra={
-                                            pk.unitsPerPack > 0 && packPrice > 0
-                                              ? `${formatKhr(Math.round(packPrice / pk.unitsPerPack))} / ${unit}`
-                                              : undefined
-                                          }
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {packBarcodeConflict && (
-                                    <p className="text-xs font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                                      <span>
-                                        {packBarcodeConflict.isInternalDuplicate
-                                          ? isKm
-                                            ? `បាកូដ "${packBarcodeConflict.code}" ជាន់គ្នានៅក្នុងផលិតផលនេះ។`
-                                            : `Barcode "${packBarcodeConflict.code}" is duplicated on this product.`
-                                          : isKm
-                                            ? `បាកូដ "${packBarcodeConflict.code}" កំពុងប្រើលើ "${packBarcodeConflict.existingProductName}"។`
-                                            : `Barcode "${packBarcodeConflict.code}" is already assigned to "${packBarcodeConflict.existingProductName}".`}
-                                      </span>
-                                    </p>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </fieldset>
-                    </>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -3307,7 +3562,15 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     onClick={handleNextStep}
                     className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                   >
-                    <span>{isKm ? 'បន្ទាប់៖ រូបមន្ត និងស្តុក' : 'Next: Recipe & Stock'}</span>
+                    <span>
+                      {productType === 'PACKAGED'
+                        ? isKm
+                          ? 'បន្ទាប់៖ ថ្លៃដើម និងស្តុក'
+                          : 'Next: Cost & Stock'
+                        : isKm
+                          ? 'បន្ទាប់៖ រូបមន្ត និងស្តុក'
+                          : 'Next: Recipe & Stock'}
+                    </span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 )}

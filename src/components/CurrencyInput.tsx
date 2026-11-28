@@ -38,6 +38,13 @@ export interface CurrencyInputProps {
   className?: string;
 }
 
+function normalizeNumericText(raw: string): string {
+  // Convert Khmer numerals (០-៩) to ASCII digits and strip grouping commas/spaces
+  return raw
+    .replace(/[\u17E0-\u17E9]/g, (ch) => String(ch.charCodeAt(0) - 0x17e0))
+    .replace(/[,\s]/g, '');
+}
+
 function roundKhrValue(val: number, allowDecimalsKhr: boolean): number {
   if (!Number.isFinite(val) || val <= 0) return 0;
   if (allowDecimalsKhr) {
@@ -46,7 +53,12 @@ function roundKhrValue(val: number, allowDecimalsKhr: boolean): number {
   return Math.round(val);
 }
 
-function formatInputBuffer(khr: number, mode: CurrencyMode, rate: number, allowDecimalsKhr: boolean): string {
+function formatInputBuffer(
+  khr: number,
+  mode: CurrencyMode,
+  rate: number,
+  allowDecimalsKhr: boolean
+): string {
   if (!Number.isFinite(khr) || khr <= 0) return '';
   if (mode === 'KHR') {
     const clean = roundKhrValue(khr, allowDecimalsKhr);
@@ -55,8 +67,7 @@ function formatInputBuffer(khr: number, mode: CurrencyMode, rate: number, allowD
   const usd = khr / Math.max(1, rate);
   const rounded = Math.round(usd * 100) / 100;
   if (rounded <= 0) return '';
-  // Trim trailing zeros only if integer, otherwise keep up to 2 decimals neatly
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0$/, '');
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
 }
 
 export const CurrencyInput: React.FC<CurrencyInputProps> = ({
@@ -114,14 +125,13 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const next = e.target.value;
-    // Allow digits and at most one decimal point when USD or allowDecimalsKhr
+    const cleaned = normalizeNumericText(e.target.value);
     const allowDecimal = activeCurrency === 'USD' || allowDecimalsKhr;
     const pattern = allowDecimal ? /^\d*\.?\d*$/ : /^\d*$/;
-    if (!pattern.test(next)) return;
+    if (!pattern.test(cleaned)) return;
 
-    setRawText(next);
-    const parsed = parseFloat(next);
+    setRawText(cleaned);
+    const parsed = parseFloat(cleaned);
     if (!Number.isFinite(parsed) || parsed <= 0) {
       lastEmittedKhrRef.current = 0;
       onChangeKhr(0);
@@ -148,11 +158,13 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
     setRawText(formatInputBuffer(normalized, activeCurrency, safeRate, allowDecimalsKhr));
   };
 
+  // Compute live equivalent from canonical KHR with exact 2-decimal USD precision
   const safeKhr = Number.isFinite(valueKhr) && valueKhr > 0 ? valueKhr : 0;
   const usdEquivalent = safeKhr / safeRate;
-  const formattedKhrEquiv = allowDecimalsKhr && !Number.isInteger(safeKhr)
-    ? `${safeKhr.toLocaleString('en-US', { maximumFractionDigits: 2 })} ៛`
-    : `${Math.round(safeKhr).toLocaleString('en-US')} ៛`;
+  const formattedKhrEquiv =
+    allowDecimalsKhr && !Number.isInteger(safeKhr)
+      ? `${safeKhr.toLocaleString('en-US', { maximumFractionDigits: 2 })} ៛`
+      : `${Math.round(safeKhr).toLocaleString('en-US')} ៛`;
   const formattedUsdEquiv = `$${usdEquivalent.toFixed(2)}`;
 
   const heightCls = size === 'lg' ? 'h-12' : 'h-11';
@@ -162,15 +174,15 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
       <div
         className={`flex items-center ${heightCls} w-full rounded-xl border transition-colors ${
           disabled
-            ? 'bg-slate-100/80 dark:bg-emerald-950/30 border-slate-200/70 dark:border-emerald-900/50 opacity-65 cursor-not-allowed'
+            ? 'bg-slate-50 dark:bg-[#0D1612] border-slate-200/60 dark:border-emerald-950/50 opacity-60 cursor-not-allowed'
             : hasError
-            ? 'bg-white dark:bg-[#0B1712] border-rose-400 dark:border-rose-500/70 focus-within:border-rose-500 focus-within:ring-2 focus-within:ring-rose-500/20'
-            : 'bg-white dark:bg-[#0B1712] border-slate-200 dark:border-emerald-900/60 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20'
+              ? 'bg-white dark:bg-[#0B1712] border-rose-400 dark:border-rose-500/70 focus-within:border-rose-500 focus-within:ring-2 focus-within:ring-rose-500/20'
+              : 'bg-white dark:bg-[#0B1712] border-slate-200/80 dark:border-emerald-950/70 hover:border-slate-300 dark:hover:border-emerald-900/80 focus-within:border-emerald-600 dark:focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15'
         }`}
       >
         <span
           aria-hidden="true"
-          className="pl-3.5 pr-1.5 text-sm font-semibold text-slate-400 dark:text-slate-500 select-none shrink-0"
+          className="pl-3.5 pr-1.5 text-sm font-medium text-slate-400 dark:text-slate-500 select-none shrink-0"
         >
           {activeCurrency === 'KHR' ? '៛' : '$'}
         </span>
@@ -185,20 +197,20 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
           onFocus={handleFocus}
           onBlur={handleBlur}
           placeholder={activeCurrency === 'KHR' ? placeholderKhr : placeholderUsd}
-          className="w-full min-w-0 h-full bg-transparent text-sm font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 tabular-nums focus:outline-none pr-2"
+          className="w-full min-w-0 h-full bg-transparent text-sm font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 tabular-nums focus:outline-none pr-2"
         />
         <div
           role="group"
           aria-label={isKm ? 'ជ្រើសរើសរូបិយប័ណ្ណ' : 'Select currency'}
-          className="flex items-center p-1 mr-1 rounded-lg bg-slate-100 dark:bg-[#12241C] border border-slate-200/70 dark:border-emerald-900/50 shrink-0"
+          className="flex items-center p-0.5 mr-1.5 rounded-lg bg-slate-100/90 dark:bg-[#13221B] shrink-0"
         >
           <button
             type="button"
             disabled={disabled}
             onClick={() => handleModeSwitch('KHR')}
-            className={`px-2 h-7 rounded-md text-[11px] font-bold tracking-tight transition-colors whitespace-nowrap ${
+            className={`px-2 h-7 rounded-md text-[11px] font-semibold tracking-tight transition-colors whitespace-nowrap ${
               activeCurrency === 'KHR'
-                ? 'bg-emerald-600 text-white shadow-xs'
+                ? 'bg-white dark:bg-emerald-600 text-slate-900 dark:text-white shadow-xs'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -208,9 +220,9 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
             type="button"
             disabled={disabled}
             onClick={() => handleModeSwitch('USD')}
-            className={`px-2 h-7 rounded-md text-[11px] font-bold tracking-tight transition-colors whitespace-nowrap ${
+            className={`px-2 h-7 rounded-md text-[11px] font-semibold tracking-tight transition-colors whitespace-nowrap ${
               activeCurrency === 'USD'
-                ? 'bg-emerald-600 text-white shadow-xs'
+                ? 'bg-white dark:bg-emerald-600 text-slate-900 dark:text-white shadow-xs'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -220,7 +232,7 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
       </div>
 
       {!hideEquivalent && (
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
           <span>
             {activeCurrency === 'KHR'
               ? `≈ ${formattedUsdEquiv}`
