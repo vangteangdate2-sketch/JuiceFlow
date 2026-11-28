@@ -11,6 +11,7 @@ import { useUndoToast } from '../context/UndoToastContext';
 import type { Expense, ExpenseCategory, ExpenseScope, PaymentMethod } from '../types';
 import { formatKhr, formatUsdRef, todayIso } from '../utils/format';
 import { isLegacyInventoryPurchaseExpense } from '../utils/inventoryEngine';
+import { CurrencyInput } from '../components/CurrencyInput';
 import { FloatingActionBar } from '../components/FloatingActionBar';
 import { InfoHint } from '../components/InfoHint';
 import { ModalPortal } from '../components/ModalPortal';
@@ -64,7 +65,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 }) => {
   const { settings, expenses, purchases, saveExpense, deleteExpense, t } = useStore();
   const isKm = settings.language === 'km';
-  const usdRate = settings.usdRate > 0 ? settings.usdRate : 4000;
+  const usdRate = settings.posExchangeRate || settings.usdRate || 4000;
 
   const [scopeFilter, setScopeFilter] = useState<'all' | ExpenseScope>('all');
   const [categoryFilter, setCategoryFilter] = useState<'all' | ExpenseCategory>('all');
@@ -77,7 +78,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const [scope, setScope] = useState<ExpenseScope>('business');
   const [category, setCategory] = useState<ExpenseCategory>('packaging');
   const [currency, setCurrency] = useState<'KHR' | 'USD'>('KHR');
-  const [amountInput, setAmountInput] = useState('');
+  const [amountKhr, setAmountKhr] = useState(0);
   const [expenseDate, setExpenseDate] = useState(todayIso());
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [vendor, setVendor] = useState('');
@@ -227,12 +228,6 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     });
   }, [expenses, scopeFilter, categoryFilter, search]);
 
-  const computedAmountKhr = useMemo(() => {
-    const num = Number(amountInput);
-    if (!Number.isFinite(num) || num < 0) return 0;
-    return currency === 'USD' ? Math.round(num * usdRate) : Math.round(num);
-  }, [amountInput, currency, usdRate]);
-
   const openNew = () => {
     setEditing(null);
     setTitle('');
@@ -240,7 +235,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     setScope(nextScope);
     setCategory(nextScope === 'household' ? 'household' : 'packaging');
     setCurrency('KHR');
-    setAmountInput('');
+    setAmountKhr(0);
     setExpenseDate(todayIso());
     setPaymentMethod('cash');
     setVendor('');
@@ -256,7 +251,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     setScope('business');
     setCategory('packaging');
     setCurrency('KHR');
-    setAmountInput('');
+    setAmountKhr(0);
     setExpenseDate(todayIso());
     setPaymentMethod('cash');
     setVendor('');
@@ -272,7 +267,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     setScope(preset.scope);
     setCategory(preset.category);
     setCurrency('KHR');
-    setAmountInput(preset.amountKhr > 0 ? String(preset.amountKhr) : '');
+    setAmountKhr(Math.max(0, Math.round(preset.amountKhr || 0)));
     setExpenseDate(todayIso());
     setPaymentMethod(preset.paymentMethod);
     setVendor(preset.vendor);
@@ -287,7 +282,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     setScope(exp.scope);
     setCategory(exp.category);
     setCurrency('KHR');
-    setAmountInput(String(exp.amountKhr));
+    setAmountKhr(Math.max(0, Math.round(exp.amountKhr || 0)));
     setExpenseDate(exp.expenseDate);
     setPaymentMethod(exp.paymentMethod);
     setVendor(exp.vendor);
@@ -305,25 +300,12 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     }
   };
 
-  const handleToggleCurrency = (nextCurrency: 'KHR' | 'USD') => {
-    if (nextCurrency === currency) return;
-    const raw = Number(amountInput);
-    if (Number.isFinite(raw) && raw > 0) {
-      if (nextCurrency === 'USD') {
-        setAmountInput((raw / usdRate).toFixed(2));
-      } else {
-        setAmountInput(String(Math.round(raw * usdRate)));
-      }
-    }
-    setCurrency(nextCurrency);
-  };
-
   const submitExpense = async (mode: 'close' | 'add_another' = 'close') => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle || saving) return;
     setSaving(true);
     try {
-      const amountToSave = Math.max(0, computedAmountKhr);
+      const amountToSave = Math.max(0, Math.round(amountKhr));
       const savedId = await saveExpense({
         id: editing?.id,
         title: trimmedTitle,
@@ -349,7 +331,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
         });
         // Reset per-entry fields while retaining smart defaults (scope, category, currency, paymentMethod, expenseDate)
         setTitle('');
-        setAmountInput('');
+        setAmountKhr(0);
         setVendor('');
         setNote('');
         window.requestAnimationFrame(() => titleInputRef.current?.focus());
@@ -358,7 +340,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 
       setEditing(null);
       setTitle('');
-      setAmountInput('');
+      setAmountKhr(0);
       setVendor('');
       setNote('');
       setFormOpen(false);
@@ -906,50 +888,18 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 
                     {/* Amount with KHR / USD Currency Toggle */}
                     <div>
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <label className="text-xs font-semibold text-stone-700 dark:text-[#D5DFDA]">
-                          {isKm ? `ចំនួនទឹកប្រាក់ (${currency})` : `Amount (${currency})`}
-                        </label>
-                        {computedAmountKhr > 0 && (
-                          <span className="font-mono-num text-[11px] text-stone-500 dark:text-[#94A39B]">
-                            {currency === 'USD'
-                              ? `≈ ${formatKhr(computedAmountKhr)}`
-                              : formatUsdRef(computedAmountKhr, usdRate)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          required
-                          min={0}
-                          step={currency === 'USD' ? '0.01' : '500'}
-                          value={amountInput}
-                          onChange={(e) => setAmountInput(e.target.value)}
-                          placeholder={currency === 'USD' ? '0.00' : '0'}
-                          className="flex-1 min-w-0 h-11 px-3.5 text-sm font-mono-num bg-white dark:bg-[#0F1814] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-                        />
-                        <div
-                          role="group"
-                          aria-label={isKm ? 'រូបិយប័ណ្ណ' : 'Currency'}
-                          className="inline-flex items-center p-1 h-11 bg-stone-100 dark:bg-[#0F1814] border border-stone-200 dark:border-[#24352C] rounded-lg shrink-0"
-                        >
-                          {(['KHR', 'USD'] as const).map((curr) => (
-                            <button
-                              key={curr}
-                              type="button"
-                              onClick={() => handleToggleCurrency(curr)}
-                              className={`h-9 px-3 text-xs font-bold rounded-md transition-colors ${
-                                currency === curr
-                                  ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
-                                  : 'text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
-                              }`}
-                            >
-                              {curr === 'KHR' ? '៛ KHR' : '$ USD'}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
+                        {isKm ? 'ចំនួនទឹកប្រាក់' : 'Amount'}
+                      </label>
+                      <CurrencyInput
+                        valueKhr={amountKhr}
+                        onChangeKhr={setAmountKhr}
+                        exchangeRate={usdRate}
+                        currency={currency}
+                        onCurrencyChange={setCurrency}
+                        placeholderKhr="0"
+                        placeholderUsd="0.00"
+                      />
                     </div>
 
                     {/* Payment Method */}

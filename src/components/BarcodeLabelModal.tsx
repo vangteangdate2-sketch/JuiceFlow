@@ -202,15 +202,22 @@ export const BarcodeLabelModal: React.FC<BarcodeLabelModalProps> = ({
       }
     }
 
-    for (let i = 0; i < (product.packagingBarcodes || []).length; i += 1) {
-      const pb = product.packagingBarcodes![i];
+    const packs =
+      product.packSizes && product.packSizes.length > 0
+        ? product.packSizes
+        : product.packagingBarcodes || [];
+    for (let i = 0; i < packs.length; i += 1) {
+      const pb = packs[i];
       if (pb.barcode?.trim()) {
         list.push({
           id: `pack_${i}`,
           code: pb.barcode.trim(),
           title: prodName,
           subtitle: `${pb.label} (×${pb.unitsPerPack})`,
-          priceKhr: product.priceKhr * Math.max(1, pb.unitsPerPack),
+          priceKhr:
+            pb.priceKhr !== undefined && Number.isFinite(Number(pb.priceKhr))
+              ? Number(pb.priceKhr)
+              : product.priceKhr * Math.max(1, pb.unitsPerPack),
         });
       }
     }

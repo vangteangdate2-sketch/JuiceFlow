@@ -6,6 +6,7 @@ import type {
   BarcodeSource,
   ExternalBarcodePrefill,
   Ingredient,
+  PackOption,
   PackagingBarcode,
   Product,
   ProductCategory,
@@ -265,7 +266,12 @@ export function extractProductBarcodeRecords(
   }
 
   // 3. Multi-unit carton / pack barcodes
-  for (const pb of product.packagingBarcodes || []) {
+  const packList =
+    Array.isArray(product.packSizes) && product.packSizes.length > 0
+      ? product.packSizes
+      : product.packagingBarcodes || [];
+  for (const pb of packList) {
+    if (!pb.barcode) continue;
     const units = Math.max(1, Math.round(Number(pb.unitsPerPack) || 1));
     pushRecord(
       pb.barcode,
@@ -357,6 +363,7 @@ export interface BarcodeConflictCandidate {
   name?: string;
   barcode?: string;
   variants?: Array<{ id?: string; name?: string; barcode?: string }>;
+  packSizes?: PackOption[];
   packagingBarcodes?: PackagingBarcode[];
 }
 
@@ -385,7 +392,11 @@ export function findDuplicateBarcodeConflicts(
       candidateEntries.push({ code: vc, label: v.name || 'Variant' });
     }
   }
-  for (const pb of candidate.packagingBarcodes || []) {
+  const candidatePacks =
+    Array.isArray(candidate.packSizes) && candidate.packSizes.length > 0
+      ? candidate.packSizes
+      : candidate.packagingBarcodes || [];
+  for (const pb of candidatePacks) {
     const pc = normalizeBarcodeString(pb.barcode);
     if (pc) {
       candidateEntries.push({ code: pc, label: pb.label || `Pack (${pb.unitsPerPack})` });
@@ -499,7 +510,11 @@ export function findDuplicateBarcodeConflicts(
         break;
       }
 
-      const matchedPack = (prod.packagingBarcodes || []).find((pb) =>
+      const prodPacks =
+        Array.isArray(prod.packSizes) && prod.packSizes.length > 0
+          ? prod.packSizes
+          : prod.packagingBarcodes || [];
+      const matchedPack = prodPacks.find((pb) =>
         equivCodes.includes(normalizeBarcodeString(pb.barcode))
       );
       if (matchedPack) {
@@ -549,6 +564,7 @@ export interface RegistryLookupHit {
   product?: Product;
   ingredient?: Ingredient;
   variant?: ProductVariant;
+  pack?: PackOption;
   registryRecord?: BarcodeRegistryRecord;
   unitsPerScan: number;
   packagingType: BarcodePackagingType;
@@ -598,16 +614,30 @@ export function resolveFromRegistryAndProducts(
           const variant = regRecord.variantId
             ? product.variants?.find((v) => v.id === regRecord.variantId)
             : undefined;
+          const matchedPack =
+            regRecord.packagingType === 'pack' || regRecord.packagingType === 'carton'
+              ? (product.packSizes || []).find(
+                  (pk) =>
+                    normalizeBarcodeString(pk.barcode) === code ||
+                    getEquivalentBarcodeCodes(pk.barcode).includes(code)
+                ) ||
+                (product.packSizes || []).find(
+                  (pk) =>
+                    pk.unitsPerPack === Math.max(1, Math.round(regRecord.unitsPerScan || 1)) &&
+                    pk.label === regRecord.label
+                )
+              : undefined;
           return {
             code,
             format: regRecord.format || detectBarcodeFormat(code),
             itemType: 'product',
             product,
             variant,
+            pack: matchedPack,
             registryRecord: regRecord,
-            unitsPerScan: Math.max(1, Math.round(regRecord.unitsPerScan || 1)),
+            unitsPerScan: Math.max(1, Math.round(matchedPack?.unitsPerPack || regRecord.unitsPerScan || 1)),
             packagingType: regRecord.packagingType,
-            packLabel: regRecord.label,
+            packLabel: matchedPack?.label || regRecord.label,
           };
         }
       }
@@ -639,6 +669,22 @@ export function resolveFromRegistryAndProducts(
           unitsPerScan: 1,
           packagingType: 'variant',
           packLabel: matchedVariant.name,
+        };
+      }
+      const matchedPackOpt = (product.packSizes || []).find(
+        (pk) => normalizeBarcodeString(pk.barcode) === code
+      );
+      if (matchedPackOpt) {
+        const units = Math.max(1, Math.round(matchedPackOpt.unitsPerPack || 1));
+        return {
+          code,
+          format: detectBarcodeFormat(code),
+          itemType: 'product',
+          product,
+          pack: matchedPackOpt,
+          unitsPerScan: units,
+          packagingType: inferPackagingType(matchedPackOpt.label || '', units),
+          packLabel: matchedPackOpt.label,
         };
       }
       const matchedPack = (product.packagingBarcodes || []).find(
@@ -691,6 +737,9 @@ export function generateUniqueInternalSku(options: {
   const usedCodes = new Set<string>();
   for (const p of options.existingProducts) {
     if (p.barcode?.trim()) usedCodes.add(normalizeBarcodeString(p.barcode).toUpperCase());
+    for (const pk of p.packSizes || []) {
+      if (pk.barcode?.trim()) usedCodes.add(normalizeBarcodeString(pk.barcode).toUpperCase());
+    }
     for (const pb of p.packagingBarcodes || []) {
       if (pb.barcode?.trim()) usedCodes.add(normalizeBarcodeString(pb.barcode).toUpperCase());
     }

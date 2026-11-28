@@ -26,11 +26,13 @@ import type {
   Ingredient,
   IngredientUnit,
   MovementType,
+  PackOption,
   PaymentMethod,
   Product,
   StockClassification,
 } from '../types';
 import { formatKhr, formatQty, todayIso } from '../utils/format';
+import { formatStockWithCartons, getProductPackSizes } from '../utils/inventoryEngine';
 import {
   findDuplicateBarcodeConflicts,
   formatBarcodeTypeLabel,
@@ -50,6 +52,7 @@ import {
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 import { useFilterVisibility } from '../hooks/useFilterVisibility';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
+import { CurrencyInput } from '../components/CurrencyInput';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { CategoryFilterPills } from '../components/CategoryFilterPills';
 import { FloatingActionBar } from '../components/FloatingActionBar';
@@ -75,6 +78,7 @@ interface StockItemTarget {
   supplier: string;
   defaultUnitsPerPack?: number;
   packLabel?: string;
+  packSizes?: PackOption[];
   barcodeScanned?: string;
 }
 
@@ -219,6 +223,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     product?: Product;
     ingredient?: Ingredient;
     unitsPerScan: number;
+    packId?: string;
     packLabel?: string;
   } | null>(null);
   const [unknownStockBarcode, setUnknownStockBarcode] = useState<{
@@ -337,13 +342,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     return null;
   }, [ingModalOpen, ingName, ingBarcode, ingredients, products, barcodeRegistry, editingIng?.id, editingIng?.name, isKm]);
 
+  const exchangeRate = settings.posExchangeRate || settings.usdRate || 4000;
+
   // Stock-In / Quick Restock Purchase modal (supports Raw Ingredients & Retail Packaged + pack/carton multiplication)
   const [purchaseTarget, setPurchaseTarget] = useState<StockItemTarget | null>(null);
   const [purchaseUsePacks, setPurchaseUsePacks] = useState(false);
+  const [selectedRestockPackId, setSelectedRestockPackId] = useState<string>('');
   const [purchasePackCount, setPurchasePackCount] = useState('1');
   const [purchaseUnitsPerPack, setPurchaseUnitsPerPack] = useState('24');
   const [purchaseQty, setPurchaseQty] = useState('');
   const [purchaseCostKhr, setPurchaseCostKhr] = useState('');
+  const [purchaseCostManual, setPurchaseCostManual] = useState(false);
   const [purchasePayment, setPurchasePayment] = useState<PaymentMethod>('cash');
   const [purchaseSupplier, setPurchaseSupplier] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(todayIso());
@@ -364,19 +373,23 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     [products]
   );
 
-  const toTargetFromProduct = (p: Product): StockItemTarget => ({
-    id: p.id,
-    name: p.name,
-    nameVi: p.nameVi,
-    classification: 'packaged',
-    unit: p.unit || 'pcs',
-    stockQty: p.stockQty,
-    reorderLevel: p.reorderLevel,
-    unitCostKhr: p.costPriceKhr,
-    supplier: p.supplier,
-    defaultUnitsPerPack: p.packagingBarcodes?.[0]?.unitsPerPack,
-    packLabel: p.packagingBarcodes?.[0]?.label,
-  });
+  const toTargetFromProduct = (p: Product): StockItemTarget => {
+    const packs = getProductPackSizes(p);
+    return {
+      id: p.id,
+      name: p.name,
+      nameVi: p.nameVi,
+      classification: 'packaged',
+      unit: p.unit || 'pcs',
+      stockQty: p.stockQty,
+      reorderLevel: p.reorderLevel,
+      unitCostKhr: p.costPriceKhr,
+      supplier: p.supplier,
+      defaultUnitsPerPack: packs[0]?.unitsPerPack,
+      packLabel: packs[0]?.label,
+      packSizes: packs,
+    };
+  };
 
   const toTargetFromIngredient = (i: Ingredient): StockItemTarget => ({
     id: i.id,
@@ -419,6 +432,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     for (const prod of packagedProducts) {
       const status: UnifiedStockItem['status'] =
         prod.stockQty <= 0 ? 'out' : prod.stockQty <= prod.reorderLevel ? 'low' : 'healthy';
+      const firstPack = getProductPackSizes(prod)[0];
       items.push({
         id: prod.id,
         name: prod.name,
@@ -431,9 +445,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         unitCostKhr: prod.costPriceKhr,
         supplier: prod.supplier,
         barcode: prod.barcode || undefined,
-        packSummary: prod.packagingBarcodes?.[0]
-          ? `${prod.packagingBarcodes[0].label}`
-          : undefined,
+        packSummary: firstPack ? `${firstPack.label}` : undefined,
         status,
         progressPct: computeStockProgressPct(prod.stockQty, prod.reorderLevel),
         target: toTargetFromProduct(prod),
@@ -508,27 +520,62 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     window.setTimeout(() => setFeedbackMsg(null), 4000);
   };
 
-  const openPurchaseModal = (target: StockItemTarget, scannedPackUnits?: number) => {
+  const openPurchaseModal = (
+    target: StockItemTarget,
+    scannedPackUnits?: number,
+    scannedPackId?: string
+  ) => {
     setPurchaseTarget(target);
-    const usePacks = Boolean(scannedPackUnits && scannedPackUnits > 1);
+    setPurchaseCostManual(false);
+    const configuredPacks = target.packSizes || [];
+    const matchedScannedPack =
+      (scannedPackId ? configuredPacks.find((pk) => pk.id === scannedPackId) : undefined) ||
+      (scannedPackUnits && scannedPackUnits > 1
+        ? configuredPacks.find((pk) => pk.unitsPerPack === scannedPackUnits) || configuredPacks[0]
+        : configuredPacks[0]);
+    const usePacks = Boolean(scannedPackId || (scannedPackUnits && scannedPackUnits > 1));
     setPurchaseUsePacks(usePacks);
+    setSelectedRestockPackId(matchedScannedPack?.id || '');
     setPurchasePackCount('1');
-    setPurchaseUnitsPerPack(String(scannedPackUnits || target.defaultUnitsPerPack || 24));
+    setPurchaseUnitsPerPack(
+      String(matchedScannedPack?.unitsPerPack || scannedPackUnits || target.defaultUnitsPerPack || 24)
+    );
     // Pre-suggest a practical restock quantity when item is low or out
     const suggestedQty =
       target.stockQty <= target.reorderLevel && target.reorderLevel > 0
         ? Math.max(1, Math.ceil(target.reorderLevel * 2 - Math.max(0, target.stockQty)))
         : '';
     setPurchaseQty(suggestedQty !== '' ? String(suggestedQty) : '');
-    const estCost =
-      suggestedQty !== '' && target.unitCostKhr > 0
-        ? Math.round(Number(suggestedQty) * target.unitCostKhr)
-        : '';
-    setPurchaseCostKhr(estCost !== '' ? String(estCost) : '');
+    if (usePacks && matchedScannedPack && matchedScannedPack.costKhr > 0) {
+      setPurchaseCostKhr(String(Math.round(matchedScannedPack.costKhr)));
+    } else if (usePacks && target.unitCostKhr > 0) {
+      const units = matchedScannedPack?.unitsPerPack || scannedPackUnits || target.defaultUnitsPerPack || 24;
+      setPurchaseCostKhr(String(Math.round(units * target.unitCostKhr)));
+    } else {
+      const estCost =
+        suggestedQty !== '' && target.unitCostKhr > 0
+          ? Math.round(Number(suggestedQty) * target.unitCostKhr)
+          : '';
+      setPurchaseCostKhr(estCost !== '' ? String(estCost) : '');
+    }
     setPurchasePayment('cash');
     setPurchaseSupplier(target.supplier || '');
     setPurchaseDate(todayIso());
-    setPurchaseNote(usePacks && target.packLabel ? `Scanned ${target.packLabel}` : '');
+    setPurchaseNote(usePacks && (matchedScannedPack?.label || target.packLabel) ? `Scanned ${matchedScannedPack?.label || target.packLabel}` : '');
+  };
+
+  const applyRestockPackSelection = (target: StockItemTarget, pack: PackOption, packCountNum: number) => {
+    setPurchaseUsePacks(true);
+    setSelectedRestockPackId(pack.id);
+    setPurchaseUnitsPerPack(String(pack.unitsPerPack));
+    const safeCount = Math.max(1, Math.round(packCountNum) || 1);
+    if (!purchaseCostManual) {
+      if (pack.costKhr > 0) {
+        setPurchaseCostKhr(String(Math.round(safeCount * pack.costKhr)));
+      } else if (target.unitCostKhr > 0) {
+        setPurchaseCostKhr(String(Math.round(safeCount * pack.unitsPerPack * target.unitCostKhr)));
+      }
+    }
   };
 
   const openQuickRestockForItem = (item: UnifiedStockItem) => {
@@ -579,13 +626,23 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
       if (res.found && res.product) {
         triggerHighlightItem(res.product.id);
+        const matchedPack =
+          res.pack ||
+          (res.unitsPerScan > 1
+            ? getProductPackSizes(res.product).find(
+                (pk) =>
+                  pk.unitsPerPack === res.unitsPerScan &&
+                  (!res.packLabel || pk.label === res.packLabel)
+              )
+            : undefined);
         setScannedInventoryMatch({
           code: effectiveCode,
           format: res.format,
           itemType: 'product',
           product: res.product,
           unitsPerScan: res.unitsPerScan,
-          packLabel: res.packLabel || res.product.packagingBarcodes?.[0]?.label,
+          packId: matchedPack?.id,
+          packLabel: matchedPack?.label || res.packLabel || getProductPackSizes(res.product)[0]?.label,
         });
         return;
       }
@@ -673,6 +730,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           imageUrl: prod.imageUrl,
           active: prod.active,
           barcode: prod.barcode,
+          packSizes: prod.packSizes,
           packagingBarcodes: prod.packagingBarcodes,
           stockQty: prod.stockQty,
           reorderLevel: prod.reorderLevel,
@@ -1046,7 +1104,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       if (!q) return true;
       const itemBarcodes = [
         item.barcode,
-        ...(item.sourceProduct?.packagingBarcodes || []).map((pb) => pb.barcode),
+        ...getProductPackSizes(item.sourceProduct).map((pk) => pk.barcode),
         ...(item.sourceProduct?.variants || []).map((v) => v.barcode),
       ];
       return (
@@ -1323,7 +1381,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         target,
                         scannedInventoryMatch.unitsPerScan > 1
                           ? scannedInventoryMatch.unitsPerScan
-                          : undefined
+                          : undefined,
+                        scannedInventoryMatch.packId
                       );
                     }}
                     className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
@@ -1929,22 +1988,40 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
                           {/* Column 3: Stock Health & Bar */}
                           <div className="min-w-0 pl-9 lg:pl-0 space-y-1.5">
-                            <div className="flex items-baseline justify-between gap-2 min-w-0">
-                              <div className="flex items-baseline gap-1.5 min-w-0">
-                                <span className="font-mono-num text-sm sm:text-[15px] font-bold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
-                                  {formatQty(item.stockQty, item.unit)}
-                                </span>
-                                <span className="font-mono-num text-[11px] text-stone-400 dark:text-[#94A39B] whitespace-nowrap truncate">
-                                  / {isKm ? 'កម្រិតអប្បបរមា' : 'min'}{' '}
-                                  {formatQty(item.reorderLevel, item.unit)}
-                                </span>
-                              </div>
-                              <span
-                                className={`text-xs font-semibold whitespace-nowrap inline-flex items-center gap-1 shrink-0 ${statusTextClass}`}
-                              >
-                                {statusLabel}
-                              </span>
-                            </div>
+                            {(() => {
+                              const stockDisplay =
+                                item.tier === 'packaged' && (item.target.packSizes?.length ?? 0) > 0
+                                  ? formatStockWithCartons(
+                                      item.stockQty,
+                                      item.unit,
+                                      item.target.packSizes || [],
+                                      isKm
+                                    )
+                                  : null;
+                              return (
+                                <div className="flex items-baseline justify-between gap-2 min-w-0">
+                                  <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 min-w-0">
+                                    <span className="font-mono-num text-sm sm:text-[15px] font-bold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
+                                      {formatQty(item.stockQty, item.unit)}
+                                    </span>
+                                    {stockDisplay?.cartonBreakdown && (
+                                      <span className="font-mono-num text-[11px] font-semibold text-sky-700 dark:text-sky-400 whitespace-nowrap">
+                                        · {stockDisplay.cartonBreakdown}
+                                      </span>
+                                    )}
+                                    <span className="font-mono-num text-[11px] text-stone-400 dark:text-[#94A39B] whitespace-nowrap truncate">
+                                      / {isKm ? 'កម្រិតអប្បបរមា' : 'min'}{' '}
+                                      {formatQty(item.reorderLevel, item.unit)}
+                                    </span>
+                                  </div>
+                                  <span
+                                    className={`text-xs font-semibold whitespace-nowrap inline-flex items-center gap-1 shrink-0 ${statusTextClass}`}
+                                  >
+                                    {statusLabel}
+                                  </span>
+                                </div>
+                              );
+                            })()}
 
                             <div
                               className="w-full h-1.5 rounded-full bg-stone-100 dark:bg-[#1F3028] overflow-hidden"
@@ -2390,8 +2467,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                <div className="sm:col-span-5">
                   <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.inventory.reorderAt}
                   </label>
@@ -2404,17 +2481,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                   />
                 </div>
-                <div>
+                <div className="sm:col-span-7">
                   <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                    {t.inventory.avgUnitCost} (KHR)
+                    {t.inventory.avgUnitCost} ({ingUnit})
                   </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="any"
-                    value={ingCost}
-                    onChange={(e) => setIngCost(e.target.value)}
-                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
+                  <CurrencyInput
+                    valueKhr={Math.max(0, Number(ingCost) || 0)}
+                    onChangeKhr={(nextKhr) => setIngCost(String(nextKhr))}
+                    exchangeRate={exchangeRate}
+                    allowDecimalsKhr
+                    placeholderKhr="0"
+                    placeholderUsd="0.00"
                   />
                 </div>
               </div>
@@ -2536,58 +2613,174 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               </button>
             </div>
             <form onSubmit={handleSavePurchase} className="p-6 space-y-4">
-              {/* Carton / Pack Mode Toggle for Packaged Goods */}
-              {purchaseTarget.classification === 'packaged' && (
-                <label className="min-h-[44px] inline-flex items-center gap-2.5 text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={purchaseUsePacks}
-                    onChange={(e) => setPurchaseUsePacks(e.target.checked)}
-                    className="w-5 h-5 accent-[#0F5C43] dark:accent-[#10B981] rounded"
-                  />
-                  {isKm
-                    ? 'បញ្ចូលតាមកេស / កញ្ចប់ (គុណចំនួនរាយដោយស្វ័យប្រវត្តិ)'
-                    : 'Enter by Cartons / Packs (auto-multiply into base units)'}
-                </label>
-              )}
+              {/* Carton / Pack Mode Segmented Toggle for Packaged Goods */}
+              {purchaseTarget.classification === 'packaged' && (() => {
+                const configuredPacks = purchaseTarget.packSizes || [];
+                const activePack =
+                  configuredPacks.find((pk) => pk.id === selectedRestockPackId) || configuredPacks[0];
+
+                if (configuredPacks.length > 0 && activePack) {
+                  return (
+                    <div className="space-y-2.5">
+                      <div
+                        role="group"
+                        aria-label={isKm ? 'របៀបបញ្ចូលស្តុក' : 'Restock unit mode'}
+                        className="grid grid-cols-2 p-1 rounded-xl bg-stone-100 dark:bg-[#18251F] border border-stone-200/70 dark:border-[#24352C] gap-1"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPurchaseUsePacks(false);
+                            if (!purchaseCostManual) {
+                              const baseQtyNum = Number(purchaseQty) || 0;
+                              if (baseQtyNum > 0 && purchaseTarget.unitCostKhr > 0) {
+                                setPurchaseCostKhr(String(Math.round(baseQtyNum * purchaseTarget.unitCostKhr)));
+                              }
+                            }
+                          }}
+                          className={`h-11 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                            !purchaseUsePacks
+                              ? 'bg-white dark:bg-[#111916] text-stone-900 dark:text-[#F1F5F3] shadow-xs'
+                              : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                          }`}
+                        >
+                          {isKm
+                            ? `ឯកតារាយ (${purchaseTarget.unit})`
+                            : `Base Units (${purchaseTarget.unit})`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            applyRestockPackSelection(
+                              purchaseTarget,
+                              activePack,
+                              Math.max(1, Number(purchasePackCount) || 1)
+                            )
+                          }
+                          className={`h-11 px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap truncate ${
+                            purchaseUsePacks
+                              ? 'bg-white dark:bg-[#111916] text-[#0F5C43] dark:text-[#34D399] shadow-xs'
+                              : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                          }`}
+                        >
+                          {configuredPacks.length === 1
+                            ? isKm
+                              ? `កេស (×${activePack.unitsPerPack} ${purchaseTarget.unit})`
+                              : `Cartons (×${activePack.unitsPerPack} ${purchaseTarget.unit})`
+                            : isKm
+                              ? `កេស / យួរ (×${activePack.unitsPerPack})`
+                              : `Cartons / Packs (×${activePack.unitsPerPack})`}
+                        </button>
+                      </div>
+
+                      {purchaseUsePacks && configuredPacks.length > 1 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {configuredPacks.map((pk) => {
+                            const selected = pk.id === activePack.id;
+                            return (
+                              <button
+                                key={pk.id}
+                                type="button"
+                                onClick={() =>
+                                  applyRestockPackSelection(
+                                    purchaseTarget,
+                                    pk,
+                                    Math.max(1, Number(purchasePackCount) || 1)
+                                  )
+                                }
+                                className={`h-9 px-3 rounded-lg text-xs font-medium border transition-colors ${
+                                  selected
+                                    ? 'bg-[#E6F2ED] dark:bg-[#064E3B]/60 border-[#0F5C43] dark:border-[#10B981] text-[#0F5C43] dark:text-[#6EE7B7] font-semibold'
+                                    : 'bg-white dark:bg-[#18251F] border-stone-200 dark:border-[#24352C] text-stone-600 dark:text-[#94A39B] hover:border-stone-300'
+                                }`}
+                              >
+                                {pk.label}
+                                {pk.costKhr > 0 ? ` · ${formatKhr(pk.costKhr)}` : ''}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <label className="min-h-[44px] inline-flex items-center gap-2.5 text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={purchaseUsePacks}
+                      onChange={(e) => setPurchaseUsePacks(e.target.checked)}
+                      className="w-5 h-5 accent-[#0F5C43] dark:accent-[#10B981] rounded"
+                    />
+                    {isKm
+                      ? 'បញ្ចូលតាមកេស / កញ្ចប់ (គុណចំនួនរាយដោយស្វ័យប្រវត្តិ)'
+                      : 'Enter by Cartons / Packs (auto-multiply into base units)'}
+                  </label>
+                );
+              })()}
 
               {purchaseUsePacks ? (
-                <div className="grid grid-cols-3 gap-2.5 items-end">
-                  <div>
-                    <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                      {isKm ? 'ចំនួនកេស' : 'Packs / Cases'}
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      value={purchasePackCount}
-                      onChange={(e) => setPurchasePackCount(e.target.value)}
-                      className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                    />
+                <div className="space-y-2">
+                  <div className="grid grid-cols-3 gap-2.5 items-end">
+                    <div>
+                      <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
+                        {isKm ? 'ចំនួនកេស' : 'Cartons / Packs'}
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        value={purchasePackCount}
+                        onChange={(e) => {
+                          const rawVal = e.target.value;
+                          setPurchasePackCount(rawVal);
+                          const cnt = Number(rawVal) || 0;
+                          const matchedPack = (purchaseTarget.packSizes || []).find(
+                            (pk) => pk.id === selectedRestockPackId
+                          );
+                          if (!purchaseCostManual && cnt > 0 && matchedPack && matchedPack.costKhr > 0) {
+                            setPurchaseCostKhr(String(Math.round(cnt * matchedPack.costKhr)));
+                          }
+                        }}
+                        className="w-full h-11 px-3 text-sm font-mono-num font-semibold border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
+                        {isKm ? 'ឯកតា / កេស' : 'Units / Pack'}
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        value={purchaseUnitsPerPack}
+                        onChange={(e) => setPurchaseUnitsPerPack(e.target.value)}
+                        className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
+                      />
+                    </div>
+                    <div className="h-11 px-2 bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg flex flex-col items-center justify-center text-center">
+                      <span className="block text-[10px] leading-tight text-stone-500 dark:text-[#94A39B]">
+                        {isKm ? 'បន្ថែមសរុប' : 'Total Added'}
+                      </span>
+                      <span className="font-mono-num text-sm leading-tight font-bold text-[#0F5C43] dark:text-[#34D399]">
+                        {(Number(purchasePackCount) || 0) * (Number(purchaseUnitsPerPack) || 0)}{' '}
+                        {purchaseTarget.unit}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                      {isKm ? 'ឯកតា / កេស' : 'Units / Pack'}
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      value={purchaseUnitsPerPack}
-                      onChange={(e) => setPurchaseUnitsPerPack(e.target.value)}
-                      className="w-full h-11 px-3 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                    />
-                  </div>
-                  <div className="h-11 px-2 bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg flex flex-col items-center justify-center text-center">
-                    <span className="block text-[10px] leading-tight text-stone-500 dark:text-[#94A39B]">
-                      {isKm ? 'បន្ថែមសរុប' : 'Total Added'}
-                    </span>
-                    <span className="font-mono-num text-sm leading-tight font-bold text-[#0F5C43] dark:text-[#34D399]">
-                      {(Number(purchasePackCount) || 0) * (Number(purchaseUnitsPerPack) || 0)}{' '}
-                      {purchaseTarget.unit}
-                    </span>
-                  </div>
+                  {(() => {
+                    const matchedPack = (purchaseTarget.packSizes || []).find(
+                      (pk) => pk.id === selectedRestockPackId
+                    );
+                    if (!matchedPack || matchedPack.costKhr <= 0) return null;
+                    return (
+                      <p className="text-[11px] font-mono-num text-stone-500 dark:text-[#94A39B]">
+                        {matchedPack.label}: {formatKhr(matchedPack.costKhr)}{' '}
+                        {isKm ? '/ ១ កេស (បានបំពេញដោយស្វ័យប្រវត្តិ)' : '/ carton (auto-filled)'}
+                      </p>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div>
@@ -2606,21 +2799,54 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                    {t.inventory.totalPaidKhr}
+                    {isKm ? 'ប្រាក់ចំណាយសរុប' : 'Total Paid'}
                   </label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    step={500}
-                    value={purchaseCostKhr}
-                    onChange={(e) => setPurchaseCostKhr(e.target.value)}
-                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                  />
+                  {(() => {
+                    const totalPaidNum = Math.max(0, Number(purchaseCostKhr) || 0);
+                    const totalUnitsAdded = purchaseUsePacks
+                      ? Math.max(0, (Number(purchasePackCount) || 0) * (Number(purchaseUnitsPerPack) || 0))
+                      : Math.max(0, Number(purchaseQty) || 0);
+                    const perUnitCost =
+                      totalUnitsAdded > 0 && totalPaidNum > 0
+                        ? totalPaidNum / totalUnitsAdded
+                        : 0;
+                    const packCnt = Math.max(0, Number(purchasePackCount) || 0);
+                    const perPackCost =
+                      purchaseUsePacks && packCnt > 0 && totalPaidNum > 0
+                        ? Math.round(totalPaidNum / packCnt)
+                        : 0;
+                    const perUnitLabel =
+                      perUnitCost > 0
+                        ? `${
+                            purchaseTarget.classification === 'ingredient' && !Number.isInteger(perUnitCost)
+                              ? `${perUnitCost.toLocaleString('en-US', { maximumFractionDigits: 2 })} ៛`
+                              : formatKhr(Math.round(perUnitCost))
+                          } / ${purchaseTarget.unit}`
+                        : null;
+                    const helperText =
+                      perPackCost > 0 && perUnitLabel
+                        ? `${formatKhr(perPackCost)} / ${isKm ? 'កេស' : 'ctn'} · ${perUnitLabel}`
+                        : perUnitLabel || undefined;
+
+                    return (
+                      <CurrencyInput
+                        valueKhr={totalPaidNum}
+                        onChangeKhr={(nextKhr) => {
+                          setPurchaseCostManual(true);
+                          setPurchaseCostKhr(String(nextKhr));
+                        }}
+                        exchangeRate={exchangeRate}
+                        placeholderKhr="24000"
+                        placeholderUsd="6.00"
+                        helperExtra={helperText}
+                      />
+                    );
+                  })()}
                 </div>
+
                 <div>
                   <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     {t.common.payment}
@@ -2854,8 +3080,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         : 'Adds initial balance valuation only — never logged as an expense.'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                    <div className="sm:col-span-5">
                       <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                         {isKm ? 'បរិមាណដើមគ្រា' : 'Opening Qty'} ({adjustModalTarget.unit})
                       </label>
@@ -2869,17 +3095,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                       />
                     </div>
-                    <div>
+                    <div className="sm:col-span-7">
                       <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                        {isKm ? 'ថ្លៃដើមឯកតា (KHR)' : 'Unit Cost (KHR)'}
+                        {isKm ? 'ថ្លៃដើមឯកតា' : 'Unit Cost'} ({adjustModalTarget.unit})
                       </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="any"
-                        value={openingUnitCost}
-                        onChange={(e) => setOpeningUnitCost(e.target.value)}
-                        className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
+                      <CurrencyInput
+                        valueKhr={Math.max(0, Number(openingUnitCost) || 0)}
+                        onChangeKhr={(nextKhr) => setOpeningUnitCost(String(nextKhr))}
+                        exchangeRate={exchangeRate}
+                        allowDecimalsKhr={adjustModalTarget.classification === 'ingredient'}
+                        placeholderKhr="0"
+                        placeholderUsd="0.00"
                       />
                     </div>
                   </div>

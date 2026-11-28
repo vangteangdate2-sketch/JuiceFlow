@@ -437,7 +437,7 @@ export interface MergeDuplicatesResult {
 function scorePrimaryProduct(p: Product): number {
   let score = 0;
   if (normalizeBarcodeString(p.barcode || '').length > 0) score += 120;
-  if ((p.packagingBarcodes?.length ?? 0) > 0) score += 20;
+  if ((p.packSizes?.length ?? 0) > 0 || (p.packagingBarcodes?.length ?? 0) > 0) score += 20;
   if ((Number(p.costPriceKhr) || 0) > 0) score += 80;
   if ((Number(p.priceKhr) || 0) > 0) score += 25;
   if ((p.variants?.length ?? 0) > 0) score += 20;
@@ -751,14 +751,33 @@ function productToFirestoreFields(clean: Product) {
       ? { markupPercent: clampNumber(clean.markupPercent, 0, 10000) }
       : {}),
     manualPriceOverride: Boolean(clean.manualPriceOverride),
+    allowSingleUnitSale: clean.productType === 'PACKAGED' ? clean.allowSingleUnitSale !== false : true,
     imageUrl: sanitizeString(clean.imageUrl, 200000),
     active: Boolean(clean.active),
     barcode: sanitizeString(clean.barcode || '', 64),
-    packagingBarcodes: (clean.packagingBarcodes || []).slice(0, 10).map((pb) => ({
-      barcode: sanitizeString(pb.barcode, 64),
-      label: sanitizeString(pb.label, 60),
-      unitsPerPack: clampNumber(Math.round(pb.unitsPerPack), 1, 10000),
-    })),
+    packagingBarcodes: (
+      clean.packSizes && clean.packSizes.length > 0
+        ? clean.packSizes
+        : (clean.packagingBarcodes || []).map((pb, idx) => ({
+            id: pb.id || `pack_${clean.id}_${idx}`,
+            label: pb.label,
+            unitsPerPack: pb.unitsPerPack,
+            costKhr: pb.costKhr ?? Math.round((clean.costPriceKhr || 0) * pb.unitsPerPack),
+            priceKhr: pb.priceKhr ?? Math.round((clean.priceKhr || 0) * pb.unitsPerPack),
+            sellableOnPos: pb.sellableOnPos !== undefined ? Boolean(pb.sellableOnPos) : (pb.priceKhr ?? 0) > 0,
+            barcode: pb.barcode,
+          }))
+    )
+      .slice(0, 10)
+      .map((pk, idx) => ({
+        id: sanitizeString(pk.id || `pack_${clean.id}_${idx}`, 64),
+        barcode: sanitizeString(pk.barcode || '', 64),
+        label: sanitizeString(pk.label, 60),
+        unitsPerPack: clampNumber(Math.round(pk.unitsPerPack), 1, 10000),
+        costKhr: clampNumber(Math.round(pk.costKhr || 0), 0, 100000000),
+        priceKhr: clampNumber(Math.round(pk.priceKhr || 0), 0, 100000000),
+        sellableOnPos: pk.sellableOnPos !== undefined ? Boolean(pk.sellableOnPos) : (pk.priceKhr || 0) > 0,
+      })),
     stockQty: clampNumber(clean.stockQty, -1000000, 100000000),
     reorderLevel: clampNumber(clean.reorderLevel, 0, 100000000),
     unit: clean.unit || 'pcs',
@@ -1753,6 +1772,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           name: productInput.name,
           barcode: productInput.barcode,
           variants: productInput.variants,
+          packSizes: productInput.packSizes,
           packagingBarcodes: productInput.packagingBarcodes,
         },
         cur.products,
@@ -1974,6 +1994,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 const matchedVariant = regRecord.variantId
                   ? matchedProduct.variants?.find((v) => v.id === regRecord.variantId)
                   : undefined;
+                const matchedPack =
+                  regRecord.packagingType === 'pack' || regRecord.packagingType === 'carton'
+                    ? (matchedProduct.packSizes || []).find(
+                        (pk) =>
+                          normalizeBarcodeString(pk.barcode) === regRecord.code ||
+                          getEquivalentBarcodeCodes(pk.barcode).includes(regRecord.code)
+                      ) ||
+                      (matchedProduct.packSizes || []).find(
+                        (pk) =>
+                          pk.unitsPerPack === Math.max(1, Math.round(regRecord.unitsPerScan || 1)) &&
+                          pk.label === regRecord.label
+                      )
+                    : undefined;
                 return {
                   found: true,
                   code: regRecord.code,
@@ -1982,10 +2015,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                   itemType: 'product',
                   product: matchedProduct,
                   variant: matchedVariant,
+                  pack: matchedPack,
                   registryRecord: regRecord,
-                  unitsPerScan: regRecord.unitsPerScan,
+                  unitsPerScan: matchedPack?.unitsPerPack || regRecord.unitsPerScan,
                   packagingType: regRecord.packagingType,
-                  packLabel: regRecord.label,
+                  packLabel: matchedPack?.label || regRecord.label,
                   externalPrefill: null,
                   lookedUpExternally: false,
                 };
@@ -2014,6 +2048,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           product: localHit.product,
           ingredient: localHit.ingredient,
           variant: localHit.variant,
+          pack: localHit.pack,
           registryRecord: localHit.registryRecord,
           unitsPerScan: localHit.unitsPerScan,
           packagingType: localHit.packagingType,
@@ -2594,11 +2629,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       let bestNameVi = primary.nameVi || primary.name;
       let bestReorder = Number(primary.reorderLevel) || 0;
       let mergedRecipe = [...(primary.recipe || [])];
-      const mergedPackBarcodes = [...(primary.packagingBarcodes || [])];
-      const seenPackCodes = new Set(
-        mergedPackBarcodes.map((pb) => normalizeBarcodeString(pb.barcode)).filter(Boolean)
+      const mergedPackSizes = [...(primary.packSizes || [])];
+      const seenPackKeys = new Set(
+        mergedPackSizes.map((pk) => normalizeBarcodeString(pk.barcode) || `${pk.label}:${pk.unitsPerPack}`)
       );
-      if (bestBarcode) seenPackCodes.add(bestBarcode);
+      if (bestBarcode) seenPackKeys.add(bestBarcode);
 
       const mergedVariants = [...(primary.variants || [])];
       const seenVariantNames = new Set(
@@ -2620,13 +2655,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const dupBarcode = normalizeBarcodeString(dup.barcode || '');
         if (!bestBarcode && dupBarcode) {
           bestBarcode = dupBarcode;
-          seenPackCodes.add(dupBarcode);
+          seenPackKeys.add(dupBarcode);
         }
-        for (const pb of dup.packagingBarcodes || []) {
-          const code = normalizeBarcodeString(pb.barcode);
-          if (code && !seenPackCodes.has(code) && mergedPackBarcodes.length < 10) {
-            seenPackCodes.add(code);
-            mergedPackBarcodes.push({ ...pb, barcode: code });
+        for (const pk of dup.packSizes || []) {
+          const code = normalizeBarcodeString(pk.barcode);
+          const key = code || `${pk.label}:${pk.unitsPerPack}`;
+          if (!seenPackKeys.has(key) && mergedPackSizes.length < 10) {
+            seenPackKeys.add(key);
+            mergedPackSizes.push({ ...pk, ...(code ? { barcode: code } : {}) });
           }
         }
         if (primary.productType === 'PREPARED_TO_ORDER') {
@@ -2664,7 +2700,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         priceKhr: bestPrice,
         costPriceKhr: finalCost,
         barcode: bestBarcode,
-        packagingBarcodes: mergedPackBarcodes,
+        packSizes: mergedPackSizes,
         stockQty: isStockTracked ? combinedStock : 0,
         reorderLevel: isStockTracked ? bestReorder : 0,
         supplier: bestSupplier,

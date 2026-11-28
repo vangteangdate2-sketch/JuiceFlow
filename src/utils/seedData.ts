@@ -196,11 +196,24 @@ export function getEnhancedSampleAdditions(): {
       imageUrl: '',
       active: true,
       barcode: '8851959132012',
+      packSizes: [
+        {
+          id: 'pack_water_24',
+          label: 'Carton (24 bottles)',
+          unitsPerPack: 24,
+          costKhr: 18000,
+          priceKhr: 36000,
+          barcode: '8851959132241',
+        },
+      ],
       packagingBarcodes: [
         {
+          id: 'pack_water_24',
           barcode: '8851959132241',
           label: 'Carton (24 bottles)',
           unitsPerPack: 24,
+          costKhr: 18000,
+          priceKhr: 36000,
         },
       ],
       stockQty: 48,
@@ -225,11 +238,31 @@ export function getEnhancedSampleAdditions(): {
       imageUrl: '',
       active: true,
       barcode: '8851959141014',
+      packSizes: [
+        {
+          id: 'pack_coke_6',
+          label: '6-Pack',
+          unitsPerPack: 6,
+          costKhr: 12000,
+          priceKhr: 18000,
+        },
+        {
+          id: 'pack_coke_24',
+          label: 'Case (24 cans)',
+          unitsPerPack: 24,
+          costKhr: 46000,
+          priceKhr: 68000,
+          barcode: '8851959141243',
+        },
+      ],
       packagingBarcodes: [
         {
+          id: 'pack_coke_24',
           barcode: '8851959141243',
           label: 'Case (24 cans)',
           unitsPerPack: 24,
+          costKhr: 46000,
+          priceKhr: 68000,
         },
       ],
       stockQty: 36,
@@ -254,11 +287,24 @@ export function getEnhancedSampleAdditions(): {
       imageUrl: '',
       active: true,
       barcode: '8850718801122',
+      packSizes: [
+        {
+          id: 'pack_chips_12',
+          label: 'Box (12 packs)',
+          unitsPerPack: 12,
+          costKhr: 34000,
+          priceKhr: 48000,
+          barcode: '8850718801129',
+        },
+      ],
       packagingBarcodes: [
         {
+          id: 'pack_chips_12',
           barcode: '8850718801129',
           label: 'Box (12 packs)',
           unitsPerPack: 12,
+          costKhr: 34000,
+          priceKhr: 48000,
         },
       ],
       stockQty: 14,

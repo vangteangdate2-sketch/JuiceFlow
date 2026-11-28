@@ -43,7 +43,11 @@ import {
 } from '../utils/format';
 import {
   getAvailableUnitsForProduct,
+  getProductPack,
+  getProductPackSizes,
   getProductVariant,
+  getSellableProductPacks,
+  isSingleUnitSaleAllowed,
   resolveBarcodeMatch,
   validateCheckoutStock,
   type StockShortage,
@@ -73,9 +77,10 @@ import {
 import { useFilterVisibility } from '../hooks/useFilterVisibility';
 
 interface CartEntry {
-  key: string; // `${productId}::${variantId || ''}`
+  key: string; // `${productId}::${variantId || ''}::${packId || ''}`
   productId: string;
   variantId?: string;
+  packId?: string;
   quantity: number;
 }
 
@@ -163,6 +168,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
 
   // Modals
   const [variantPickerProduct, setVariantPickerProduct] = useState<Product | null>(null);
+  const [packPickerProduct, setPackPickerProduct] = useState<Product | null>(null);
   const [receiptSale, setReceiptSale] = useState<Sale | null>(null);
   const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
   const [returnQtyMap, setReturnQtyMap] = useState<Record<string, number>>({});
@@ -197,7 +203,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
           (v?.name || '').toLowerCase().includes(q) ||
           (v?.barcode || '').toLowerCase().includes(q)
       );
-      const packMatch = (p.packagingBarcodes || []).some(
+      const packMatch = getProductPackSizes(p).some(
         (pb) =>
           (pb?.barcode || '').toLowerCase().includes(q) ||
           (pb?.label || '').toLowerCase().includes(q)
@@ -220,12 +226,17 @@ export const SalesView: React.FC<SalesViewProps> = ({
         const product = prodMap.get(entry.productId);
         if (!product) return null;
         const variant = getProductVariant(product, entry.variantId);
-        const unitPrice = variant ? variant.priceKhr : product.priceKhr;
-        const unitCogs = Math.round(calculateProductCogs(product, ingredients, variant));
+        const pack =
+          product.productType === 'PACKAGED' ? getProductPack(product, entry.packId) : undefined;
+        const unitPrice = pack ? pack.priceKhr : variant ? variant.priceKhr : product.priceKhr;
+        const unitCogs = pack
+          ? pack.costKhr
+          : Math.round(calculateProductCogs(product, ingredients, variant));
         return {
           ...entry,
           product,
           variant,
+          pack,
           unitPrice,
           lineTotal: unitPrice * entry.quantity,
           lineCogs: unitCogs * entry.quantity,
@@ -304,6 +315,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
       cartLines.map((l) => ({
         productId: l.productId,
         variantId: l.variantId,
+        packId: l.packId,
         quantity: l.quantity,
       })),
       products,
@@ -316,18 +328,20 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const canAddToCart = (
     productId: string,
     variantId?: string,
-    qtyToAdd = 1
+    qtyToAdd = 1,
+    packId?: string
   ): { allowed: boolean; reason?: string; shortages?: StockShortage[] } => {
     if (qtyToAdd <= 0 || settings.allowNegativeStock) {
       return { allowed: true };
     }
-    const key = `${productId}::${variantId || ''}`;
+    const key = `${productId}::${variantId || ''}::${packId || ''}`;
     const nextMap: Record<string, CartEntry> = {
       ...cart,
       [key]: {
         key,
         productId,
         variantId,
+        packId,
         quantity: (cart[key]?.quantity || 0) + qtyToAdd,
       },
     };
@@ -336,6 +350,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
       .map((e) => ({
         productId: e.productId,
         variantId: e.variantId,
+        packId: e.packId,
         quantity: e.quantity,
       }));
     const check = validateCheckoutStock(nextItems, products, ingredients, false);
@@ -354,14 +369,19 @@ export const SalesView: React.FC<SalesViewProps> = ({
     return { allowed: true };
   };
 
-  const addEntryToCart = (productId: string, variantId?: string, qtyToAdd = 1): boolean => {
-    const stockCheck = canAddToCart(productId, variantId, qtyToAdd);
+  const addEntryToCart = (
+    productId: string,
+    variantId?: string,
+    qtyToAdd = 1,
+    packId?: string
+  ): boolean => {
+    const stockCheck = canAddToCart(productId, variantId, qtyToAdd, packId);
     if (!stockCheck.allowed) {
       setCheckoutError(stockCheck.reason || (isKm ? 'ដល់កម្រិតស្តុកអតិបរមាហើយ។' : 'Stock limit reached.'));
       setCheckoutShortages(stockCheck.shortages || []);
       return false;
     }
-    const key = `${productId}::${variantId || ''}`;
+    const key = `${productId}::${variantId || ''}::${packId || ''}`;
     setCheckoutError(null);
     setCheckoutShortages([]);
     setCart((prev) => {
@@ -372,6 +392,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
           key,
           productId,
           variantId,
+          packId,
           quantity: (existing?.quantity || 0) + qtyToAdd,
         },
       };
@@ -380,6 +401,32 @@ export const SalesView: React.FC<SalesViewProps> = ({
   };
 
   const handleProductTileClick = (product: Product) => {
+    if (product.productType === 'PACKAGED') {
+      const allowSingle = isSingleUnitSaleAllowed(product);
+      const sellablePacks = getSellableProductPacks(product);
+
+      if (!allowSingle) {
+        if (sellablePacks.length === 1) {
+          addEntryToCart(product.id, undefined, 1, sellablePacks[0].id);
+          return;
+        }
+        if (sellablePacks.length > 1) {
+          setPackPickerProduct(product);
+          return;
+        }
+        setCheckoutError(
+          isKm
+            ? 'មិនទាន់មានតម្លៃកេសសម្រាប់លក់លើ POS ទេ។ សូមកំណត់នៅក្នុងទំព័រផលិតផល។'
+            : 'No sellable carton price configured for this carton-only product.'
+        );
+        return;
+      }
+
+      if (sellablePacks.length > 0) {
+        setPackPickerProduct(product);
+        return;
+      }
+    }
     if (product.variants && product.variants.length > 1) {
       setVariantPickerProduct(product);
       return;
@@ -392,7 +439,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
     const current = cart[key];
     if (!current) return;
     if (delta > 0) {
-      const stockCheck = canAddToCart(current.productId, current.variantId, delta);
+      const stockCheck = canAddToCart(current.productId, current.variantId, delta, current.packId);
       if (!stockCheck.allowed) {
         setCheckoutError(stockCheck.reason || (isKm ? 'ដល់កម្រិតស្តុកអតិបរមាហើយ។' : 'Stock limit reached.'));
         setCheckoutShortages(stockCheck.shortages || []);
@@ -468,7 +515,18 @@ export const SalesView: React.FC<SalesViewProps> = ({
       return { ok: false, message: msg };
     }
 
-    const qty = Math.max(1, result.unitsPerScan || 1);
+    const matchedPack =
+      result.product.productType === 'PACKAGED'
+        ? result.pack ||
+          ((result.packagingType === 'pack' || result.packagingType === 'carton')
+            ? getProductPackSizes(result.product).find(
+                (pk) =>
+                  pk.unitsPerPack === Math.max(1, result.unitsPerScan || 1) &&
+                  (!result.packLabel || pk.label === result.packLabel)
+              )
+            : undefined)
+        : undefined;
+
     const availability = getAvailableUnitsForProduct(
       result.product,
       ingredients,
@@ -483,6 +541,73 @@ export const SalesView: React.FC<SalesViewProps> = ({
       return { ok: false, message: msg };
     }
 
+    // Direct Carton/Pack Barcode Scan: bypass picker and add 1x carton line priced at pack.priceKhr
+    if (matchedPack) {
+      if (matchedPack.sellableOnPos === false || matchedPack.priceKhr <= 0) {
+        const displayName = getLocalizedName(result.product.name, result.product.nameVi);
+        const msg = isKm
+          ? `"${displayName}" (${matchedPack.label}) ត្រូវបានកំណត់សម្រាប់តែនាំចូលស្តុក — មិនមែនសម្រាប់លក់ជាកេសលើ POS ទេ។`
+          : `"${displayName}" (${matchedPack.label}) is configured as restock-only and has no POS selling price.`;
+        setCheckoutError(msg);
+        return { ok: false, message: msg };
+      }
+
+      const stockCheck = canAddToCart(result.product.id, undefined, 1, matchedPack.id);
+      if (!stockCheck.allowed) {
+        const msg =
+          stockCheck.reason ||
+          (isKm ? 'ស្តុកមិនគ្រប់គ្រាន់សម្រាប់ ១ កេសទេ។' : 'Insufficient stock for 1 carton/pack.');
+        setCheckoutError(msg);
+        setCheckoutShortages(stockCheck.shortages || []);
+        return { ok: false, message: msg };
+      }
+
+      addEntryToCart(result.product.id, undefined, 1, matchedPack.id);
+      const displayName = getLocalizedName(result.product.name, result.product.nameVi);
+      const msg = isKm
+        ? `បានបន្ថែម +1× ${displayName} (${matchedPack.label} · ${formatKhr(matchedPack.priceKhr)})`
+        : `Added +1× ${displayName} (${matchedPack.label} · ${formatKhr(matchedPack.priceKhr)})`;
+      return { ok: true, message: msg };
+    }
+
+    // Carton-Only packaged product scanned via unit barcode: route to sellable carton instead of 0 KHR single unit
+    if (result.product.productType === 'PACKAGED' && !isSingleUnitSaleAllowed(result.product)) {
+      const sellablePacks = getSellableProductPacks(result.product);
+      const displayName = getLocalizedName(result.product.name, result.product.nameVi);
+      if (sellablePacks.length === 1) {
+        const onlyPack = sellablePacks[0];
+        const stockCheck = canAddToCart(result.product.id, undefined, 1, onlyPack.id);
+        if (!stockCheck.allowed) {
+          const msg =
+            stockCheck.reason ||
+            (isKm ? 'ស្តុកមិនគ្រប់គ្រាន់សម្រាប់ ១ កេសទេ។' : 'Insufficient stock for 1 carton/pack.');
+          setCheckoutError(msg);
+          setCheckoutShortages(stockCheck.shortages || []);
+          return { ok: false, message: msg };
+        }
+        addEntryToCart(result.product.id, undefined, 1, onlyPack.id);
+        const msg = isKm
+          ? `បានបន្ថែម +1× ${displayName} (${onlyPack.label} · ${formatKhr(onlyPack.priceKhr)})`
+          : `Added +1× ${displayName} (${onlyPack.label} · ${formatKhr(onlyPack.priceKhr)})`;
+        return { ok: true, message: msg };
+      }
+      if (sellablePacks.length > 1) {
+        setPackPickerProduct(result.product);
+        return {
+          ok: true,
+          message: isKm
+            ? `ជ្រើសរើសប្រភេទកេសសម្រាប់ "${displayName}"`
+            : `Select carton option for "${displayName}"`,
+        };
+      }
+      const msg = isKm
+        ? `"${displayName}" មិនទាន់មានតម្លៃកេសសម្រាប់លក់លើ POS ទេ។`
+        : `"${displayName}" has no sellable carton price configured.`;
+      setCheckoutError(msg);
+      return { ok: false, message: msg };
+    }
+
+    const qty = Math.max(1, result.unitsPerScan || 1);
     const stockCheck = canAddToCart(result.product.id, result.variant?.id, qty);
     if (!stockCheck.allowed) {
       const msg =
@@ -523,6 +648,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
         items: cartLines.map((l) => ({
           productId: l.productId,
           variantId: l.variantId,
+          packId: l.packId,
           quantity: l.quantity,
         })),
         paymentMethod,
@@ -595,7 +721,12 @@ export const SalesView: React.FC<SalesViewProps> = ({
       if (paymentFilter !== 'all' && s.paymentMethod !== paymentFilter) return false;
       if (!q) return true;
       const itemsText = (s.items || [])
-        .map((i) => `${i?.productName || ''} ${i?.productNameVi || ''} ${i?.variantName || ''}`)
+        .map(
+          (i) =>
+            `${i?.productName || ''} ${i?.productNameVi || ''} ${i?.variantName || ''} ${
+              i?.packLabel || ''
+            }`
+        )
         .join(' ')
         .toLowerCase();
       return (
@@ -682,6 +813,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
       .filter((c) => c.productId === productId)
       .reduce((s, c) => s + c.quantity, 0);
 
+  const getBaseUnitsInCartForProduct = (product: Product) =>
+    Object.values(cart)
+      .filter((c) => c.productId === product.id)
+      .reduce((sum, c) => {
+        const pk = product.productType === 'PACKAGED' ? getProductPack(product, c.packId) : undefined;
+        return sum + c.quantity * (pk ? Math.max(1, pk.unitsPerPack) : 1);
+      }, 0);
+
   return (
     <div className="space-y-4">
       {/* Condensed Single-Row Header: Title + Inline POS / Sales Ledger Switcher */}
@@ -752,6 +891,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   subTab === 'pos' &&
                   !cashModalOpen &&
                   !variantPickerProduct &&
+                  !packPickerProduct &&
                   !receiptSale &&
                   !detailSaleId &&
                   !quickRegisterOpen
@@ -955,23 +1095,47 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   const qtyInCart = getQtyInCartForProduct(product.id);
                   const displayName = getLocalizedName(product.name, product.nameVi);
                   const productVariants = Array.isArray(product.variants) ? product.variants : [];
+                  const allowSingle = isSingleUnitSaleAllowed(product);
+                  const sellablePacks = getSellableProductPacks(product);
+                  const isCartonOnly = product.productType === 'PACKAGED' && !allowSingle;
                   const availability = getAvailableUnitsForProduct(
                     product,
                     ingredients,
                     productVariants[0]?.id
                   );
                   const hasMultiVariants = productVariants.length > 1;
-                  const minPrice = hasMultiVariants
-                    ? Math.min(...productVariants.map((v) => Number(v.priceKhr) || 0))
-                    : productVariants[0]?.priceKhr ?? product.priceKhr;
+                  const hasPackOptions = sellablePacks.length > 0;
+                  const minPrice = isCartonOnly
+                    ? sellablePacks.length > 0
+                      ? Math.min(...sellablePacks.map((pk) => Number(pk.priceKhr) || 0))
+                      : 0
+                    : hasMultiVariants
+                      ? Math.min(...productVariants.map((v) => Number(v.priceKhr) || 0))
+                      : productVariants[0]?.priceKhr ?? product.priceKhr;
 
-                  const outBlocked = availability.status === 'out' && !settings.allowNegativeStock;
+                  const outBlocked =
+                    !settings.allowNegativeStock &&
+                    (availability.status === 'out' ||
+                      (isCartonOnly &&
+                        sellablePacks.length > 0 &&
+                        (availability.availableUnits ?? 0) <
+                          Math.min(...sellablePacks.map((pk) => pk.unitsPerPack))));
                   const atStockLimit =
                     !outBlocked &&
                     !settings.allowNegativeStock &&
-                    (hasMultiVariants
-                      ? productVariants.every((v) => !canAddToCart(product.id, v.id, 1).allowed)
-                      : !canAddToCart(product.id, productVariants[0]?.id, 1).allowed);
+                    (isCartonOnly
+                      ? sellablePacks.length === 0 ||
+                        sellablePacks.every(
+                          (pk) => !canAddToCart(product.id, undefined, 1, pk.id).allowed
+                        )
+                      : hasMultiVariants
+                        ? productVariants.every((v) => !canAddToCart(product.id, v.id, 1).allowed)
+                        : hasPackOptions
+                          ? !canAddToCart(product.id, undefined, 1).allowed &&
+                            sellablePacks.every(
+                              (pk) => !canAddToCart(product.id, undefined, 1, pk.id).allowed
+                            )
+                          : !canAddToCart(product.id, productVariants[0]?.id, 1).allowed);
                   const cardDisabled = outBlocked || atStockLimit;
 
                   return (
@@ -1056,6 +1220,16 @@ export const SalesView: React.FC<SalesViewProps> = ({
                                 · {productVariants.length} {isKm ? 'ទំហំ' : 'sizes'}
                               </span>
                             )}
+                            {hasPackOptions && (
+                              <span className="text-sky-700 dark:text-sky-400 font-medium truncate">
+                                ·{' '}
+                                {sellablePacks.length === 1
+                                  ? sellablePacks[0].label
+                                  : isKm
+                                    ? `${sellablePacks.length} ជម្រើសកេស`
+                                    : `${sellablePacks.length} packs`}
+                              </span>
+                            )}
                           </div>
                           {atStockLimit ? (
                             <span className="font-mono-num font-semibold text-amber-700 dark:text-amber-400 shrink-0">
@@ -1088,7 +1262,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
                         </h3>
                         <div className="mt-1.5 flex items-baseline justify-between gap-2">
                           <span className="font-mono-num text-sm font-bold text-[#0D5C3E] dark:text-[#34D399]">
-                            {hasMultiVariants ? `${formatKhr(minPrice)}+` : formatKhr(minPrice)}
+                            {hasMultiVariants || (isCartonOnly && sellablePacks.length > 1)
+                              ? `${formatKhr(minPrice)}+`
+                              : formatKhr(minPrice)}
                           </span>
                           <span className="text-[11px] text-stone-400 dark:text-[#94A39B] font-mono-num">
                             {formatUsdRef(minPrice, settings.usdRate)}
@@ -1166,14 +1342,19 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 </div>
               ) : (
                 <ul className="divide-y divide-stone-100 dark:divide-[#24352C]">
-                  {cartLines.map(({ key, product, variant, unitPrice, quantity, lineTotal }) => {
-                    const incCheck = canAddToCart(product.id, variant?.id, 1);
+                  {cartLines.map(({ key, product, variant, pack, unitPrice, quantity, lineTotal }) => {
+                    const incCheck = canAddToCart(product.id, variant?.id, 1, pack?.id);
                     return (
                       <li key={key} className="py-2.5 flex items-center justify-between gap-2.5 animate-cart-item">
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-stone-900 dark:text-[#F1F5F3] truncate">
                             {getLocalizedName(product.name, product.nameVi)}
-                            {variant ? (
+                            {pack ? (
+                              <span className="text-sky-700 dark:text-sky-400 font-normal">
+                                {' '}
+                                ({pack.label})
+                              </span>
+                            ) : variant ? (
                               <span className="text-stone-500 dark:text-[#94A39B] font-normal">
                                 {' '}
                                 ({getLocalizedName(variant.name, variant.nameVi)})
@@ -1183,6 +1364,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                           <div className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num mt-0.5">
                             <span>
                               {formatKhr(unitPrice)} × {quantity}
+                              {pack ? ` (${quantity * pack.unitsPerPack} ${product.unit})` : ''}
                             </span>
                             {!incCheck.allowed && (
                               <span className="text-[10px] font-sans font-semibold text-amber-700 dark:text-amber-400">
@@ -1611,7 +1793,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
                               .map(
                                 (i) =>
                                   `${i.quantity}× ${getLocalizedName(i.productName, i.productNameVi)}${
-                                    i.variantName ? ` (${i.variantName})` : ''
+                                    i.packLabel || i.variantName
+                                      ? ` (${i.packLabel || i.variantName})`
+                                      : ''
                                   }`
                               )
                               .join(', ')}
@@ -1812,6 +1996,149 @@ export const SalesView: React.FC<SalesViewProps> = ({
         </ModalPortal>
       )}
 
+      {/* Retail Single-Unit vs Carton/Pack Picker Modal */}
+      {packPickerProduct && (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-200 animate-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setPackPickerProduct(null);
+            }}
+          >
+            <div className="w-full max-w-sm bg-white dark:bg-[#111916] border border-slate-200/80 dark:border-emerald-950/60 rounded-2xl overflow-hidden shadow-2xl animate-modal">
+              <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
+                    {getLocalizedName(packPickerProduct.name, packPickerProduct.nameVi)}
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-[#94A39B]">
+                    {isSingleUnitSaleAllowed(packPickerProduct)
+                      ? isKm
+                        ? 'ជ្រើសរើសលក់រាយ ឬលក់ជាកេស / យួរ'
+                        : 'Choose single unit or carton / pack to add'
+                      : isKm
+                        ? 'ជ្រើសរើសប្រភេទកេស / យួរដើម្បីបន្ថែម'
+                        : 'Choose carton / pack option to add'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPackPickerProduct(null)}
+                  className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-4 space-y-2.5">
+                {(() => {
+                  const inCartBase = getBaseUnitsInCartForProduct(packPickerProduct);
+                  const remainingBase = Math.max(0, (Number(packPickerProduct.stockQty) || 0) - inCartBase);
+                  const allowSingle = isSingleUnitSaleAllowed(packPickerProduct);
+                  const unitCheck = canAddToCart(packPickerProduct.id, undefined, 1, undefined);
+                  const unitBlocked = !settings.allowNegativeStock && (!unitCheck.allowed || remainingBase < 1);
+                  const packs = getSellableProductPacks(packPickerProduct);
+
+                  return (
+                    <>
+                      {/* Single Base Unit Row */}
+                      {allowSingle && (
+                        <button
+                          type="button"
+                          disabled={unitBlocked}
+                          onClick={() => {
+                            if (addEntryToCart(packPickerProduct.id, undefined, 1, undefined)) {
+                              setPackPickerProduct(null);
+                            }
+                          }}
+                          className="w-full min-h-[56px] px-4 py-3 bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl flex items-center justify-between gap-3 transition-all active:scale-[0.97]"
+                        >
+                          <div className="text-left min-w-0">
+                            <div className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
+                              {isKm
+                                ? `1 ${packPickerProduct.unit} (លក់រាយ)`
+                                : `1 ${packPickerProduct.unit} (Single)`}
+                            </div>
+                            <div className="text-[11px] font-mono-num text-stone-500 dark:text-[#94A39B]">
+                              {remainingBase < 1 && !settings.allowNegativeStock
+                                ? isKm
+                                  ? 'អស់ពីស្តុក'
+                                  : 'Out of stock'
+                                : isKm
+                                  ? `នៅសល់ ${Math.floor(remainingBase)} ${packPickerProduct.unit} ក្នុងស្តុក`
+                                  : `${Math.floor(remainingBase)} ${packPickerProduct.unit} in stock`}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="block font-mono-num text-sm font-bold text-[#0D5C3E] dark:text-[#34D399]">
+                              {formatKhr(packPickerProduct.priceKhr)}
+                            </span>
+                            <span className="block font-mono-num text-[10px] text-stone-400 dark:text-[#94A39B]">
+                              {formatUsdRef(packPickerProduct.priceKhr, settings.usdRate)}
+                            </span>
+                          </div>
+                        </button>
+                      )}
+
+                      {/* Configured Sellable Carton / Pack Rows */}
+                      {packs.map((pack) => {
+                        const availablePacks = Math.floor(remainingBase / Math.max(1, pack.unitsPerPack));
+                        const packCheck = canAddToCart(packPickerProduct.id, undefined, 1, pack.id);
+                        const packBlocked =
+                          !settings.allowNegativeStock &&
+                          (!packCheck.allowed || remainingBase < pack.unitsPerPack);
+
+                        return (
+                          <button
+                            key={pack.id}
+                            type="button"
+                            disabled={packBlocked}
+                            onClick={() => {
+                              if (addEntryToCart(packPickerProduct.id, undefined, 1, pack.id)) {
+                                setPackPickerProduct(null);
+                              }
+                            }}
+                            className="w-full min-h-[56px] px-4 py-3 bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:border-sky-600 dark:hover:border-sky-400 hover:bg-sky-50/40 dark:hover:bg-[#1F3028] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl flex items-center justify-between gap-3 transition-all active:scale-[0.97]"
+                          >
+                            <div className="text-left min-w-0">
+                              <div className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
+                                {pack.label}
+                              </div>
+                              <div
+                                className={`text-[11px] font-mono-num ${
+                                  packBlocked
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : 'text-stone-500 dark:text-[#94A39B]'
+                                }`}
+                              >
+                                {packBlocked
+                                  ? isKm
+                                    ? `ស្តុកមិនគ្រប់ (${Math.floor(remainingBase)}/${pack.unitsPerPack} ${packPickerProduct.unit})`
+                                    : `Need ${pack.unitsPerPack} ${packPickerProduct.unit} (${Math.floor(remainingBase)} left)`
+                                  : isKm
+                                    ? `${availablePacks} កេសមានក្នុងស្តុក · -${pack.unitsPerPack} ${packPickerProduct.unit}`
+                                    : `${availablePacks} ${availablePacks === 1 ? 'carton' : 'cartons'} available · -${pack.unitsPerPack} ${packPickerProduct.unit}`}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="block font-mono-num text-sm font-bold text-[#0D5C3E] dark:text-[#34D399]">
+                                {formatKhr(pack.priceKhr)}
+                              </span>
+                              <span className="block font-mono-num text-[10px] text-stone-400 dark:text-[#94A39B]">
+                                {formatUsdRef(pack.priceKhr, settings.usdRate)}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
       {/* Order Details & Partial Return Modal */}
       {detailSale && (
         <ModalPortal>
@@ -1911,11 +2238,16 @@ export const SalesView: React.FC<SalesViewProps> = ({
                             <p className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                               {item.quantity}×{' '}
                               {getLocalizedName(item.productName, item.productNameVi)}
-                              {item.variantName ? ` (${item.variantName})` : ''}
+                              {item.packLabel || item.variantName
+                                ? ` (${item.packLabel || item.variantName})`
+                                : ''}
                             </p>
                             <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
                               {formatKhr(item.unitPriceKhr)} {isKm ? '/ឯកតា' : 'ea'} ·{' '}
                               {isKm ? 'ថ្លៃដើម' : 'COGS'} {formatKhr(item.unitCogsKhr)}
+                              {item.unitsPerPack && item.unitsPerPack > 1
+                                ? ` · ${item.quantity * item.unitsPerPack} base units`
+                                : ''}
                               {returned > 0
                                 ? ` · ${isKm ? 'បានបង្វិល' : 'Returned'}: ${returned}`
                                 : ''}

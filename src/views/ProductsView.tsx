@@ -42,6 +42,12 @@ import {
   formatKhr,
   formatQty,
 } from '../utils/format';
+import {
+  formatStockWithCartons,
+  getProductPackSizes,
+  getSellableProductPacks,
+  isSingleUnitSaleAllowed,
+} from '../utils/inventoryEngine';
 import { compressImageBlobToDataUrl } from '../utils/image';
 import {
   getCategoriesForScope,
@@ -354,15 +360,20 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         return false;
       }
       if (!q) return true;
+      const productPacks = getProductPackSizes(p);
       const productBarcodes = [
         p.barcode,
-        ...(p.packagingBarcodes || []).map((pb) => pb.barcode),
+        ...productPacks.map((pk) => pk.barcode),
         ...(p.variants || []).map((v) => v.barcode),
       ];
+      const packLabelMatch = productPacks.some((pk) =>
+        (pk.label || '').toLowerCase().includes(q)
+      );
       return (
         p.name.toLowerCase().includes(q) ||
         p.nameVi.toLowerCase().includes(q) ||
         (p.brand || '').toLowerCase().includes(q) ||
+        packLabelMatch ||
         matchesBarcodeSearch(productBarcodes, search)
       );
     });
@@ -1259,12 +1270,26 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               <tbody className="divide-y divide-stone-100 dark:divide-[#1F3028] text-sm">
                 {filteredProducts.map((product) => {
                   const firstVariant = product.variants?.[0];
-                  const cogs = Math.round(calculateProductCogs(product, ingredients, firstVariant));
-                  const basePrice = firstVariant ? firstVariant.priceKhr : product.priceKhr;
+                  const isDirectStock = product.productType === 'PACKAGED';
+                  const allPacks = isDirectStock ? getProductPackSizes(product) : [];
+                  const sellablePacks = isDirectStock ? getSellableProductPacks(product) : [];
+                  const singleAllowed = isSingleUnitSaleAllowed(product);
+                  const isCartonOnly = isDirectStock && !singleAllowed && sellablePacks.length > 0;
+                  const primaryPack = isCartonOnly ? sellablePacks[0] : undefined;
+                  const cogs = primaryPack
+                    ? Math.round(primaryPack.costKhr)
+                    : Math.round(calculateProductCogs(product, ingredients, firstVariant));
+                  const basePrice = primaryPack
+                    ? primaryPack.priceKhr
+                    : firstVariant
+                      ? firstVariant.priceKhr
+                      : product.priceKhr;
                   const profit = basePrice - cogs;
                   const margin = basePrice > 0 ? Math.round((profit / basePrice) * 100) : 0;
+                  const stockDisplay = isDirectStock
+                    ? formatStockWithCartons(product.stockQty, product.unit, allPacks, isKm)
+                    : null;
                   const displayName = getLocalizedName(product.name, product.nameVi);
-                  const isDirectStock = product.productType === 'PACKAGED';
                   const isLowStock = isDirectStock && product.stockQty <= product.reorderLevel;
                   const isUnlinkedRecipe =
                     product.productType === 'PREPARED_TO_ORDER' && !hasLinkedRecipe(product);
@@ -1429,20 +1454,27 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
 
                           <div className="text-xs leading-tight">
                             {isDirectStock ? (
-                              <span
-                                className={`font-mono-num font-semibold ${
-                                  product.stockQty <= 0
-                                    ? 'text-red-600 dark:text-[#F87171]'
-                                    : isLowStock
-                                      ? 'text-amber-700 dark:text-amber-300'
-                                      : 'text-emerald-700 dark:text-[#34D399]'
-                                }`}
-                              >
-                                {formatQty(product.stockQty, product.unit)}{' '}
-                                <span className="font-sans font-normal text-stone-500 dark:text-[#94A39B]">
-                                  {isKm ? 'ក្នុងស្តុក' : 'in stock'}
+                              <div className="flex flex-col">
+                                <span
+                                  className={`font-mono-num font-semibold ${
+                                    product.stockQty <= 0
+                                      ? 'text-red-600 dark:text-[#F87171]'
+                                      : isLowStock
+                                        ? 'text-amber-700 dark:text-amber-300'
+                                        : 'text-emerald-700 dark:text-[#34D399]'
+                                  }`}
+                                >
+                                  {formatQty(product.stockQty, product.unit)}{' '}
+                                  <span className="font-sans font-normal text-stone-500 dark:text-[#94A39B]">
+                                    {isKm ? 'ក្នុងស្តុក' : 'in stock'}
+                                  </span>
                                 </span>
-                              </span>
+                                {stockDisplay?.cartonBreakdown && (
+                                  <span className="text-[11px] font-mono-num text-stone-500 dark:text-[#94A39B]">
+                                    ≈ {stockDisplay.cartonBreakdown}
+                                  </span>
+                                )}
+                              </div>
                             ) : isUnlinkedRecipe ? (
                               <button
                                 type="button"
@@ -1468,10 +1500,43 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       {/* Col 4: Merged Price & Margin Column (Fully Unblocked) */}
                       <td className="px-2.5 py-3 text-right whitespace-nowrap">
                         <div className="font-mono-num text-sm font-bold text-[#0F5C43] dark:text-[#34D399]">
-                          {product.variants && product.variants.length > 1
-                            ? `${formatKhr(Math.min(...product.variants.map((v) => v.priceKhr)))}+`
-                            : formatKhr(basePrice)}
+                          {isCartonOnly && primaryPack ? (
+                            <>
+                              {formatKhr(primaryPack.priceKhr)}
+                              <span className="font-sans text-[11px] font-normal text-sky-700 dark:text-sky-400">
+                                {' '}
+                                / {primaryPack.label}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              {product.variants && product.variants.length > 1
+                                ? `${formatKhr(Math.min(...product.variants.map((v) => v.priceKhr)))}+`
+                                : formatKhr(basePrice)}
+                              {sellablePacks.length > 0 && (
+                                <span className="font-sans text-[11px] font-normal text-stone-500 dark:text-[#94A39B]">
+                                  {' '}
+                                  / {product.unit}
+                                </span>
+                              )}
+                            </>
+                          )}
                         </div>
+                        {isCartonOnly ? (
+                          <div className="mt-0.5 text-[11px] font-sans text-sky-700 dark:text-sky-400">
+                            {isKm ? 'លក់ជាកេសប៉ុណ្ណោះ' : 'Carton only'}
+                            {sellablePacks.length > 1 ? ` · +${sellablePacks.length - 1}` : ''}
+                          </div>
+                        ) : sellablePacks.length > 0 ? (
+                          <div className="mt-0.5 text-[11px] font-mono-num text-sky-700 dark:text-sky-400">
+                            {sellablePacks[0].label}: {formatKhr(sellablePacks[0].priceKhr)}
+                            {sellablePacks.length > 1 ? ` +${sellablePacks.length - 1}` : ''}
+                          </div>
+                        ) : allPacks.length > 0 ? (
+                          <div className="mt-0.5 text-[11px] font-sans text-stone-500 dark:text-[#94A39B]">
+                            {allPacks[0].label} · {isKm ? 'ស្តុកចូល' : 'Restock pack'}
+                          </div>
+                        ) : null}
                         <div className="mt-0.5 text-xs font-mono-num flex items-center justify-end gap-1">
                           {isUnlinkedRecipe ? (
                             <span className="inline-flex items-center gap-1 font-sans font-semibold text-amber-700 dark:text-amber-300">
@@ -1545,12 +1610,26 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
           {filteredProducts.map((product) => {
             const firstVariant = product.variants?.[0];
-            const cogs = Math.round(calculateProductCogs(product, ingredients, firstVariant));
-            const basePrice = firstVariant ? firstVariant.priceKhr : product.priceKhr;
+            const isDirectStock = product.productType === 'PACKAGED';
+            const allPacks = isDirectStock ? getProductPackSizes(product) : [];
+            const sellablePacks = isDirectStock ? getSellableProductPacks(product) : [];
+            const singleAllowed = isSingleUnitSaleAllowed(product);
+            const isCartonOnly = isDirectStock && !singleAllowed && sellablePacks.length > 0;
+            const primaryPack = isCartonOnly ? sellablePacks[0] : undefined;
+            const cogs = primaryPack
+              ? Math.round(primaryPack.costKhr)
+              : Math.round(calculateProductCogs(product, ingredients, firstVariant));
+            const basePrice = primaryPack
+              ? primaryPack.priceKhr
+              : firstVariant
+                ? firstVariant.priceKhr
+                : product.priceKhr;
             const profit = basePrice - cogs;
             const margin = basePrice > 0 ? Math.round((profit / basePrice) * 100) : 0;
+            const stockDisplay = isDirectStock
+              ? formatStockWithCartons(product.stockQty, product.unit, allPacks, isKm)
+              : null;
             const displayName = getLocalizedName(product.name, product.nameVi);
-            const isDirectStock = product.productType === 'PACKAGED';
             const isLowStock = isDirectStock && product.stockQty <= product.reorderLevel;
             const isUnlinkedRecipe =
               product.productType === 'PREPARED_TO_ORDER' && !hasLinkedRecipe(product);
@@ -1723,12 +1802,18 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   <div className="pt-3 border-t border-stone-100 dark:border-[#1F3028] grid grid-cols-[auto_1fr] gap-3 items-end">
                     <div>
                       <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                        {isKm ? 'តម្លៃលក់' : 'Price'}
+                        {isCartonOnly && primaryPack
+                          ? primaryPack.label
+                          : isKm
+                            ? 'តម្លៃលក់'
+                            : 'Price'}
                       </span>
                       <span className="font-mono-num text-base font-bold text-[#0F5C43] dark:text-[#34D399] whitespace-nowrap">
-                        {product.variants && product.variants.length > 1
-                          ? `${formatKhr(Math.min(...product.variants.map((v) => v.priceKhr)))}+`
-                          : formatKhr(basePrice)}
+                        {isCartonOnly && primaryPack
+                          ? formatKhr(primaryPack.priceKhr)
+                          : product.variants && product.variants.length > 1
+                            ? `${formatKhr(Math.min(...product.variants.map((v) => v.priceKhr)))}+`
+                            : formatKhr(basePrice)}
                       </span>
                     </div>
 
@@ -1743,20 +1828,27 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                             : 'Margin / Sizes'}
                       </span>
                       {isDirectStock ? (
-                        <span
-                          className={`block font-mono-num text-xs font-semibold truncate ${
-                            product.stockQty <= 0
-                              ? 'text-red-600 dark:text-[#F87171]'
-                              : isLowStock
-                                ? 'text-amber-700 dark:text-amber-300'
-                                : 'text-emerald-700 dark:text-[#34D399]'
-                          }`}
-                        >
-                          {formatQty(product.stockQty, product.unit)}{' '}
-                          <span className="font-sans font-normal text-stone-500 dark:text-[#94A39B]">
-                            {isKm ? 'ក្នុងស្តុក' : 'in stock'}
+                        <div className="min-w-0">
+                          <span
+                            className={`block font-mono-num text-xs font-semibold truncate ${
+                              product.stockQty <= 0
+                                ? 'text-red-600 dark:text-[#F87171]'
+                                : isLowStock
+                                  ? 'text-amber-700 dark:text-amber-300'
+                                  : 'text-emerald-700 dark:text-[#34D399]'
+                            }`}
+                          >
+                            {formatQty(product.stockQty, product.unit)}{' '}
+                            <span className="font-sans font-normal text-stone-500 dark:text-[#94A39B]">
+                              {isKm ? 'ក្នុងស្តុក' : 'in stock'}
+                            </span>
                           </span>
-                        </span>
+                          {stockDisplay?.cartonBreakdown && (
+                            <span className="block text-[11px] font-mono-num text-stone-500 dark:text-[#94A39B] truncate">
+                              ≈ {stockDisplay.cartonBreakdown}
+                            </span>
+                          )}
+                        </div>
                       ) : isUnlinkedRecipe ? (
                         <button
                           type="button"
@@ -1787,6 +1879,27 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       )}
                     </div>
                   </div>
+
+                  {/* Subtle Carton / Pack Pricing Readout (Retail Packaged) */}
+                  {isDirectStock && (isCartonOnly ? (
+                    <p className="text-[11px] font-sans text-sky-700 dark:text-sky-400 truncate -mt-1">
+                      {isKm ? 'លក់ជាកេសប៉ុណ្ណោះ' : 'Carton only'}
+                      {sellablePacks.length > 1
+                        ? ` · +${sellablePacks.length - 1} ${isKm ? 'ជម្រើសទៀត' : 'more packs'}`
+                        : ''}
+                    </p>
+                  ) : sellablePacks.length > 0 ? (
+                    <p className="text-[11px] font-mono-num text-sky-700 dark:text-sky-400 truncate -mt-1">
+                      {formatKhr(basePrice)} / {product.unit} · {sellablePacks[0].label}:{' '}
+                      {formatKhr(sellablePacks[0].priceKhr)}
+                      {sellablePacks.length > 1 ? ` (+${sellablePacks.length - 1})` : ''}
+                    </p>
+                  ) : allPacks.length > 0 ? (
+                    <p className="text-[11px] font-sans text-stone-500 dark:text-[#94A39B] truncate -mt-1">
+                      {allPacks[0].label} (×{allPacks[0].unitsPerPack}) ·{' '}
+                      {isKm ? 'សម្រាប់ស្តុកចូល' : 'Restock carton'}
+                    </p>
+                  ) : null)}
 
                   {/* Part 3: Collapsible Secondary Details Toggle & Drawer */}
                   <div className="pt-2.5 border-t border-stone-100 dark:border-[#1F3028]">
@@ -1821,11 +1934,15 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-stone-500 dark:text-[#94A39B]">
-                              {product.productType === 'PACKAGED'
+                              {isCartonOnly && primaryPack
                                 ? isKm
-                                  ? 'ថ្លៃដើមមួយឯកតា'
-                                  : 'Unit Cost'
-                                : t.products.recipeCost}
+                                  ? `ថ្លៃដើម (${primaryPack.label})`
+                                  : `Pack Cost (${primaryPack.label})`
+                                : product.productType === 'PACKAGED'
+                                  ? isKm
+                                    ? 'ថ្លៃដើមមួយឯកតា'
+                                    : 'Unit Cost'
+                                  : t.products.recipeCost}
                             </span>
                             <span
                               className={`font-mono-num font-semibold ${
@@ -1891,29 +2008,58 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           )}
                         </div>
 
-                        {/* Pack / Case Barcodes (Packaged Goods) */}
-                        {product.productType === 'PACKAGED' &&
-                          product.packagingBarcodes &&
-                          product.packagingBarcodes.length > 0 && (
-                            <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] space-y-1">
-                              <p className="font-medium text-stone-500 dark:text-[#94A39B]">
-                                {isKm ? 'បាកូដកញ្ចប់ / កេស' : 'Pack / Case Barcodes'}
-                              </p>
-                              {product.packagingBarcodes.map((pb, idx) => (
+                        {/* Carton / Pack Pricing & Barcodes (Packaged Goods) */}
+                        {product.productType === 'PACKAGED' && allPacks.length > 0 && (
+                          <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] space-y-1.5">
+                            <p className="font-medium text-stone-500 dark:text-[#94A39B]">
+                              {isKm ? 'កេស / យួរ និងតម្លៃ' : 'Carton / Pack Options'}
+                            </p>
+                            {allPacks.map((pk, idx) => {
+                              const isPosSellable = pk.sellableOnPos !== false && pk.priceKhr > 0;
+                              const pkProfit = pk.priceKhr - pk.costKhr;
+                              const pkMargin =
+                                pk.priceKhr > 0 ? Math.round((pkProfit / pk.priceKhr) * 100) : 0;
+                              const unitImpliedCost =
+                                pk.unitsPerPack > 0 && pk.costKhr > 0
+                                  ? Math.round(pk.costKhr / pk.unitsPerPack)
+                                  : 0;
+                              return (
                                 <div
-                                  key={idx}
-                                  className="flex justify-between gap-2 font-mono-num text-[11px]"
+                                  key={pk.id || idx}
+                                  className="space-y-0.5 text-[11px] font-mono-num"
                                 >
-                                  <span className="text-stone-600 dark:text-[#94A39B]">
-                                    {pb.label}
-                                  </span>
-                                  <span className="text-stone-800 dark:text-[#D5DFDA] break-all text-right">
-                                    {pb.barcode} (×{pb.unitsPerPack})
-                                  </span>
+                                  <div className="flex justify-between gap-2 items-center">
+                                    <span className="font-sans font-medium text-stone-700 dark:text-[#D5DFDA] truncate">
+                                      {pk.label} (×{pk.unitsPerPack})
+                                    </span>
+                                    {isPosSellable ? (
+                                      <span className="font-semibold text-[#0F5C43] dark:text-[#34D399] shrink-0">
+                                        {formatKhr(pk.priceKhr)}
+                                      </span>
+                                    ) : (
+                                      <span className="font-sans text-[10px] font-semibold px-1.5 py-0.5 rounded bg-stone-100 dark:bg-[#18251F] text-stone-600 dark:text-[#94A39B] shrink-0">
+                                        {isKm ? 'ស្តុកចូលប៉ុណ្ណោះ' : 'Restock only'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex justify-between gap-2 text-[10px] text-stone-500 dark:text-[#94A39B]">
+                                    <span>
+                                      {isKm ? 'ថ្លៃដើម' : 'Cost'} {formatKhr(pk.costKhr)}
+                                      {isPosSellable
+                                        ? ` · ${pkMargin}%`
+                                        : unitImpliedCost > 0
+                                          ? ` (${formatKhr(unitImpliedCost)}/${product.unit})`
+                                          : ''}
+                                    </span>
+                                    {pk.barcode && (
+                                      <span className="truncate text-right">{pk.barcode}</span>
+                                    )}
+                                  </div>
                                 </div>
-                              ))}
-                            </div>
-                          )}
+                              );
+                            })}
+                          </div>
+                        )}
 
                         {/* Size Variant Breakdown */}
                         {product.productType !== 'PACKAGED' &&

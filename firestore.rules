@@ -112,7 +112,7 @@ service cloud.firestore {
         && data.currency == 'KHR'
         && data.usdRate is number && data.usdRate > 0 && data.usdRate <= 100000
         && (!('posExchangeRate' in data) || (data.posExchangeRate is number && data.posExchangeRate > 0 && data.posExchangeRate <= 100000))
-        && data.language is string && data.language in ['en', 'vi']
+        && data.language is string && data.language in ['en', 'vi', 'km']
         && isValidFamilyNames(data.familyMembers)
         && data.lowStockDefault is number && data.lowStockDefault >= 0 && data.lowStockDefault <= 1000000
         && (!('allowNegativeStock' in data) || data.allowNegativeStock is bool)
@@ -139,7 +139,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'workspaceId', 'memberUids', 'name', 'nameVi', 'brand', 'category', 'categoryId', 'productType',
-          'priceKhr', 'costPriceKhr', 'markupPercent', 'manualPriceOverride',
+          'priceKhr', 'costPriceKhr', 'markupPercent', 'manualPriceOverride', 'allowSingleUnitSale',
           'imageUrl', 'active', 'barcode', 'packagingBarcodes',
           'stockQty', 'reorderLevel', 'unit', 'supplier',
           'recipe', 'recipeVersion', 'variants',
@@ -157,6 +157,7 @@ service cloud.firestore {
         && (!('costPriceKhr' in data) || (data.costPriceKhr is number && data.costPriceKhr >= 0 && data.costPriceKhr <= 100000000))
         && (!('markupPercent' in data) || (data.markupPercent is number && data.markupPercent >= 0 && data.markupPercent <= 10000))
         && (!('manualPriceOverride' in data) || data.manualPriceOverride is bool)
+        && (!('allowSingleUnitSale' in data) || data.allowSingleUnitSale is bool)
         && data.imageUrl is string && data.imageUrl.size() <= 200000
         && data.active is bool
         && (!('barcode' in data) || (data.barcode is string && data.barcode.size() <= 64))
@@ -567,7 +568,7 @@ service cloud.firestore {
           && (
             incoming().diff(existing()).affectedKeys().hasOnly([
               'name', 'nameVi', 'brand', 'category', 'categoryId', 'productType',
-              'priceKhr', 'costPriceKhr', 'markupPercent', 'manualPriceOverride',
+              'priceKhr', 'costPriceKhr', 'markupPercent', 'manualPriceOverride', 'allowSingleUnitSale',
               'imageUrl', 'active', 'barcode', 'packagingBarcodes',
               'stockQty', 'reorderLevel', 'unit', 'supplier',
               'recipe', 'recipeVersion', 'variants', 'updatedAt'

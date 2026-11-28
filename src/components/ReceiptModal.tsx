@@ -33,8 +33,9 @@ export function buildReceiptPlainText(sale: Sale, settings: WorkspaceSettings): 
   lines.push(divider);
 
   for (const item of saleItems) {
-    const label = item.variantName
-      ? `${item.productName} (${item.variantName})`
+    const optionTag = item.packLabel || item.variantName;
+    const label = optionTag
+      ? `${item.productName} (${optionTag})`
       : item.productName;
     lines.push(`${item.quantity}x ${label}`);
     lines.push(`   ${formatKhr(item.unitPriceKhr)} ea -> ${formatKhr(item.lineTotalKhr)}`);
@@ -268,7 +269,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
                   <div className="flex justify-between gap-2 font-medium">
                     <span className="truncate">
                       {item.quantity}x {item.productName}
-                      {item.variantName ? ` (${item.variantName})` : ''}
+                      {item.packLabel || item.variantName
+                        ? ` (${item.packLabel || item.variantName})`
+                        : ''}
                     </span>
                     <span className="shrink-0">{formatKhr(item.lineTotalKhr)}</span>
                   </div>

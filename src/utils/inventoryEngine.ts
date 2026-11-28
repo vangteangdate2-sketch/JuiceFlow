@@ -4,6 +4,8 @@ import type {
   Ingredient,
   IngredientUnit,
   MovementType,
+  PackOption,
+  PackagingBarcode,
   PaymentMethod,
   Product,
   ProductType,
@@ -157,6 +159,61 @@ export function normalizeProduct(raw: Partial<Product> & { id: string }): Produc
   const safeUnit: IngredientUnit =
     raw.unit && VALID_UNITS.has(raw.unit) ? raw.unit : 'pcs';
 
+  const basePriceKhr = Math.max(0, Number(raw.priceKhr ?? 0) || 0);
+  const baseCostKhr = Math.max(0, Number(raw.costPriceKhr ?? 0) || 0);
+
+  const rawPackSource: Array<Partial<PackOption> & { barcode?: string; label?: string; unitsPerPack?: number }> =
+    Array.isArray(raw.packSizes)
+      ? raw.packSizes
+      : Array.isArray(raw.packagingBarcodes)
+        ? raw.packagingBarcodes
+        : [];
+
+  const packSizes: PackOption[] = rawPackSource
+    .filter((pk) => Boolean(pk && typeof pk === 'object' && Number(pk.unitsPerPack) > 0))
+    .slice(0, 10)
+    .map((pk, idx) => {
+      const units = Math.max(1, Math.round(Number(pk.unitsPerPack) || 1));
+      const trimmedBarcode = typeof pk.barcode === 'string' ? pk.barcode.trim().slice(0, 64) : '';
+      const hasExplicitCost = pk.costKhr !== undefined && Number.isFinite(Number(pk.costKhr));
+      const hasExplicitPrice = pk.priceKhr !== undefined && Number.isFinite(Number(pk.priceKhr));
+      const resolvedCostKhr = hasExplicitCost
+        ? Math.max(0, roundKhr(Number(pk.costKhr)))
+        : roundKhr(baseCostKhr * units);
+      const resolvedPriceKhr = hasExplicitPrice
+        ? Math.max(0, roundKhr(Number(pk.priceKhr)))
+        : roundKhr(basePriceKhr * units);
+      const sellableOnPos =
+        pk.sellableOnPos !== undefined ? Boolean(pk.sellableOnPos) : resolvedPriceKhr > 0;
+      return {
+        id:
+          typeof pk.id === 'string' && pk.id.trim().length > 0
+            ? pk.id.trim().slice(0, 64)
+            : `pack_${raw.id}_${idx}`,
+        label: String(pk.label || `Pack (${units})`).trim().slice(0, 60) || `Pack (${units})`,
+        unitsPerPack: units,
+        costKhr: resolvedCostKhr,
+        priceKhr: resolvedPriceKhr,
+        sellableOnPos,
+        ...(trimmedBarcode ? { barcode: trimmedBarcode } : {}),
+      };
+    });
+
+  const packagingBarcodes: PackagingBarcode[] = packSizes
+    .filter((pk) => Boolean(pk.barcode && pk.barcode.trim().length > 0))
+    .map((pk) => ({
+      id: pk.id,
+      barcode: pk.barcode!.trim(),
+      label: pk.label,
+      unitsPerPack: pk.unitsPerPack,
+      costKhr: pk.costKhr,
+      priceKhr: pk.priceKhr,
+      sellableOnPos: pk.sellableOnPos,
+    }));
+
+  const allowSingleUnitSale =
+    productType === 'PACKAGED' ? raw.allowSingleUnitSale !== false : true;
+
   return {
     id: String(raw.id),
     name: String(raw.name || 'Untitled Item'),
@@ -165,25 +222,19 @@ export function normalizeProduct(raw: Partial<Product> & { id: string }): Produc
     category: safeCategory,
     categoryId: safeCategoryId,
     productType,
-    priceKhr: Math.max(0, Number(raw.priceKhr ?? 0) || 0),
-    costPriceKhr: Math.max(0, Number(raw.costPriceKhr ?? 0) || 0),
+    priceKhr: basePriceKhr,
+    costPriceKhr: baseCostKhr,
     markupPercent:
       raw.markupPercent !== undefined && Number.isFinite(Number(raw.markupPercent))
         ? Number(raw.markupPercent)
         : undefined,
     manualPriceOverride: Boolean(raw.manualPriceOverride),
+    allowSingleUnitSale,
     imageUrl: typeof raw.imageUrl === 'string' ? raw.imageUrl : '',
     active: raw.active !== false,
     barcode: raw.barcode ? String(raw.barcode).trim() : '',
-    packagingBarcodes: Array.isArray(raw.packagingBarcodes)
-      ? raw.packagingBarcodes
-          .filter((pb) => Boolean(pb && typeof pb === 'object' && pb.barcode && Number(pb.unitsPerPack) > 0))
-          .map((pb) => ({
-            barcode: String(pb.barcode).trim(),
-            label: String(pb.label || `Pack (${pb.unitsPerPack})`),
-            unitsPerPack: Math.max(1, Math.round(Number(pb.unitsPerPack))),
-          }))
-      : [],
+    packSizes,
+    packagingBarcodes,
     stockQty: Number.isFinite(Number(raw.stockQty)) ? Number(raw.stockQty) : 0,
     reorderLevel: Number.isFinite(Number(raw.reorderLevel)) ? Math.max(0, Number(raw.reorderLevel)) : 10,
     unit: safeUnit,
@@ -266,6 +317,11 @@ export function normalizeSale(raw: Partial<Sale> & { id: string }): Sale {
             productName: String(item.productName || 'Item'),
             productNameVi: String(item.productNameVi || item.productName || 'Sản phẩm'),
             ...(item.variantName ? { variantName: String(item.variantName) } : {}),
+            ...(item.packId ? { packId: String(item.packId) } : {}),
+            ...(item.packLabel ? { packLabel: String(item.packLabel) } : {}),
+            ...(item.unitsPerPack !== undefined && Number.isFinite(Number(item.unitsPerPack))
+              ? { unitsPerPack: Math.max(1, Math.round(Number(item.unitsPerPack))) }
+              : {}),
             quantity: Math.max(0, Number(item.quantity ?? 0) || 0),
             unitPriceKhr: Math.max(0, Number(item.unitPriceKhr ?? 0) || 0),
             unitCogsKhr: Math.max(0, Number(item.unitCogsKhr ?? 0) || 0),
@@ -451,10 +507,102 @@ export function normalizeSettings(
 export interface BarcodeMatch {
   product: Product;
   variant?: ProductVariant;
+  pack?: PackOption;
   unitsPerPack: number;
   packLabel?: string;
   isPackagingBarcode: boolean;
   matchedBarcode: string;
+}
+
+export function getProductPackSizes(product?: Product | null): PackOption[] {
+  if (!product) return [];
+  if (Array.isArray(product.packSizes) && product.packSizes.length > 0) {
+    return product.packSizes;
+  }
+  if (Array.isArray(product.packagingBarcodes) && product.packagingBarcodes.length > 0) {
+    return product.packagingBarcodes
+      .filter((pb) => Boolean(pb && Number(pb.unitsPerPack) > 0))
+      .map((pb, idx) => {
+        const units = Math.max(1, Math.round(Number(pb.unitsPerPack) || 1));
+        const priceKhr =
+          pb.priceKhr !== undefined && Number.isFinite(Number(pb.priceKhr))
+            ? Math.max(0, roundKhr(Number(pb.priceKhr)))
+            : roundKhr((product.priceKhr || 0) * units);
+        return {
+          id: pb.id || `pack_${product.id}_${idx}`,
+          label: pb.label || `Pack (${units})`,
+          unitsPerPack: units,
+          costKhr:
+            pb.costKhr !== undefined && Number.isFinite(Number(pb.costKhr))
+              ? Math.max(0, roundKhr(Number(pb.costKhr)))
+              : roundKhr((product.costPriceKhr || 0) * units),
+          priceKhr,
+          sellableOnPos: pb.sellableOnPos !== undefined ? Boolean(pb.sellableOnPos) : priceKhr > 0,
+          ...(pb.barcode?.trim() ? { barcode: pb.barcode.trim() } : {}),
+        };
+      });
+  }
+  return [];
+}
+
+export function isSingleUnitSaleAllowed(product?: Product | null): boolean {
+  if (!product) return true;
+  if (product.productType !== 'PACKAGED') return true;
+  return product.allowSingleUnitSale !== false;
+}
+
+export function getSellableProductPacks(product?: Product | null): PackOption[] {
+  if (!product || product.productType !== 'PACKAGED') return [];
+  return getProductPackSizes(product).filter(
+    (pk) => pk.unitsPerPack >= 1 && pk.sellableOnPos !== false && pk.priceKhr > 0
+  );
+}
+
+export function formatStockWithCartons(
+  stockQty: number,
+  unit: string,
+  packSizes: PackOption[],
+  isKm = false
+): { primary: string; cartonBreakdown: string | null } {
+  const safeQty = Number.isFinite(stockQty) ? stockQty : 0;
+  const formattedQty = Number.isInteger(safeQty)
+    ? safeQty.toLocaleString('en-US')
+    : safeQty.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const primary = `${formattedQty} ${unit}`;
+
+  const primaryCarton = packSizes.find((pk) => pk.unitsPerPack > 1);
+  if (!primaryCarton || safeQty <= 0) {
+    return { primary, cartonBreakdown: null };
+  }
+
+  const perPack = Math.max(1, Math.round(primaryCarton.unitsPerPack));
+  const fullCartons = Math.floor(safeQty / perPack);
+  const remainder = roundQty(safeQty - fullCartons * perPack);
+  const ctnWord = isKm ? 'កេស' : fullCartons === 1 ? 'ctn' : 'ctns';
+
+  if (fullCartons <= 0) {
+    return { primary, cartonBreakdown: null };
+  }
+
+  if (remainder > 0) {
+    const remStr = Number.isInteger(remainder)
+      ? remainder.toLocaleString('en-US')
+      : remainder.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    return {
+      primary,
+      cartonBreakdown: `${fullCartons} ${ctnWord} + ${remStr} ${unit}`,
+    };
+  }
+
+  return {
+    primary,
+    cartonBreakdown: `${fullCartons} ${ctnWord}`,
+  };
+}
+
+export function getProductPack(product?: Product | null, packId?: string): PackOption | undefined {
+  if (!product || !packId) return undefined;
+  return getProductPackSizes(product).find((pk) => pk.id === packId);
 }
 
 export function resolveBarcodeMatch(rawBarcode: string, products: Product[]): BarcodeMatch | null {
@@ -490,13 +638,15 @@ export function resolveBarcodeMatch(rawBarcode: string, products: Product[]): Ba
     }
 
     // 3. Packaging / Carton barcode (e.g. 24-bottle carton)
-    if (Array.isArray(product.packagingBarcodes) && product.packagingBarcodes.length > 0) {
-      const matchedPack = product.packagingBarcodes.find(
-        (pb) => pb && pb.barcode && String(pb.barcode).trim() === code
+    const packs = getProductPackSizes(product);
+    if (packs.length > 0) {
+      const matchedPack = packs.find(
+        (pk) => pk && pk.barcode && String(pk.barcode).trim() === code
       );
       if (matchedPack) {
         return {
           product,
+          pack: matchedPack,
           unitsPerPack: Math.max(1, Math.round(Number(matchedPack.unitsPerPack) || 1)),
           packLabel: matchedPack.label,
           isPackagingBarcode: true,
@@ -606,6 +756,7 @@ export function getAvailableUnitsForProduct(
 export interface CartRequestItem {
   productId: string;
   variantId?: string;
+  packId?: string;
   quantity: number;
 }
 
@@ -645,7 +796,12 @@ export function validateCheckoutStock(
     if (!prod) continue;
 
     if (prod.productType === 'PACKAGED') {
-      requiredProducts.set(prod.id, roundQty((requiredProducts.get(prod.id) ?? 0) + qty));
+      const pack = getProductPack(prod, line.packId);
+      const unitsPerSaleLine = pack ? Math.max(1, Math.round(pack.unitsPerPack)) : 1;
+      requiredProducts.set(
+        prod.id,
+        roundQty((requiredProducts.get(prod.id) ?? 0) + qty * unitsPerSaleLine)
+      );
     } else {
       // PREPARED_TO_ORDER -> deduct ingredients via active variant/product recipe
       const variant = getProductVariant(prod, line.variantId);
@@ -799,27 +955,35 @@ export function buildCheckoutPlan(params: CheckoutPlanParams): CheckoutPlanResul
     if (!prod) return;
 
     const variant = getProductVariant(prod, req.variantId);
-    const unitPriceKhr = roundKhr(variant ? variant.priceKhr : prod.priceKhr);
-    const unitCogsKhr = roundKhr(calculateProductCogs(prod, params.ingredients, variant));
+    const pack = prod.productType === 'PACKAGED' ? getProductPack(prod, req.packId) : undefined;
+    const unitsPerPack = pack ? Math.max(1, Math.round(pack.unitsPerPack)) : 1;
+    const unitPriceKhr = roundKhr(pack ? pack.priceKhr : variant ? variant.priceKhr : prod.priceKhr);
+    const unitCogsKhr = roundKhr(
+      pack ? pack.costKhr : calculateProductCogs(prod, params.ingredients, variant)
+    );
     const lineTotalKhr = roundKhr(unitPriceKhr * req.quantity);
     const lineId = `${saleId}_l${idx + 1}`;
     const deductions: SaleDeductionSnapshot[] = [];
 
     if (prod.productType === 'PACKAGED') {
       const classification: StockClassification = 'packaged';
-      const deductQty = roundQty(req.quantity);
+      const deductQty = roundQty(req.quantity * unitsPerPack);
       prod.stockQty = roundQty(prod.stockQty - deductQty);
       touchedProductIds.add(prod.id);
 
-      const unitCost = Math.max(0, Number(variant?.costPriceKhr ?? prod.costPriceKhr) || unitCogsKhr);
+      const baseUnitCost = pack
+        ? unitsPerPack > 0
+          ? pack.costKhr / unitsPerPack
+          : pack.costKhr
+        : Math.max(0, Number(variant?.costPriceKhr ?? prod.costPriceKhr) || unitCogsKhr);
       deductions.push({
         itemId: prod.id,
         itemName: prod.name,
         itemClassification: classification,
         unit: prod.unit,
-        qtyPerSaleUnit: 1,
+        qtyPerSaleUnit: unitsPerPack,
         totalDeductedQty: deductQty,
-        unitCostKhr: unitCost,
+        unitCostKhr: baseUnitCost,
       });
 
       movements.push({
@@ -832,11 +996,11 @@ export function buildCheckoutPlan(params: CheckoutPlanParams): CheckoutPlanResul
         movementType: 'sale_consumption',
         deltaQty: -deductQty,
         unit: prod.unit,
-        unitCostKhr: unitCost,
-        totalCostKhr: roundKhr(unitCost * deductQty),
+        unitCostKhr: baseUnitCost,
+        totalCostKhr: roundKhr(unitCogsKhr * req.quantity),
         referenceId: saleId,
         movementDate: saleDate,
-        note: `Order ${orderNumber} (${req.quantity}x ${prod.name})`,
+        note: `Order ${orderNumber} (${req.quantity}x ${prod.name}${pack ? ` - ${pack.label}` : ''})`,
         recordedBy,
         createdAt,
       });
@@ -892,6 +1056,7 @@ export function buildCheckoutPlan(params: CheckoutPlanParams): CheckoutPlanResul
       productId: prod.id,
       categoryId: prod.categoryId || prod.category || UNCATEGORIZED_ID,
       ...(variant ? { variantId: variant.id, variantName: variant.name, variantNameVi: variant.nameVi } : {}),
+      ...(pack ? { packId: pack.id, packLabel: pack.label, unitsPerPack } : {}),
       productType: prod.productType,
       recipeVersion: variant?.recipeVersion ?? prod.recipeVersion ?? 1,
       productName: prod.name,
@@ -1227,7 +1392,10 @@ export function buildPartialReturnPlan(params: {
       lineId: line.lineId!,
       productId: line.productId,
       ...(line.variantId ? { variantId: line.variantId } : {}),
-      productName: line.variantName ? `${line.productName} (${line.variantName})` : line.productName,
+      productName:
+        line.packLabel || line.variantName
+          ? `${line.productName} (${line.packLabel || line.variantName})`
+          : line.productName,
       quantity: req.quantity,
       refundAmountKhr: lineRefundKhr,
       restoredCogsKhr: lineRestoredCogsKhr,
@@ -1363,10 +1531,13 @@ export function buildPurchasePlan(params: {
     if (!ing) return { ok: false, error: 'Ingredient not found.' };
 
     const oldQty = Math.max(0, ing.stockQty);
+    const oldCost = Math.max(0, Number(ing.unitCostKhr || 0));
     const weightedCost =
-      oldQty + effectiveQty > 0
-        ? (oldQty * ing.unitCostKhr + totalCostKhr) / (oldQty + effectiveQty)
-        : unitCostKhr;
+      totalCostKhr <= 0
+        ? oldCost
+        : oldQty <= 0 || oldCost <= 0
+          ? unitCostKhr
+          : (oldQty * oldCost + totalCostKhr) / (oldQty + effectiveQty);
 
     const supplier = sanitizeString(params.supplier || ing.supplier || 'Market Supplier', 100);
     const updatedIngredient: Ingredient = {
@@ -1424,10 +1595,13 @@ export function buildPurchasePlan(params: {
   if (!prod) return { ok: false, error: 'Product not found.' };
 
   const oldQty = Math.max(0, prod.stockQty);
+  const oldCost = Math.max(0, Number(prod.costPriceKhr || 0));
   const weightedCost =
-    oldQty + effectiveQty > 0
-      ? roundKhr((oldQty * prod.costPriceKhr + totalCostKhr) / (oldQty + effectiveQty))
-      : roundKhr(unitCostKhr);
+    totalCostKhr <= 0
+      ? oldCost
+      : oldQty <= 0 || oldCost <= 0
+        ? roundKhr(unitCostKhr)
+        : roundKhr((oldQty * oldCost + totalCostKhr) / (oldQty + effectiveQty));
 
   const supplier = sanitizeString(params.supplier || prod.supplier || 'Wholesale Supplier', 100);
   const updatedProduct: Product = {

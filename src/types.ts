@@ -84,10 +84,24 @@ export interface RecipeItem {
   unit?: IngredientUnit; // Optional display/entry unit; converted to ingredient's base unit on deduction
 }
 
+export interface PackOption {
+  id: string;
+  label: string; // e.g., "Carton (24 pcs)", "6-Pack"
+  unitsPerPack: number; // e.g., 24, 6
+  costKhr: number; // Entered manually (e.g., 12000) — never auto-derived from unit selling price
+  priceKhr: number; // Entered manually (e.g., 15000) — independent of unitsPerPack * unitPrice
+  barcode?: string; // Optional dedicated carton/pack barcode
+  sellableOnPos?: boolean; // True when this carton/pack can be sold directly on POS; false = restock-only pack
+}
+
 export interface PackagingBarcode {
+  id?: string;
   barcode: string;
   label: string; // e.g., "Carton (24 bottles)", "6-Pack"
   unitsPerPack: number; // e.g., 24, 6
+  costKhr?: number;
+  priceKhr?: number;
+  sellableOnPos?: boolean;
 }
 
 export interface ProductVariant {
@@ -113,10 +127,12 @@ export interface Product {
   costPriceKhr: number;
   markupPercent?: number;
   manualPriceOverride?: boolean;
+  allowSingleUnitSale?: boolean; // Defaults to true; set to false for Carton/Pack-Only wholesale retail products
   imageUrl: string;
   active: boolean;
   // Barcode & packaging identifiers (primarily for PACKAGED retail items)
   barcode?: string;
+  packSizes?: PackOption[];
   packagingBarcodes?: PackagingBarcode[];
   // Direct stock balance for PACKAGED items
   stockQty: number;
@@ -164,6 +180,9 @@ export interface SaleItem {
   variantId?: string;
   variantName?: string;
   variantNameVi?: string;
+  packId?: string;
+  packLabel?: string;
+  unitsPerPack?: number;
   productType?: ProductType;
   recipeVersion?: number;
   productName: string;
@@ -334,6 +353,7 @@ export interface BarcodeResolutionResult {
   product?: Product;
   ingredient?: Ingredient;
   variant?: ProductVariant;
+  pack?: PackOption;
   registryRecord?: BarcodeRegistryRecord;
   unitsPerScan: number;
   packagingType?: BarcodePackagingType;
