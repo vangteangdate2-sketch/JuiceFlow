@@ -87,10 +87,10 @@ function getPhnomPenhHour(date: Date = new Date()): number {
   return (date.getUTCHours() + 7) % 24;
 }
 
-function formatReadableToday(isVi: boolean): string {
+function formatReadableToday(isKm: boolean): string {
   const now = new Date();
   try {
-    return new Intl.DateTimeFormat(isVi ? 'vi-VN' : 'en-US', {
+    return new Intl.DateTimeFormat(isKm ? 'km-KH' : 'en-US', {
       timeZone: BUSINESS_TIMEZONE,
       weekday: 'long',
       month: 'short',
@@ -99,6 +99,13 @@ function formatReadableToday(isVi: boolean): string {
   } catch {
     return todayIso();
   }
+}
+
+function getLocalizedItemName(name: string, nameVi: string | undefined, isKm: boolean): string {
+  if (isKm && nameVi && /[\u1780-\u17FF]/.test(nameVi)) {
+    return nameVi;
+  }
+  return name;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
@@ -115,7 +122,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     t,
   } = useStore();
   const { isDark } = useTheme();
-  const isVi = settings.language === 'vi';
+  const isKm = settings.language === 'km';
 
   const [timeframe, setTimeframe] = useState<ChartTimeframe>('7d');
   const [feedbackBanner, setFeedbackBanner] = useState<{
@@ -140,12 +147,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
   const currentHour = getPhnomPenhHour();
   const greeting = useMemo(() => {
-    if (currentHour < 12) return isVi ? 'Chào buổi sáng' : 'Good morning';
-    if (currentHour < 18) return isVi ? 'Chào buổi chiều' : 'Good afternoon';
-    return isVi ? 'Chào buổi tối' : 'Good evening';
-  }, [currentHour, isVi]);
+    if (currentHour < 12) return isKm ? 'អរុណសួស្តី' : 'Good morning';
+    if (currentHour < 18) return isKm ? 'ទិវាសួស្តី' : 'Good afternoon';
+    return isKm ? 'សាយ័ណ្ហសួស្តី' : 'Good evening';
+  }, [currentHour, isKm]);
 
-  const readableDate = useMemo(() => formatReadableToday(isVi), [isVi]);
+  const readableDate = useMemo(() => formatReadableToday(isKm), [isKm]);
 
   const chartColors = useMemo(
     () => ({
@@ -226,28 +233,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     const revYest = yesterdayReport.netRevenueKhr;
     if (revYest <= 0) {
       if (revToday > 0) {
-        return { kind: 'up' as const, label: isVi ? 'Mới hôm nay' : 'Up from 0 ៛' };
+        return { kind: 'up' as const, label: isKm ? 'កើនពី 0 ៛ ថ្ងៃនេះ' : 'Up from 0 ៛' };
       }
-      return { kind: 'flat' as const, label: isVi ? 'Chưa có đơn hôm qua' : 'Same as yesterday' };
+      return { kind: 'flat' as const, label: isKm ? 'ដូចម្សិលមិញ' : 'Same as yesterday' };
     }
     const pct = Math.round(((revToday - revYest) / revYest) * 100);
     if (pct > 0) {
       return {
         kind: 'up' as const,
-        label: `+${pct}% ${isVi ? 'so với hôm qua' : 'vs yesterday'}`,
+        label: `+${pct}% ${isKm ? 'ធៀបនឹងម្សិលមិញ' : 'vs yesterday'}`,
       };
     }
     if (pct < 0) {
       return {
         kind: 'down' as const,
-        label: `${pct}% ${isVi ? 'so với hôm qua' : 'vs yesterday'}`,
+        label: `${pct}% ${isKm ? 'ធៀបនឹងម្សិលមិញ' : 'vs yesterday'}`,
       };
     }
     return {
       kind: 'flat' as const,
-      label: `0% ${isVi ? 'so với hôm qua' : 'vs yesterday'}`,
+      label: `0% ${isKm ? 'ធៀបនឹងម្សិលមិញ' : 'vs yesterday'}`,
     };
-  }, [todayReport.netRevenueKhr, yesterdayReport.netRevenueKhr, isVi]);
+  }, [todayReport.netRevenueKhr, yesterdayReport.netRevenueKhr, isKm]);
 
   // Expenses & Net Cash Flow (matching DailySummary calculation)
   const todayExpensesTotalKhr =
@@ -330,38 +337,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     [topSellingToday]
   );
 
-  // Plain-English "Today at a Glance" dynamic sentences
+  // Plain-English / Khmer "Today at a Glance" dynamic sentences
   const insightCopy = useMemo(() => {
     const orders = todayReport.completedOrderCount;
     const rev = formatKhr(todayReport.netRevenueKhr);
     const margin = todayReport.grossMarginPct;
-    const totalLow = lowStockList.length;
 
-    if (isVi) {
+    if (isKm) {
       const stockPhrase =
         outOfStockCount > 0 && lowOnlyCount > 0
-          ? `có ${outOfStockCount} món hết hàng và ${lowOnlyCount} món sắp hết`
+          ? `មាន ${outOfStockCount} មុខអស់ពីស្តុក និង ${lowOnlyCount} មុខជិតអស់ស្តុក`
           : outOfStockCount > 0
-            ? `có ${outOfStockCount} mặt hàng đã hết kho cần nhập`
+            ? `មាន ${outOfStockCount} មុខអស់ពីស្តុក`
             : lowOnlyCount > 0
-              ? `có ${lowOnlyCount} mặt hàng đang sắp hết kho`
-              : 'tất cả tồn kho đều đang ổn định';
+              ? `មាន ${lowOnlyCount} មុខជិតអស់ស្តុក`
+              : 'ស្តុកទំនិញទាំងអស់គ្រប់គ្រាន់ល្អ';
 
       if (orders === 0) {
         return {
-          primary: `Chưa có đơn hàng nào hôm nay — quán sẵn sàng đón khách! Hiện ${stockPhrase}.`,
+          primary: `មិនទាន់មានការកុម្ម៉ង់ថ្ងៃនេះទេ — រួចរាល់ទទួលភ្ញៀវហើយ! បច្ចុប្បន្ន${stockPhrase}។`,
           secondary:
             todayExpensesTotalKhr > 0
-              ? `Bạn đã ghi nhận ${formatKhr(todayExpensesTotalKhr)} tiền chi trong hôm nay.`
+              ? `អ្នកបានកត់ត្រាចំណាយ ${formatKhr(todayExpensesTotalKhr)} រួចហើយថ្ងៃនេះ។`
               : null,
         };
       }
 
       const topItem = topSellingToday[0];
       return {
-        primary: `Hôm nay bạn đã bán ${orders} đơn với tổng doanh thu ${rev} (lãi gộp ${margin}%), ${stockPhrase}.`,
+        primary: `ថ្ងៃនេះលក់បាន ${orders} វិក្កយបត្រ សរុប ${rev} (ប្រាក់ចំណេញដុល ${margin}%) ហើយ${stockPhrase}។`,
         secondary: topItem
-          ? `Món bán chạy nhất hôm nay là ${topItem.nameVi || topItem.name} (${topItem.netQty} ly/sp).`
+          ? `មុខលក់ដាច់បំផុតថ្ងៃនេះគឺ ${getLocalizedItemName(topItem.name, topItem.nameVi, true)} (${topItem.netQty} កែវ/មុខ)។`
           : null,
       };
     }
@@ -397,12 +403,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     todayReport.completedOrderCount,
     todayReport.netRevenueKhr,
     todayReport.grossMarginPct,
-    lowStockList.length,
     outOfStockCount,
     lowOnlyCount,
     todayExpensesTotalKhr,
     topSellingToday,
-    isVi,
+    isKm,
   ]);
 
   // Chart data for Today (hourly Phnom Penh buckets), 7 Days, and 30 Days
@@ -477,8 +482,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   }, [timeframe, todayReport, sevenDayReport, thirtyDayReport]);
 
   const getTierLabel = (c: StockClassification) => {
-    if (c === 'packaged') return isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged';
-    return isVi ? 'Nguyên liệu thô' : 'Raw Ingredients';
+    if (c === 'packaged') return isKm ? 'ទំនិញវេចខ្ចប់ស្រាប់' : 'Retail Packaged';
+    return isKm ? 'វត្ថុធាតុដើម' : 'Raw Ingredients';
   };
 
   // Inline Quick Restock handlers
@@ -504,7 +509,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     const qty = Number(restockQty) || 0;
     if (qty <= 0) {
       setRestockError(
-        isVi ? 'Vui lòng nhập số lượng lớn hơn 0.' : 'Please enter a quantity greater than 0.'
+        isKm ? 'សូមបញ្ចូលបរិមាណធំជាង 0។' : 'Please enter a quantity greater than 0.'
       );
       return;
     }
@@ -519,18 +524,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         totalCostKhr: Math.max(0, Number(restockTotalCost) || 0),
         paymentMethod: restockPayment,
         supplier: restockSupplier.trim(),
-        note: restockNote.trim() || (isVi ? 'Nhập nhanh từ Bảng điều khiển' : 'Quick restock from Dashboard'),
+        note: restockNote.trim() || (isKm ? 'បញ្ចូលស្តុករហ័សពីផ្ទាំងគ្រប់គ្រង' : 'Quick restock from Dashboard'),
         purchaseDate: today,
       });
       if (!res.ok) {
-        setRestockError(res.error || (isVi ? 'Không thể nhập kho.' : 'Could not record restock.'));
+        setRestockError(res.error || (isKm ? 'មិនអាចបញ្ចូលស្តុកបានទេ។' : 'Could not record restock.'));
         return;
       }
-      const displayName = isVi ? restockTarget.nameVi : restockTarget.name;
+      const displayName = getLocalizedItemName(restockTarget.name, restockTarget.nameVi, isKm);
       setFeedbackBanner({
         kind: 'ok',
-        text: isVi
-          ? `Đã nhập kho +${formatQty(qty, restockTarget.unit)} ${displayName}.`
+        text: isKm
+          ? `បានបញ្ចូលស្តុក +${formatQty(qty, restockTarget.unit)} ${displayName}។`
           : `Restocked +${formatQty(qty, restockTarget.unit)} of ${displayName}.`,
       });
       setRestockTarget(null);
@@ -563,7 +568,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] text-xs font-medium text-stone-700 dark:text-[#D5DFDA]">
               <User className="w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] shrink-0" />
               <span className="truncate max-w-[140px]">
-                {settings.activeOperator || (isVi ? 'Nhân viên' : 'Team Member')}
+                {settings.activeOperator || (isKm ? 'បុគ្គលិក' : 'Team Member')}
               </span>
             </span>
 
@@ -585,15 +590,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               )}
               <span>
                 {syncing
-                  ? isVi
-                    ? 'Đang đồng bộ...'
+                  ? isKm
+                    ? 'កំពុងធ្វើសមកាលកម្ម...'
                     : 'Syncing...'
                   : cloudSynced
-                    ? isVi
-                      ? 'Đã đồng bộ đám mây'
+                    ? isKm
+                      ? 'បានភ្ជាប់ Cloud'
                       : 'Cloud Synced'
-                    : isVi
-                      ? 'Lưu cục bộ'
+                    : isKm
+                      ? 'រក្សាទុកក្នុងម៉ាស៊ីន'
                       : 'Saved Locally'}
               </span>
             </span>
@@ -605,37 +610,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <button
             type="button"
             onClick={() => onNavigate('sales')}
-            className="h-12 px-4 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] transition-colors whitespace-nowrap"
+            className="h-12 px-4 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
           >
             <Plus className="w-4 h-4 shrink-0" />
-            <span>{isVi ? 'Bán hàng mới' : 'New Sale'}</span>
+            <span>{isKm ? 'ការលក់ថ្មី' : 'New Sale'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => onNavigate('expenses', 'add_expense')}
-            className="h-12 px-4 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 hover:border-stone-300 dark:hover:bg-[#18251F] dark:hover:border-[#344B3F] transition-colors whitespace-nowrap"
+            className="h-12 px-4 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 hover:border-stone-300 dark:hover:bg-[#18251F] dark:hover:border-[#344B3F] transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
           >
             <Plus className="w-4 h-4 shrink-0 text-[#0F5C43] dark:text-[#34D399]" />
-            <span>{isVi ? 'Ghi chi phí' : 'Log Expense'}</span>
+            <span>{isKm ? 'កត់ត្រាចំណាយ' : 'Log Expense'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => onNavigate('inventory')}
-            className="h-12 px-4 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 hover:border-stone-300 dark:hover:bg-[#18251F] dark:hover:border-[#344B3F] transition-colors whitespace-nowrap"
+            className="h-12 px-4 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 hover:border-stone-300 dark:hover:bg-[#18251F] dark:hover:border-[#344B3F] transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
           >
             <Plus className="w-4 h-4 shrink-0 text-[#0F5C43] dark:text-[#34D399]" />
-            <span>{isVi ? 'Nhập tồn kho' : 'Restock Item'}</span>
+            <span>{isKm ? 'បញ្ចូលស្តុក' : 'Restock Item'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => onNavigate('products', 'add_product')}
-            className="h-12 px-4 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 hover:border-stone-300 dark:hover:bg-[#18251F] dark:hover:border-[#344B3F] transition-colors whitespace-nowrap"
+            className="h-12 px-4 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 hover:border-stone-300 dark:hover:bg-[#18251F] dark:hover:border-[#344B3F] transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
           >
             <Plus className="w-4 h-4 shrink-0 text-[#0F5C43] dark:text-[#34D399]" />
-            <span>{isVi ? 'Thêm sản phẩm' : 'Add Product'}</span>
+            <span>{isKm ? 'បន្ថែមផលិតផល' : 'Add Product'}</span>
           </button>
         </div>
       </section>
@@ -669,7 +674,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       {/* 2. PLAIN-ENGLISH DAILY INSIGHT STRIP ("TODAY AT A GLANCE")         */}
       {/* ================================================================== */}
       <section
-        aria-label={isVi ? 'Tóm tắt hôm nay' : 'Today at a Glance'}
+        aria-label={isKm ? 'សង្ខេបថ្ងៃនេះ' : 'Today at a Glance'}
         className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl px-4 sm:px-5 py-4 flex items-start gap-3.5"
       >
         <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-[#064E3B]/70 border border-emerald-200/80 dark:border-[#10B981]/30 flex items-center justify-center shrink-0 mt-0.5">
@@ -677,7 +682,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         </div>
         <div className="min-w-0 space-y-1">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#0F5C43] dark:text-[#34D399]">
-            {isVi ? 'Tóm tắt hôm nay' : 'Today at a Glance'}
+            {isKm ? 'សង្ខេបថ្ងៃនេះ' : 'Today at a Glance'}
           </p>
           <p className="text-sm sm:text-[15px] leading-relaxed text-stone-800 dark:text-[#E7EFEA] font-medium">
             {insightCopy.primary}
@@ -694,27 +699,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       {/* ================================================================== */}
       {/* 3. 4 CLEAN PRIMARY KPI CARDS (WITH <InfoHint> TRIGGERS)            */}
       {/* ================================================================== */}
-      <section aria-label={isVi ? 'Chỉ số chính hôm nay' : "Today's Key Metrics"}>
+      <section aria-label={isKm ? 'តួលេខសំខាន់ថ្ងៃនេះ' : "Today's Key Metrics"}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* KPI 1: Today's Revenue */}
-          <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between gap-3">
+          <div className="pos-lift bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between gap-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1 min-w-0">
                 <p className="text-xs font-semibold text-stone-500 dark:text-[#94A39B] truncate">
-                  {isVi ? 'Doanh thu hôm nay' : "Today's Revenue"}
+                  {isKm ? 'ចំណូលថ្ងៃនេះ' : "Today's Revenue"}
                 </p>
                 <InfoHint
                   compact
-                  label={isVi ? 'Giải thích doanh thu hôm nay' : "About Today's Revenue"}
+                  label={isKm ? 'អំពីចំណូលថ្ងៃនេះ' : "About Today's Revenue"}
                   text={
-                    isVi
-                      ? 'Tổng tiền bán hàng ròng hôm nay sau khi trừ đơn hủy và hoàn tiền, so sánh với doanh thu hôm qua.'
+                    isKm
+                      ? 'ចំណូលលក់សុទ្ធថ្ងៃនេះក្រោយកាត់វិក្កយបត្រលុប និងការបង្វិលសង ធៀបនឹងម្សិលមិញ។'
                       : 'Net sales revenue collected today after voids and refunds, compared against yesterday.'
                   }
                 />
               </div>
               <span className="font-mono-num text-[11px] font-medium text-stone-400 dark:text-[#94A39B] whitespace-nowrap">
-                {todayReport.completedOrderCount} {isVi ? 'đơn' : 'orders'}
+                {todayReport.completedOrderCount} {isKm ? 'វិក្កយបត្រ' : 'orders'}
               </span>
             </div>
 
@@ -745,18 +750,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
 
           {/* KPI 2: Est. Gross Profit */}
-          <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between gap-3">
+          <div className="pos-lift bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between gap-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1 min-w-0">
                 <p className="text-xs font-semibold text-stone-500 dark:text-[#94A39B] truncate">
-                  {isVi ? 'Lãi gộp ước tính' : 'Est. Gross Profit'}
+                  {isKm ? 'ប្រាក់ចំណេញដុលប៉ាន់ស្មាន' : 'Est. Gross Profit'}
                 </p>
                 <InfoHint
                   compact
-                  label={isVi ? 'Giải thích lãi gộp' : 'About Estimated Gross Profit'}
+                  label={isKm ? 'អំពីប្រាក់ចំណេញដុល' : 'About Estimated Gross Profit'}
                   text={
-                    isVi
-                      ? 'Doanh thu hôm nay trừ giá vốn nguyên liệu & sản phẩm đã bán (COGS). Tỷ suất lãi gộp = Lãi gộp / Doanh thu.'
+                    isKm
+                      ? 'ចំណូលសុទ្ធថ្ងៃនេះដកថ្លៃដើមទំនិញលក់ (COGS)។ អត្រាចំណេញដុល = ប្រាក់ចំណេញដុល ÷ ចំណូល។'
                       : 'Today’s net revenue minus Cost of Goods Sold (recipe ingredients & unit costs). Gross Margin = Gross Profit ÷ Revenue.'
                   }
                 />
@@ -770,7 +775,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                       : 'bg-stone-100 text-stone-600 border-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C]'
                 }`}
               >
-                {todayReport.grossMarginPct}% {isVi ? 'biên' : 'margin'}
+                {todayReport.grossMarginPct}% {isKm ? 'អត្រា' : 'margin'}
               </span>
             </div>
 
@@ -790,7 +795,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
 
             <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] flex items-center justify-between text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
-              <span>{isVi ? 'Giá vốn (COGS)' : 'Item COGS'}</span>
+              <span>{isKm ? 'ថ្លៃដើមទំនិញលក់' : 'Item COGS'}</span>
               <span className="font-medium text-stone-700 dark:text-[#D5DFDA]">
                 {formatKhr(todayReport.netCogsKhr)}
               </span>
@@ -798,18 +803,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
 
           {/* KPI 3: Today's Expenses */}
-          <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between gap-3">
+          <div className="pos-lift bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between gap-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1 min-w-0">
                 <p className="text-xs font-semibold text-stone-500 dark:text-[#94A39B] truncate">
-                  {isVi ? 'Chi phí hôm nay' : "Today's Expenses"}
+                  {isKm ? 'ចំណាយថ្ងៃនេះ' : "Today's Expenses"}
                 </p>
                 <InfoHint
                   compact
-                  label={isVi ? 'Giải thích chi phí hôm nay' : "About Today's Expenses"}
+                  label={isKm ? 'អំពីចំណាយថ្ងៃនេះ' : "About Today's Expenses"}
                   text={
-                    isVi
-                      ? 'Tổng tiền chi hôm nay gồm chi phí vận hành và tiền nhập hàng tồn kho. Dòng tiền ròng = Doanh thu hôm nay − Tổng tiền chi.'
+                    isKm
+                      ? 'សាច់ប្រាក់ចំណាយសរុបថ្ងៃនេះ រួមទាំងចំណាយប្រតិបត្តិការ និងការទិញបញ្ចូលស្តុក។ លំហូរសាច់ប្រាក់សុទ្ធ = ចំណូលថ្ងៃនេះ − ចំណាយថ្ងៃនេះ។'
                       : 'Total cash spent today across operating expenses and stock restocks. Net cash flow = Today’s Revenue − Today’s Expenses.'
                   }
                 />
@@ -828,7 +833,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
             <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] flex items-center justify-between gap-2 text-xs font-mono-num">
               <span className="text-stone-500 dark:text-[#94A39B]">
-                {isVi ? 'Dòng tiền ròng' : 'Net cash'}
+                {isKm ? 'សាច់ប្រាក់សុទ្ធ' : 'Net cash'}
               </span>
               <span
                 className={`font-semibold ${
@@ -847,7 +852,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <button
             type="button"
             onClick={() => onNavigate('inventory')}
-            className="text-left bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-stone-300 dark:hover:border-[#344B3F] rounded-xl p-5 flex flex-col justify-between gap-3 transition-colors group"
+            className="pos-lift text-left bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-stone-300 dark:hover:border-[#344B3F] rounded-xl p-5 flex flex-col justify-between gap-3 transition-colors group"
           >
             <div className="flex items-center justify-between gap-2 w-full">
               <div
@@ -855,14 +860,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="text-xs font-semibold text-stone-500 dark:text-[#94A39B] truncate">
-                  {isVi ? 'Sắp hết / Hết kho' : 'Low / Out of Stock'}
+                  {isKm ? 'ស្តុកជិតអស់ / អស់ស្តុក' : 'Low / Out of Stock'}
                 </p>
                 <InfoHint
                   compact
-                  label={isVi ? 'Giải thích cảnh báo kho' : 'About Stock Alerts'}
+                  label={isKm ? 'អំពីការជូនដំណឹងស្តុក' : 'About Stock Alerts'}
                   text={
-                    isVi
-                      ? 'Số mặt hàng Nguyên liệu thô và Đóng gói bán lẻ đang bằng hoặc thấp hơn mức cảnh báo.'
+                    isKm
+                      ? 'វត្ថុធាតុដើម និងទំនិញវេចខ្ចប់ស្រាប់ដែលមានចំនួនស្មើ ឬទាបជាងកម្រិតបញ្ជាទិញឡើងវិញ។'
                       : 'Items across Raw Ingredients and Retail Packaged goods currently at or below their low-stock threshold.'
                   }
                 />
@@ -886,22 +891,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               >
                 {lowStockList.length}{' '}
                 <span className="text-sm font-sans font-semibold">
-                  {isVi ? 'mặt hàng' : lowStockList.length === 1 ? 'item' : 'items'}
+                  {isKm ? 'មុខ' : lowStockList.length === 1 ? 'item' : 'items'}
                 </span>
               </p>
               <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B]">
                 {lowStockList.length === 0
-                  ? isVi
-                    ? 'Tất cả tồn kho đều ổn định'
+                  ? isKm
+                    ? 'ស្តុកទំនិញទាំងអស់គ្រប់គ្រាន់'
                     : 'All stock levels healthy'
-                  : isVi
-                    ? `${outOfStockCount} hết hàng · ${lowOnlyCount} sắp hết`
+                  : isKm
+                    ? `${outOfStockCount} អស់ស្តុក · ${lowOnlyCount} ជិតអស់`
                     : `${outOfStockCount} out · ${lowOnlyCount} low`}
               </p>
             </div>
 
             <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] flex items-center justify-between text-xs font-semibold text-[#0F5C43] dark:text-[#34D399]">
-              <span>{isVi ? 'Mở kho hàng' : 'View Inventory'}</span>
+              <span>{isKm ? 'មើលស្តុកទំនិញ' : 'View Inventory'}</span>
               <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
             </div>
           </button>
@@ -915,28 +920,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
           <div className="min-w-0">
             <h2 className="font-display text-base sm:text-lg font-bold text-stone-900 dark:text-[#F1F5F3] tracking-tight">
-              {isVi ? 'Xu hướng doanh thu' : 'Sales Trend'}
+              {isKm ? 'និន្នាការលក់' : 'Sales Trend'}
             </h2>
             <p className="mt-0.5 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
               <strong className="text-stone-800 dark:text-[#F1F5F3]">
                 {formatKhr(activePeriodSummary.revenue)}
               </strong>{' '}
               · {activePeriodSummary.orders}{' '}
-              {isVi ? 'đơn' : activePeriodSummary.orders === 1 ? 'order' : 'orders'}
+              {isKm ? 'វិក្កយបត្រ' : activePeriodSummary.orders === 1 ? 'order' : 'orders'}
             </p>
           </div>
 
           {/* Clean 3-Way Timeframe Switcher */}
           <div
             role="tablist"
-            aria-label={isVi ? 'Khung thời gian biểu đồ' : 'Chart timeframe'}
+            aria-label={isKm ? 'ចន្លោះពេលក្រាហ្វិក' : 'Chart timeframe'}
             className="inline-flex items-center p-1 rounded-xl bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] self-start sm:self-auto"
           >
             {(
               [
-                { id: 'today', label: isVi ? 'Hôm nay' : 'Today' },
-                { id: '7d', label: isVi ? '7 ngày' : '7 Days' },
-                { id: '30d', label: isVi ? '30 ngày' : '30 Days' },
+                { id: 'today', label: isKm ? 'ថ្ងៃនេះ' : 'Today' },
+                { id: '7d', label: isKm ? '៧ ថ្ងៃ' : '7 Days' },
+                { id: '30d', label: isKm ? '៣០ ថ្ងៃ' : '30 Days' },
               ] as const
             ).map((opt) => {
               const active = timeframe === opt.id;
@@ -947,7 +952,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setTimeframe(opt.id)}
-                  className={`h-9 px-3.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                  className={`h-9 px-3.5 text-xs font-semibold rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap ${
                     active
                       ? 'bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#2C4035]'
                       : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] border border-transparent'
@@ -1000,8 +1005,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 formatter={(value, _name, item) => {
                   const orders = (item?.payload as { orders?: number } | undefined)?.orders ?? 0;
                   return [
-                    `${formatKhr(Number(value ?? 0))} (${orders} ${isVi ? 'đơn' : 'orders'})`,
-                    isVi ? 'Doanh thu' : 'Revenue',
+                    `${formatKhr(Number(value ?? 0))} (${orders} ${isKm ? 'វិក្កយបត្រ' : 'orders'})`,
+                    isKm ? 'ចំណូល' : 'Revenue',
                   ];
                 }}
                 contentStyle={{
@@ -1017,7 +1022,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               <Area
                 type="monotone"
                 dataKey="revenue"
-                name={isVi ? 'Doanh thu' : 'Revenue'}
+                name={isKm ? 'ចំណូល' : 'Revenue'}
                 stroke={chartColors.revenue}
                 strokeWidth={2.25}
                 fill="url(#dashRevenueFill)"
@@ -1038,7 +1043,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <div className="flex items-center gap-2 min-w-0">
               <CupSoda className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
               <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
-                {isVi ? 'Món bán chạy hôm nay' : 'Top Selling Drinks Today'}
+                {isKm ? 'ភេសជ្ជៈលក់ដាច់បំផុតថ្ងៃនេះ' : 'Top Selling Drinks Today'}
               </h2>
             </div>
             <button
@@ -1046,7 +1051,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               onClick={() => onNavigate('reports')}
               className="text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] hover:underline inline-flex items-center gap-1 whitespace-nowrap"
             >
-              {isVi ? 'Báo cáo' : 'Reports'}
+              {isKm ? 'របាយការណ៍' : 'Reports'}
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -1055,17 +1060,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             {topSellingToday.length === 0 ? (
               <div className="py-8 text-center space-y-3">
                 <p className="text-sm font-medium text-stone-600 dark:text-[#94A39B]">
-                  {isVi
-                    ? 'Chưa có món nào được bán trong hôm nay.'
+                  {isKm
+                    ? 'មិនទាន់មានភេសជ្ជៈលក់បានថ្ងៃនេះទេ។'
                     : 'No drinks sold yet today.'}
                 </p>
                 <button
                   type="button"
                   onClick={() => onNavigate('sales')}
-                  className="h-10 px-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
+                  className="h-10 px-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.97]"
                 >
                   <Plus className="w-3.5 h-3.5 shrink-0" />
-                  <span>{isVi ? 'Tạo đơn đầu tiên' : 'Record First Sale'}</span>
+                  <span>{isKm ? 'កត់ត្រាការលក់ដំបូង' : 'Record First Sale'}</span>
                 </button>
               </div>
             ) : (
@@ -1080,12 +1085,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                             #{idx + 1}
                           </span>
                           <p className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
-                            {isVi ? item.nameVi || item.name : item.name}
+                            {getLocalizedItemName(item.name, item.nameVi, isKm)}
                           </p>
                         </div>
                         <div className="flex items-baseline gap-2.5 shrink-0 font-mono-num">
                           <span className="text-xs text-stone-500 dark:text-[#94A39B]">
-                            {item.netQty} {isVi ? 'ly' : 'sold'}
+                            {item.netQty} {isKm ? 'កែវ' : 'sold'}
                           </span>
                           <span className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                             {formatKhr(item.netRevenueKhr)}
@@ -1120,7 +1125,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 }`}
               />
               <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
-                {isVi ? 'Cần nhập thêm' : 'Needs Restock'}
+                {isKm ? 'ត្រូវបញ្ចូលស្តុក' : 'Needs Restock'}
               </h2>
               {lowStockList.length > 0 && (
                 <span className="font-mono-num text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200">
@@ -1133,7 +1138,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               onClick={() => onNavigate('inventory')}
               className="text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] hover:underline inline-flex items-center gap-1 whitespace-nowrap"
             >
-              {isVi ? 'Xem tất cả' : 'View All'}
+              {isKm ? 'មើលទាំងអស់' : 'View All'}
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -1143,11 +1148,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               <div className="py-8 text-center space-y-2">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-900 dark:bg-[#065F46] dark:text-[#D1FAE5]">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 dark:text-[#34D399]" />
-                  {isVi ? 'Tất cả tồn kho đều ổn định' : 'All Stock Levels Healthy'}
+                  {isKm ? 'ស្តុកទំនិញទាំងអស់គ្រប់គ្រាន់' : 'All Stock Levels Healthy'}
                 </span>
                 <p className="text-xs text-stone-500 dark:text-[#94A39B]">
-                  {isVi
-                    ? 'Không có Nguyên liệu thô hay Đóng gói bán lẻ nào dưới mức cảnh báo.'
+                  {isKm
+                    ? 'គ្មានវត្ថុធាតុដើម ឬទំនិញវេចខ្ចប់ស្រាប់ណាទាបជាងកម្រិតជូនដំណឹងទេ។'
                     : 'No Raw Ingredients or Retail Packaged items are below threshold.'}
                 </p>
               </div>
@@ -1174,11 +1179,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                             }`}
                           >
                             {isOut
-                              ? isVi
-                                ? 'Hết hàng'
+                              ? isKm
+                                ? 'អស់ពីស្តុក'
                                 : 'Out of Stock'
-                              : isVi
-                                ? 'Sắp hết'
+                              : isKm
+                                ? 'ស្តុកជិតអស់'
                                 : 'Low Stock'}
                           </span>
                           <span
@@ -1196,7 +1201,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                         </div>
 
                         <p className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
-                          {isVi ? item.nameVi : item.name}
+                          {getLocalizedItemName(item.name, item.nameVi, isKm)}
                         </p>
 
                         <div className="space-y-1">
@@ -1211,7 +1216,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                               {formatQty(item.stockQty, item.unit)}
                             </strong>
                             <span className="text-[11px] text-stone-400 dark:text-[#94A39B]">
-                              {isVi ? 'tối thiểu' : 'min'}{' '}
+                              {isKm ? 'អប្បបរមា' : 'min'}{' '}
                               {formatQty(item.reorderLevel, item.unit)}
                             </span>
                           </div>
@@ -1227,10 +1232,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                       <button
                         type="button"
                         onClick={() => openInlineRestock(item)}
-                        className="h-10 px-3.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                        className="h-10 px-3.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5 shrink-0" />
-                        <span>{isVi ? 'Nhập thêm' : 'Restock'}</span>
+                        <span>{isKm ? 'បញ្ចូលស្តុក' : 'Restock'}</span>
                       </button>
                     </div>
                   );
@@ -1257,10 +1262,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-[#0F5C43] dark:text-[#34D399]">
-                  {isVi ? 'Nhập kho nhanh' : 'Quick Restock'}
+                  {isKm ? 'បញ្ចូលស្តុករហ័ស' : 'Quick Restock'}
                 </p>
                 <h3 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
-                  {isVi ? restockTarget.nameVi : restockTarget.name}
+                  {getLocalizedItemName(restockTarget.name, restockTarget.nameVi, isKm)}
                 </h3>
               </div>
               <button
@@ -1277,7 +1282,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <form onSubmit={handleSubmitInlineRestock} className="p-5 space-y-4">
               <div className="px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] flex items-center justify-between text-xs font-mono-num">
                 <span className="text-stone-500 dark:text-[#94A39B]">
-                  {isVi ? 'Hiện còn / Tối thiểu' : 'Current / Threshold'}
+                  {isKm ? 'ស្តុកបច្ចុប្បន្ន / កម្រិតអប្បបរមា' : 'Current / Threshold'}
                 </span>
                 <span className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
                   {formatQty(restockTarget.stockQty, restockTarget.unit)} /{' '}
@@ -1293,7 +1298,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                  {isVi ? `Số lượng thêm (${restockTarget.unit})` : `Quantity to Add (${restockTarget.unit})`}
+                  {isKm ? `បរិមាណបន្ថែម (${restockTarget.unit})` : `Quantity to Add (${restockTarget.unit})`}
                 </label>
                 <input
                   type="number"
@@ -1316,7 +1321,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                    {isVi ? 'Tổng tiền nhập (KHR)' : 'Total Cost (KHR)'}
+                    {isKm ? 'តម្លៃសរុប (KHR)' : 'Total Cost (KHR)'}
                   </label>
                   <input
                     type="number"
@@ -1328,7 +1333,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                    {isVi ? 'Thanh toán' : 'Payment'}
+                    {isKm ? 'ការទូទាត់' : 'Payment'}
                   </label>
                   <select
                     value={restockPayment}
@@ -1345,26 +1350,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                  {isVi ? 'Nhà cung cấp (tùy chọn)' : 'Supplier (Optional)'}
+                  {isKm ? 'អ្នកផ្គត់ផ្គង់ (ជម្រើស)' : 'Supplier (Optional)'}
                 </label>
                 <input
                   type="text"
                   value={restockSupplier}
                   onChange={(e) => setRestockSupplier(e.target.value)}
-                  placeholder={isVi ? 'VD: Chợ Orussey' : 'e.g. Local Market'}
+                  placeholder={isKm ? 'ឧ. ផ្សារអូរឫស្សី' : 'e.g. Local Market'}
                   className="w-full h-11 px-3.5 rounded-lg border border-stone-300 dark:border-[#24352C] bg-white dark:bg-[#0F1814] text-sm text-stone-900 dark:text-[#F1F5F3] focus:outline-none focus:ring-2 focus:ring-[#0F5C43] dark:focus:ring-[#10B981]"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                  {isVi ? 'Ghi chú (tùy chọn)' : 'Note (Optional)'}
+                  {isKm ? 'កំណត់ចំណាំ (ជម្រើស)' : 'Note (Optional)'}
                 </label>
                 <input
                   type="text"
                   value={restockNote}
                   onChange={(e) => setRestockNote(e.target.value)}
-                  placeholder={isVi ? 'Ghi chú nhanh...' : 'Quick note...'}
+                  placeholder={isKm ? 'កំណត់ចំណាំខ្លីៗ...' : 'Quick note...'}
                   className="w-full h-11 px-3.5 rounded-lg border border-stone-300 dark:border-[#24352C] bg-white dark:bg-[#0F1814] text-sm text-stone-900 dark:text-[#F1F5F3] focus:outline-none focus:ring-2 focus:ring-[#0F5C43] dark:focus:ring-[#10B981]"
                 />
               </div>
@@ -1381,10 +1386,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
                 <button
                   type="submit"
                   disabled={restockSubmitting}
-                  className="h-11 px-5 rounded-lg bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] text-sm font-semibold text-white inline-flex items-center gap-2 transition-colors disabled:opacity-60"
+                  className="h-11 px-5 rounded-lg bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] text-sm font-semibold text-white inline-flex items-center gap-2 transition-all duration-150 active:scale-[0.97] disabled:opacity-60"
                 >
                   {restockSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{isVi ? 'Xác nhận nhập kho' : 'Confirm Restock'}</span>
+                  <span>{isKm ? 'បញ្ជាក់បញ្ចូលស្តុក' : 'Confirm Restock'}</span>
                 </button>
               </div>
             </form>

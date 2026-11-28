@@ -427,7 +427,7 @@ export function normalizeSettings(
         : Number.isFinite(fallbackPosRate) && fallbackPosRate > 0
           ? Math.round(fallbackPosRate)
           : 4000,
-    language: safeRaw.language === 'vi' ? 'vi' : safeRaw.language === 'en' ? 'en' : fallback.language,
+    language: safeRaw.language === 'km' ? 'km' : safeRaw.language === 'en' ? 'en' : fallback.language,
     familyMembers,
     activeOperator,
     lowStockDefault:

@@ -116,7 +116,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const ingredients = Array.isArray(rawIngredients) ? rawIngredients : [];
   const barcodeRegistry = Array.isArray(rawBarcodeRegistry) ? rawBarcodeRegistry : [];
   const sales = Array.isArray(rawSales) ? rawSales : [];
-  const isVi = settings?.language === 'vi';
+  const isKm = settings?.language === 'km';
+  const getLocalizedName = (name: string, nameVi?: string) =>
+    isKm && nameVi && /[\u1780-\u17FF]/.test(nameVi) ? nameVi : name;
   const { showUndoToast } = useUndoToast();
 
   const [subTab, setSubTab] = useState<'pos' | 'ledger'>('pos');
@@ -339,17 +341,13 @@ export const SalesView: React.FC<SalesViewProps> = ({
     const check = validateCheckoutStock(nextItems, products, ingredients, false);
     if (!check.ok) {
       const first = check.shortages[0];
-      const itemLabel = first
-        ? isVi
-          ? first.itemNameVi || first.itemName
-          : first.itemName
-        : '';
+      const itemLabel = first ? getLocalizedName(first.itemName, first.itemNameVi) : '';
       const reason = first
-        ? isVi
-          ? `Đã đạt giới hạn tồn kho cho ${itemLabel} (còn ${formatQty(first.availableQty, first.unit)}).`
+        ? isKm
+          ? `ដល់កម្រិតស្តុកអតិបរមាសម្រាប់ ${itemLabel} (នៅសល់ ${formatQty(first.availableQty, first.unit)})។`
           : `Stock limit reached for ${itemLabel} (${formatQty(first.availableQty, first.unit)} available).`
-        : isVi
-          ? 'Đã đạt giới hạn tồn kho.'
+        : isKm
+          ? 'ដល់កម្រិតស្តុកអតិបរមាហើយ។'
           : 'Stock limit reached.';
       return { allowed: false, reason, shortages: check.shortages };
     }
@@ -359,7 +357,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
   const addEntryToCart = (productId: string, variantId?: string, qtyToAdd = 1): boolean => {
     const stockCheck = canAddToCart(productId, variantId, qtyToAdd);
     if (!stockCheck.allowed) {
-      setCheckoutError(stockCheck.reason || (isVi ? 'Đã đạt giới hạn tồn kho.' : 'Stock limit reached.'));
+      setCheckoutError(stockCheck.reason || (isKm ? 'ដល់កម្រិតស្តុកអតិបរមាហើយ។' : 'Stock limit reached.'));
       setCheckoutShortages(stockCheck.shortages || []);
       return false;
     }
@@ -396,7 +394,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
     if (delta > 0) {
       const stockCheck = canAddToCart(current.productId, current.variantId, delta);
       if (!stockCheck.allowed) {
-        setCheckoutError(stockCheck.reason || (isVi ? 'Đã đạt giới hạn tồn kho.' : 'Stock limit reached.'));
+        setCheckoutError(stockCheck.reason || (isKm ? 'ដល់កម្រិតស្តុកអតិបរមាហើយ។' : 'Stock limit reached.'));
         setCheckoutShortages(stockCheck.shortages || []);
         return;
       }
@@ -437,11 +435,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
     }
 
     if (result.found && result.ingredient) {
-      const ingName = isVi
-        ? result.ingredient.nameVi || result.ingredient.name
-        : result.ingredient.name;
-      const msg = isVi
-        ? `"${ingName}" là nguyên liệu thô trong Kho (mã ${result.code || cleaned}) — không phải sản phẩm bán lẻ POS.`
+      const ingName = getLocalizedName(result.ingredient.name, result.ingredient.nameVi);
+      const msg = isKm
+        ? `"${ingName}" ជាវត្ថុធាតុដើមក្នុងស្តុក (បាកូដ ${result.code || cleaned}) — មិនមែនជាទំនិញលក់លើ POS ទេ។`
         : `"${ingName}" is a Raw Ingredient in Inventory (${result.code || cleaned}) — not a sellable POS item.`;
       setCheckoutError(msg);
       return { ok: false, message: msg };
@@ -457,16 +453,16 @@ export const SalesView: React.FC<SalesViewProps> = ({
       });
       return {
         ok: false,
-        message: isVi
-          ? `Mã "${result.code || cleaned}" chưa có trong kho — nhấn Đăng ký ngay.`
+        message: isKm
+          ? `បាកូដ "${result.code || cleaned}" មិនទាន់បានចុះឈ្មោះ — ចុច ចុះឈ្មោះឥឡូវនេះ។`
           : `Unregistered barcode "${result.code || cleaned}" — tap Register Now.`,
         suppressToast: true,
       };
     }
 
     if (!result.product.active) {
-      const msg = isVi
-        ? `Sản phẩm "${result.product.nameVi || result.product.name}" đang tạm ngưng bán.`
+      const msg = isKm
+        ? `"${getLocalizedName(result.product.name, result.product.nameVi)}" កំពុងផ្អាកលក់។`
         : `"${result.product.name}" is currently paused.`;
       setCheckoutError(msg);
       return { ok: false, message: msg };
@@ -479,9 +475,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
       result.variant?.id
     );
     if (availability.status === 'out' && !settings.allowNegativeStock) {
-      const displayName = isVi ? result.product.nameVi || result.product.name : result.product.name;
-      const msg = isVi
-        ? `${displayName} hiện đã hết hàng trong kho.`
+      const displayName = getLocalizedName(result.product.name, result.product.nameVi);
+      const msg = isKm
+        ? `${displayName} អស់ពីស្តុកហើយ។`
         : `${displayName} is currently out of stock.`;
       setCheckoutError(msg);
       return { ok: false, message: msg };
@@ -491,21 +487,21 @@ export const SalesView: React.FC<SalesViewProps> = ({
     if (!stockCheck.allowed) {
       const msg =
         stockCheck.reason ||
-        (isVi ? 'Đã đạt giới hạn tồn kho.' : 'Stock limit reached.');
+        (isKm ? 'ដល់កម្រិតស្តុកអតិបរមាហើយ។' : 'Stock limit reached.');
       setCheckoutError(msg);
       setCheckoutShortages(stockCheck.shortages || []);
       return { ok: false, message: msg };
     }
 
     addEntryToCart(result.product.id, result.variant?.id, qty);
-    const displayName = isVi ? result.product.nameVi || result.product.name : result.product.name;
+    const displayName = getLocalizedName(result.product.name, result.product.nameVi);
     const variantSuffix = result.variant
-      ? ` (${isVi ? result.variant.nameVi || result.variant.name : result.variant.name})`
+      ? ` (${getLocalizedName(result.variant.name, result.variant.nameVi)})`
       : '';
     const packSuffix =
       qty > 1 && result.packLabel ? ` · ${result.packLabel}` : '';
-    const msg = isVi
-      ? `Đã thêm +${qty}× ${displayName}${variantSuffix}${packSuffix} vào giỏ`
+    const msg = isKm
+      ? `បានបន្ថែម +${qty}× ${displayName}${variantSuffix}${packSuffix} ទៅក្នុងការកុម្ម៉ង់`
       : `Added +${qty}× ${displayName}${variantSuffix}${packSuffix} to cart`;
     return { ok: true, message: msg };
   };
@@ -671,8 +667,8 @@ export const SalesView: React.FC<SalesViewProps> = ({
         setReturnQtyMap({});
         setReturnReason('');
         setReturnFeedback(
-          isVi
-            ? 'Đã hoàn trả hàng và cộng lại chính xác lượng tồn kho gốc.'
+          isKm
+            ? 'បានកត់ត្រាការបង្វិលទំនិញ និងបន្ថែមស្តុកដើមត្រឡប់មកវិញយ៉ាងត្រឹមត្រូវ។'
             : 'Return recorded and exact original stock restored.'
         );
       }
@@ -734,10 +730,12 @@ export const SalesView: React.FC<SalesViewProps> = ({
             <button
               type="button"
               onClick={() => setReceiptSale(lastCompletedSale)}
-              className="inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg"
+              className="inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97]"
             >
               <Printer className="w-3.5 h-3.5" />
-              {isVi ? `In hóa đơn ${lastCompletedSale.orderNumber}` : `Receipt ${lastCompletedSale.orderNumber}`}
+              {isKm
+                ? `បោះពុម្ពវិក្កយបត្រ ${lastCompletedSale.orderNumber}`
+                : `Receipt ${lastCompletedSale.orderNumber}`}
             </button>
           )}
         </div>
@@ -758,7 +756,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   !detailSaleId &&
                   !quickRegisterOpen
                 }
-                isVi={isVi}
+                isKm={isKm}
                 searchValue={posSearch}
                 onSearchChange={setPosSearch}
                 onScan={handleBarcodeScan}
@@ -774,22 +772,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     onClick={toggleFilters}
                     aria-expanded={filtersOpen}
                     aria-controls="pos-catalog-filters"
-                    className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap border ${
+                    className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-all active:scale-[0.97] whitespace-nowrap border ${
                       filtersOpen || activeFilterCount > 0
                         ? 'bg-stone-100 dark:bg-[#18251F] border-transparent dark:border-[#24352C] text-stone-900 dark:text-[#F1F5F3] hover:bg-stone-200/70 dark:hover:bg-[#1F3028]'
                         : 'bg-transparent border-transparent text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
                     }`}
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
-                    <span>
-                      {filtersOpen
-                        ? isVi
-                          ? 'Ẩn bộ lọc'
-                          : 'Hide Filters'
-                        : isVi
-                          ? 'Hiện bộ lọc'
-                          : 'Show Filters'}
-                    </span>
+                    <span>{isKm ? 'តម្រង' : 'Filters'}</span>
                     {activeFilterCount > 0 && (
                       <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-mono-num font-semibold bg-[#0D5C3E]/12 text-[#0D5C3E] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
                         {activeFilterCount}
@@ -813,7 +803,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     }}
                     className="inline-flex items-center justify-center h-11 px-3 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors whitespace-nowrap"
                   >
-                    {isVi ? 'Đặt lại tất cả' : 'Reset All'}
+                    {isKm ? 'កំណត់ឡើងវិញ' : 'Reset'}
                   </button>
                 }
               />
@@ -826,8 +816,8 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 >
                   <Loader2 className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] animate-spin shrink-0" />
                   <span>
-                    {isVi
-                      ? `Đang kiểm tra sổ mã vạch JuiceFlow cho "${lookingUpBarcode}"...`
+                    {isKm
+                      ? `កំពុងស្វែងរកបាកូដ "${lookingUpBarcode}" ក្នុងបញ្ជី JuiceFlow...`
                       : `Checking JuiceFlow registry for "${lookingUpBarcode}"...`}
                   </span>
                 </div>
@@ -837,13 +827,13 @@ export const SalesView: React.FC<SalesViewProps> = ({
               {unknownBarcodePrompt && !lookingUpBarcode && (
                 <div
                   role="status"
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C]"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] animate-drawer-in"
                 >
                   <div className="flex items-start gap-2.5 min-w-0">
                     <ScanBarcode className="w-4 h-4 text-[#0D5C3E] dark:text-[#10B981] shrink-0 mt-0.5" />
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                        {isVi ? 'Mã vạch chưa đăng ký' : 'Unregistered Barcode'}:{' '}
+                        {isKm ? 'បាកូដមិនទាន់ចុះឈ្មោះ' : 'Unregistered Barcode'}:{' '}
                         <span className="font-mono-num text-[#0D5C3E] dark:text-[#34D399]">
                           {unknownBarcodePrompt.code}
                         </span>{' '}
@@ -853,11 +843,11 @@ export const SalesView: React.FC<SalesViewProps> = ({
                       </p>
                       <p className="text-[11px] text-stone-600 dark:text-[#94A39B] truncate mt-0.5">
                         {unknownBarcodePrompt.prefill
-                          ? isVi
-                            ? `Tìm thấy từ Open Food Facts: ${unknownBarcodePrompt.prefill.name}${unknownBarcodePrompt.prefill.brand ? ` · ${unknownBarcodePrompt.prefill.brand}` : ''} (giá KHR & tồn kho bạn tự nhập)`
+                          ? isKm
+                            ? `រកឃើញពី Open Food Facts៖ ${unknownBarcodePrompt.prefill.name}${unknownBarcodePrompt.prefill.brand ? ` · ${unknownBarcodePrompt.prefill.brand}` : ''} (ត្រូវបញ្ចូលតម្លៃ KHR និងស្តុក)`
                             : `Found on Open Food Facts: ${unknownBarcodePrompt.prefill.name}${unknownBarcodePrompt.prefill.brand ? ` · ${unknownBarcodePrompt.prefill.brand}` : ''} (local KHR price & stock required)`
-                          : isVi
-                          ? 'Không có trên Open Food Facts — nhấn Đăng ký ngay để tạo sản phẩm thủ công.'
+                          : isKm
+                          ? 'រកមិនឃើញក្នុងប្រព័ន្ធខាងក្រៅ — ចុច ចុះឈ្មោះឥឡូវនេះ ដើម្បីបន្ថែមដោយដៃ ដោយរក្សាទុកការកុម្ម៉ង់បច្ចុប្បន្ន។'
                           : 'Not found externally — tap Register Now to add manually while keeping your cart.'}
                       </p>
                     </div>
@@ -866,10 +856,10 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setQuickRegisterOpen(true)}
-                      className="inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0D5C3E] hover:bg-[#0A4A31] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                      className="inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0D5C3E] hover:bg-[#0A4A31] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      {isVi ? 'Đăng ký ngay' : 'Register Now'}
+                      {isKm ? 'ចុះឈ្មោះឥឡូវនេះ' : 'Register Now'}
                     </button>
                     <button
                       type="button"
@@ -888,7 +878,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 id="pos-catalog-filters"
                 className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
                   filtersOpen
-                    ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-stone-100 dark:border-[#24352C]'
+                    ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-stone-100 dark:border-[#24352C] animate-drawer-in'
                     : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
                 }`}
               >
@@ -899,14 +889,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
                       categories={posCategories}
                       selectedCategoryId={categoryFilter}
                       onSelect={setCategoryFilter}
-                      isVi={isVi}
+                      isKm={isKm}
                       allLabel={t.common.all}
                     />
 
                     {/* Row 2: Color-Coded Item Type Pills matching Inventory & Products (h-11 = 44px) */}
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="text-[11px] font-semibold text-stone-500 dark:text-[#94A39B] w-16 shrink-0">
-                        {isVi ? 'Loại hàng' : 'Item Type'}
+                        {isKm ? 'ប្រភេទទំនិញ' : 'Item Type'}
                       </span>
                       <div className="flex flex-nowrap items-center gap-2 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {(['ALL', 'PREPARED_TO_ORDER', 'PACKAGED'] as const).map((pt) => {
@@ -917,7 +907,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                               type="button"
                               onClick={() => setTypeFilter(pt)}
                               aria-pressed={active}
-                              className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors duration-200 ease-out whitespace-nowrap shrink-0 border ${getProductTypeFilterPillClass(
+                              className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0 border ${getProductTypeFilterPillClass(
                                 pt,
                                 active
                               )}`}
@@ -963,7 +953,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
               >
                 {activeProducts.map((product) => {
                   const qtyInCart = getQtyInCartForProduct(product.id);
-                  const displayName = isVi ? product.nameVi || product.name : product.name;
+                  const displayName = getLocalizedName(product.name, product.nameVi);
                   const productVariants = Array.isArray(product.variants) ? product.variants : [];
                   const availability = getAvailableUnitsForProduct(
                     product,
@@ -992,12 +982,12 @@ export const SalesView: React.FC<SalesViewProps> = ({
                       onClick={() => handleProductTileClick(product)}
                       title={
                         outBlocked
-                          ? isVi
-                            ? 'Hết hàng'
+                          ? isKm
+                            ? 'អស់ពីស្តុក'
                             : 'Out of Stock'
                           : atStockLimit
-                            ? isVi
-                              ? 'Đã đạt giới hạn tồn kho trong giỏ'
+                            ? isKm
+                              ? 'ដល់កម្រិតស្តុកអតិបរមាក្នុងការកុម្ម៉ង់'
                               : 'Stock limit reached in cart'
                             : undefined
                       }
@@ -1024,14 +1014,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
                         {outBlocked && (
                           <div className="absolute inset-0 flex items-center justify-center bg-stone-900/20 dark:bg-black/45">
                             <span className="px-3 py-1 rounded-full bg-stone-900/85 dark:bg-red-950/95 text-white dark:text-red-200 border border-transparent dark:border-red-500/50 text-xs font-semibold tracking-wide shadow-xs">
-                              {isVi ? 'Hết hàng' : 'Out of Stock'}
+                              {isKm ? 'អស់ពីស្តុក' : 'Out of Stock'}
                             </span>
                           </div>
                         )}
 
                         {!outBlocked && qtyInCart > 0 && (
                           <span className="absolute top-2 right-2 bg-[#0D5C3E] text-white dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border dark:border-[#10B981]/50 font-mono-num text-[11px] font-semibold px-2.5 py-0.5 rounded-full shadow-xs">
-                            {isVi ? `${qtyInCart} trong giỏ` : `${qtyInCart} in cart`}
+                            {isKm ? `${qtyInCart} ក្នុងកន្ត្រក` : `${qtyInCart} in cart`}
                           </span>
                         )}
                       </div>
@@ -1057,19 +1047,19 @@ export const SalesView: React.FC<SalesViewProps> = ({
                               );
                               return (
                                 <span className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B] truncate">
-                                  · {getCategoryDisplayName(catItem, isVi)}
+                                  · {getCategoryDisplayName(catItem, isKm)}
                                 </span>
                               );
                             })()}
                             {hasMultiVariants && (
                               <span className="text-stone-500 dark:text-[#94A39B] truncate">
-                                · {productVariants.length} {isVi ? 'cỡ' : 'sizes'}
+                                · {productVariants.length} {isKm ? 'ទំហំ' : 'sizes'}
                               </span>
                             )}
                           </div>
                           {atStockLimit ? (
                             <span className="font-mono-num font-semibold text-amber-700 dark:text-amber-400 shrink-0">
-                              {isVi ? 'Đạt giới hạn' : 'Max limit'}
+                              {isKm ? 'ដល់កម្រិតអតិបរមា' : 'Max limit'}
                             </span>
                           ) : (
                             availability.availableUnits !== null && (
@@ -1083,8 +1073,8 @@ export const SalesView: React.FC<SalesViewProps> = ({
                                 }`}
                               >
                                 {availability.status === 'out'
-                                  ? isVi
-                                    ? 'Hết hàng'
+                                  ? isKm
+                                    ? 'អស់ស្តុក'
                                     : 'Out'
                                   : product.productType === 'PREPARED_TO_ORDER'
                                   ? `~${availability.availableUnits}`
@@ -1147,8 +1137,8 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     setCheckoutShortages([]);
 
                     showUndoToast({
-                      message: isVi
-                        ? `Đã xóa giỏ hàng (${itemCount} món)`
+                      message: isKm
+                        ? `បានសម្អាតការកុម្ម៉ង់ (${itemCount} មុខ)`
                         : `Cleared cart (${itemCount} ${itemCount === 1 ? 'item' : 'items'})`,
                       detail: formatKhr(totalSnapshot),
                       onUndo: () => {
@@ -1162,7 +1152,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   }}
                   className="h-11 px-2.5 -mr-2 text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] rounded-lg transition-colors shrink-0"
                 >
-                  {isVi ? 'Xóa giỏ' : 'Clear'}
+                  {isKm ? 'សម្អាត' : 'Clear'}
                 </button>
               )}
             </div>
@@ -1179,14 +1169,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   {cartLines.map(({ key, product, variant, unitPrice, quantity, lineTotal }) => {
                     const incCheck = canAddToCart(product.id, variant?.id, 1);
                     return (
-                      <li key={key} className="py-2.5 flex items-center justify-between gap-2.5">
+                      <li key={key} className="py-2.5 flex items-center justify-between gap-2.5 animate-cart-item">
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-stone-900 dark:text-[#F1F5F3] truncate">
-                            {isVi ? product.nameVi || product.name : product.name}
+                            {getLocalizedName(product.name, product.nameVi)}
                             {variant ? (
                               <span className="text-stone-500 dark:text-[#94A39B] font-normal">
                                 {' '}
-                                ({isVi ? variant.nameVi || variant.name : variant.name})
+                                ({getLocalizedName(variant.name, variant.nameVi)})
                               </span>
                             ) : null}
                           </p>
@@ -1196,7 +1186,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                             </span>
                             {!incCheck.allowed && (
                               <span className="text-[10px] font-sans font-semibold text-amber-700 dark:text-amber-400">
-                                · {isVi ? 'Tối đa' : 'Max'}
+                                · {isKm ? 'អតិបរមា' : 'Max'}
                               </span>
                             )}
                           </div>
@@ -1208,7 +1198,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                               type="button"
                               onClick={() => updateCartQty(key, -1)}
                               aria-label="Decrease quantity"
-                              className="w-9 h-9 inline-flex items-center justify-center border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
+                              className="w-9 h-9 inline-flex items-center justify-center border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-all active:scale-[0.94]"
                             >
                               <Minus className="w-4 h-4" />
                             </button>
@@ -1222,10 +1212,10 @@ export const SalesView: React.FC<SalesViewProps> = ({
                               aria-label="Increase quantity"
                               title={
                                 !incCheck.allowed
-                                  ? incCheck.reason || (isVi ? 'Đã đạt giới hạn tồn kho' : 'Stock limit reached')
+                                  ? incCheck.reason || (isKm ? 'ដល់កម្រិតស្តុកអតិបរមា' : 'Stock limit reached')
                                   : undefined
                               }
-                              className="w-9 h-9 inline-flex items-center justify-center border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] disabled:opacity-35 disabled:cursor-not-allowed rounded-lg transition-colors"
+                              className="w-9 h-9 inline-flex items-center justify-center border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] disabled:opacity-35 disabled:cursor-not-allowed rounded-lg transition-all active:scale-[0.94]"
                             >
                               <Plus className="w-4 h-4" />
                             </button>
@@ -1256,11 +1246,11 @@ export const SalesView: React.FC<SalesViewProps> = ({
                       <span className="leading-snug">
                         {checkoutError ||
                           (settings.allowNegativeStock
-                            ? isVi
-                              ? 'Cảnh báo âm kho (đang bật chế độ cho phép):'
+                            ? isKm
+                              ? 'ការព្រមានស្តុកអវិជ្ជមាន (បានបើកការអនុញ្ញាត)៖'
                               : 'Negative stock override active:'
-                            : isVi
-                            ? 'Không đủ tồn kho để thanh toán:'
+                            : isKm
+                            ? 'ស្តុកមិនគ្រប់គ្រាន់ — មិនអាចគិតប្រាក់បានទេ៖'
                             : 'Insufficient stock — checkout blocked:')}
                       </span>
                     </div>
@@ -1288,8 +1278,8 @@ export const SalesView: React.FC<SalesViewProps> = ({
                         : liveStockValidation.shortages
                       ).map((sh) => (
                         <li key={sh.itemId}>
-                          {isVi ? sh.itemNameVi || sh.itemName : sh.itemName}: need{' '}
-                          {formatQty(sh.requiredQty, sh.unit)}, have{' '}
+                          {getLocalizedName(sh.itemName, sh.itemNameVi)}: {isKm ? 'ត្រូវការ' : 'need'}{' '}
+                          {formatQty(sh.requiredQty, sh.unit)}, {isKm ? 'នៅសល់' : 'have'}{' '}
                           {formatQty(sh.availableQty, sh.unit)}
                         </li>
                       ))}
@@ -1311,7 +1301,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   className="w-full h-11 px-3 flex items-center justify-between gap-2 text-xs font-medium text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-100/70 dark:hover:bg-[#1F3028] transition-colors"
                 >
                   <span className="truncate">
-                    {isVi ? 'Chi tiết đơn & Ghi chú' : 'Order Details & Notes'}
+                    {isKm ? 'ព័ត៌មានលម្អិត និងកំណត់ចំណាំ' : 'Order Details & Notes'}
                     {(customerName.trim() || note.trim()) && !orderDetailsOpen && (
                       <span className="text-stone-400 dark:text-[#94A39B] font-normal">
                         {' '}
@@ -1392,7 +1382,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                       role="radio"
                       aria-checked={selected}
                       onClick={() => setPaymentMethod(pm)}
-                      className={`h-11 px-1.5 text-[11px] xl:text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap truncate ${
+                      className={`h-11 px-1.5 text-[11px] xl:text-xs font-semibold rounded-lg border transition-all active:scale-[0.97] whitespace-nowrap truncate ${
                         selected
                           ? 'border-[#0D5C3E] bg-[#E6F2ED] text-[#0D5C3E] dark:border-[#10B981] dark:bg-[#064E3B] dark:text-[#D1FAE5]'
                           : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-50 dark:hover:bg-[#1F3028]'
@@ -1407,7 +1397,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
               {/* Optional Hidden Margin Breakdown + Total Row with Eye Toggle */}
               <div className="space-y-1.5 pt-1 border-t border-stone-100 dark:border-[#24352C]">
                 {showMargins && (
-                  <div className="space-y-1 pb-1.5 border-b border-stone-100 dark:border-[#24352C] text-xs">
+                  <div className="space-y-1 pb-1.5 border-b border-stone-100 dark:border-[#24352C] text-xs animate-drawer-in">
                     <div className="flex justify-between text-stone-500 dark:text-[#94A39B]">
                       <span>{t.sales.estimatedCogs}</span>
                       <span className="font-mono-num">{formatKhr(cartCogs)}</span>
@@ -1429,20 +1419,20 @@ export const SalesView: React.FC<SalesViewProps> = ({
                       onClick={() => setShowMargins((prev) => !prev)}
                       aria-label={
                         showMargins
-                          ? isVi
-                            ? 'Ẩn giá vốn & lợi nhuận'
+                          ? isKm
+                            ? 'លាក់ថ្លៃដើម និងប្រាក់ចំណេញ'
                             : 'Hide cost & profit'
-                          : isVi
-                            ? 'Hiện giá vốn & lợi nhuận'
+                          : isKm
+                            ? 'បង្ហាញថ្លៃដើម និងប្រាក់ចំណេញ'
                             : 'Show cost & profit'
                       }
                       title={
                         showMargins
-                          ? isVi
-                            ? 'Ẩn giá vốn & lợi nhuận'
+                          ? isKm
+                            ? 'លាក់ថ្លៃដើម និងប្រាក់ចំណេញ'
                             : 'Hide cost & profit'
-                          : isVi
-                            ? 'Hiện giá vốn & lợi nhuận'
+                          : isKm
+                            ? 'បង្ហាញថ្លៃដើម និងប្រាក់ចំណេញ'
                             : 'Show cost & profit'
                       }
                       className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors"
@@ -1469,14 +1459,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
               <button
                 type="submit"
                 disabled={cartLines.length === 0 || submitting || !liveStockValidation.ok}
-                className="w-full h-12 px-4 text-sm font-bold text-white dark:text-[#042419] bg-[#0D5C3E] hover:bg-[#0A4A31] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap font-mono-num"
+                className="w-full h-12 px-4 text-sm font-bold text-white dark:text-[#042419] bg-[#0D5C3E] hover:bg-[#0A4A31] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-all active:scale-[0.98] whitespace-nowrap font-mono-num"
               >
                 {submitting
-                  ? isVi
-                    ? 'Đang xử lý...'
+                  ? isKm
+                    ? 'កំពុងកត់ត្រាការលក់...'
                     : 'Recording Sale...'
-                  : isVi
-                    ? `Thu ${formatKhr(cartTotal)}`
+                  : isKm
+                    ? `គិតប្រាក់ ${formatKhr(cartTotal)}`
                     : `Charge ${formatKhr(cartTotal)}`}
               </button>
             </div>
@@ -1492,7 +1482,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={isVi ? 'Tìm kiếm' : 'Search'}
+                placeholder={isKm ? 'ស្វែងរក...' : 'Search'}
                 className="w-full h-11 pl-10 pr-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
               />
             </div>
@@ -1503,7 +1493,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   key={pm}
                   type="button"
                   onClick={() => setPaymentFilter(pm)}
-                  className={`h-11 px-3.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 border ${
+                  className={`h-11 px-3.5 text-xs font-medium rounded-lg transition-all active:scale-[0.97] whitespace-nowrap shrink-0 border ${
                     paymentFilter === pm
                       ? 'bg-stone-900 text-white border-stone-900 dark:bg-[#10B981] dark:text-[#042419] dark:border-[#10B981] font-semibold'
                       : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
@@ -1520,7 +1510,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
             <div className="px-5 py-3 bg-stone-50/80 dark:bg-[#18251F]/70 border-b border-stone-200 dark:border-[#24352C] grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>
                 <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                  {isVi ? 'Tiền USD thu vào' : 'USD Bills Received'}
+                  {isKm ? 'ប្រាក់ដុល្លារទទួលបាន' : 'USD Bills Received'}
                 </span>
                 <span className="font-mono-num text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                   {formatUsdClean(cashDrawerSummary.usdBillsIn)}
@@ -1528,7 +1518,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
               </div>
               <div>
                 <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                  {isVi ? 'Tiền KHR thu vào' : 'KHR Cash Received'}
+                  {isKm ? 'ប្រាក់រៀលទទួលបាន' : 'KHR Cash Received'}
                 </span>
                 <span className="font-mono-num text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                   {formatKhr(cashDrawerSummary.khrCashIn)}
@@ -1536,7 +1526,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
               </div>
               <div>
                 <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                  {isVi ? 'Tiền thối KHR đã trả' : 'KHR Change Given'}
+                  {isKm ? 'ប្រាក់អាប់ KHR បានផ្តល់' : 'KHR Change Given'}
                 </span>
                 <span className="font-mono-num text-sm font-semibold text-amber-700 dark:text-amber-400">
                   -{formatKhr(cashDrawerSummary.changeGivenKhr)}
@@ -1544,7 +1534,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
               </div>
               <div>
                 <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                  {isVi ? 'KHR thực giữ trong két' : 'Net KHR in Drawer'}
+                  {isKm ? 'ប្រាក់រៀលសុទ្ធក្នុងប្រអប់' : 'Net KHR in Drawer'}
                 </span>
                 <span className="font-mono-num text-sm font-semibold text-[#0D5C3E] dark:text-[#34D399]">
                   {formatKhr(cashDrawerSummary.netKhrDrawer)}
@@ -1560,7 +1550,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/60">
-                    <th className="py-3 px-5 font-medium">Order / {t.common.date}</th>
+                    <th className="py-3 px-5 font-medium">
+                      {isKm ? 'វិក្កយបត្រ' : 'Order'} / {t.common.date}
+                    </th>
                     <th className="py-3 px-4 font-medium">{t.sales.itemsSummary}</th>
                     <th className="py-3 px-4 font-medium">{t.common.payment}</th>
                     <th className="py-3 px-4 font-medium text-right">{t.sales.cogs}</th>
@@ -1602,12 +1594,12 @@ export const SalesView: React.FC<SalesViewProps> = ({
                               {sale.status === 'voided'
                                 ? t.sales.voided
                                 : sale.status === 'partially_returned'
-                                ? isVi
-                                  ? 'Trả 1 phần'
+                                ? isKm
+                                  ? 'បង្វិលមួយផ្នែក'
                                   : 'Partial Return'
                                 : sale.status === 'refunded'
-                                ? isVi
-                                  ? 'Đã hoàn trả'
+                                ? isKm
+                                  ? 'បានសងប្រាក់វិញ'
                                   : 'Refunded'
                                 : t.sales.completed}
                             </span>
@@ -1618,7 +1610,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                             {(sale.items || [])
                               .map(
                                 (i) =>
-                                  `${i.quantity}× ${isVi ? i.productNameVi || i.productName : i.productName}${
+                                  `${i.quantity}× ${getLocalizedName(i.productName, i.productNameVi)}${
                                     i.variantName ? ` (${i.variantName})` : ''
                                   }`
                               )
@@ -1652,7 +1644,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                                   .join(' + ') || '0 ៛'}
                                 {sale.change_given_khr !== null &&
                                 sale.change_given_khr !== undefined
-                                  ? ` · ${isVi ? 'Thối' : 'Chg'} ${formatKhr(sale.change_given_khr)}`
+                                  ? ` · ${isKm ? 'ប្រាក់អាប់' : 'Chg'} ${formatKhr(sale.change_given_khr)}`
                                   : ''}
                               </span>
                             )}
@@ -1681,18 +1673,18 @@ export const SalesView: React.FC<SalesViewProps> = ({
                             <button
                               type="button"
                               onClick={() => setReceiptSale(sale)}
-                              className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:bg-stone-100 dark:hover:bg-[#1F3028]"
-                              title="Receipt"
+                              className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-all active:scale-[0.95]"
+                              title={isKm ? 'បោះពុម្ពវិក្កយបត្រ' : 'Print Receipt'}
                             >
                               <Printer className="w-4 h-4" />
                             </button>
                             <button
                               type="button"
                               onClick={() => openOrderDetail(sale)}
-                              className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-[#E6F2ED] dark:hover:bg-[#064E3B]/50"
+                              className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-[#E6F2ED] dark:hover:bg-[#064E3B]/50 transition-all active:scale-[0.97]"
                             >
                               <Eye className="w-3.5 h-3.5" />
-                              {isVi ? 'Chi tiết' : 'Details'}
+                              {isKm ? 'ព័ត៌មានលម្អិត' : 'Details'}
                             </button>
                             {canModify &&
                               (confirmVoidId === sale.id ? (
@@ -1750,12 +1742,10 @@ export const SalesView: React.FC<SalesViewProps> = ({
             <div className="px-5 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between">
               <div>
                 <h3 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3]">
-                  {isVi
-                    ? variantPickerProduct.nameVi || variantPickerProduct.name
-                    : variantPickerProduct.name}
+                  {getLocalizedName(variantPickerProduct.name, variantPickerProduct.nameVi)}
                 </h3>
                 <p className="text-xs text-stone-500 dark:text-[#94A39B]">
-                  {isVi ? 'Chọn kích cỡ để thêm vào đơn' : 'Choose size variant to add to order'}
+                  {isKm ? 'ជ្រើសរើសទំហំ ដើម្បីបន្ថែមទៅក្នុងការកុម្ម៉ង់' : 'Choose size variant to add to order'}
                 </p>
               </div>
               <button
@@ -1786,24 +1776,26 @@ export const SalesView: React.FC<SalesViewProps> = ({
                         setVariantPickerProduct(null);
                       }
                     }}
-                    className="w-full min-h-[52px] px-4 py-3 bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center justify-between transition-colors"
+                    className="w-full min-h-[52px] px-4 py-3 bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center justify-between transition-all active:scale-[0.97]"
                   >
                     <div className="text-left">
                       <div className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                        {isVi ? variant.nameVi || variant.name : variant.name}
+                        {getLocalizedName(variant.name, variant.nameVi)}
                       </div>
                       {!outBlocked && !variantLimitCheck.allowed ? (
                         <div className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
-                          {isVi ? 'Đã đạt giới hạn tồn kho' : 'Stock limit reached in cart'}
+                          {isKm ? 'ដល់កម្រិតស្តុកអតិបរមា' : 'Stock limit reached in cart'}
                         </div>
                       ) : (
                         avail.availableUnits !== null && (
                           <div className="text-[11px] text-stone-500 dark:text-[#94A39B] font-mono-num">
                             {avail.status === 'out'
-                              ? isVi
-                                ? 'Thiếu nguyên liệu'
+                              ? isKm
+                                ? 'ខ្វះវត្ថុធាតុដើម'
                                 : `Out (${avail.limitingItemName})`
-                              : `~${avail.availableUnits} makeable`}
+                              : isKm
+                                ? `~${avail.availableUnits} អាចធ្វើបាន`
+                                : `~${avail.availableUnits} makeable`}
                           </div>
                         )
                       )}
@@ -1862,7 +1854,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   <div className="p-3.5 bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                     <div>
                       <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                        {isVi ? 'Nhận USD' : 'USD Received'}
+                        {isKm ? 'ប្រាក់ USD ទទួលបាន' : 'USD Received'}
                       </span>
                       <span className="font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3]">
                         {formatUsdClean(detailSale.cash_received_usd ?? 0)}
@@ -1870,7 +1862,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     </div>
                     <div>
                       <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                        {isVi ? 'Nhận KHR' : 'KHR Received'}
+                        {isKm ? 'ប្រាក់ KHR ទទួលបាន' : 'KHR Received'}
                       </span>
                       <span className="font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3]">
                         {formatKhr(detailSale.cash_received_khr ?? 0)}
@@ -1878,7 +1870,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     </div>
                     <div>
                       <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                        {isVi ? 'Tỷ giá áp dụng' : 'Rate Used'}
+                        {isKm ? 'អត្រាប្តូរប្រាក់' : 'Rate Used'}
                       </span>
                       <span className="font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3]">
                         {(detailSale.exchange_rate_used ?? posExchangeRate).toLocaleString('en-US')}{' '}
@@ -1887,7 +1879,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     </div>
                     <div>
                       <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                        {isVi ? 'Tiền thối KHR' : 'Change Given'}
+                        {isKm ? 'ប្រាក់អាប់' : 'Change Given'}
                       </span>
                       <span className="font-mono-num font-semibold text-[#0D5C3E] dark:text-[#34D399]">
                         {formatKhr(detailSale.change_given_khr ?? 0)}
@@ -1899,7 +1891,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
               {/* Line Items + Return Quantity Pickers */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-stone-700 dark:text-[#94A39B] uppercase tracking-wide">
-                  {isVi ? 'Chi tiết món & Hoàn trả một phần' : 'Order Items & Partial Returns'}
+                  {isKm ? 'មុខទំនិញ និងការបង្វិលមួយផ្នែក' : 'Order Items & Partial Returns'}
                 </h3>
                 <div className="divide-y divide-stone-100 dark:divide-[#24352C] border border-stone-200 dark:border-[#24352C] rounded-lg">
                   {(detailSale.items || []).map((item, idx) => {
@@ -1918,19 +1910,22 @@ export const SalesView: React.FC<SalesViewProps> = ({
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                               {item.quantity}×{' '}
-                              {isVi ? item.productNameVi || item.productName : item.productName}
+                              {getLocalizedName(item.productName, item.productNameVi)}
                               {item.variantName ? ` (${item.variantName})` : ''}
                             </p>
                             <p className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
-                              {formatKhr(item.unitPriceKhr)} ea · COGS {formatKhr(item.unitCogsKhr)}
-                              {returned > 0 ? ` · Returned: ${returned}` : ''}
+                              {formatKhr(item.unitPriceKhr)} {isKm ? '/ឯកតា' : 'ea'} ·{' '}
+                              {isKm ? 'ថ្លៃដើម' : 'COGS'} {formatKhr(item.unitCogsKhr)}
+                              {returned > 0
+                                ? ` · ${isKm ? 'បានបង្វិល' : 'Returned'}: ${returned}`
+                                : ''}
                             </p>
                           </div>
 
                           {canReturnLine && (
                             <div className="flex items-center gap-2 shrink-0">
                               <span className="text-[11px] text-stone-500 dark:text-[#94A39B]">
-                                {isVi ? 'Trả:' : 'Return:'}
+                                {isKm ? 'បង្វិល៖' : 'Return:'}
                               </span>
                               <input
                                 type="number"
@@ -1955,7 +1950,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                         {/* Immutable Stock Deduction Snapshot */}
                         {item.deductions && item.deductions.length > 0 && (
                           <p className="text-[11px] text-stone-500 dark:text-[#94A39B] font-mono-num">
-                            {isVi ? 'Đã trừ kho gốc: ' : 'Original deduction snapshot: '}
+                            {isKm ? 'កំណត់ត្រាកាត់ស្តុកដើម៖ ' : 'Original deduction snapshot: '}
                             {item.deductions
                               .map((d) => `${d.itemName} (-${formatQty(d.totalDeductedQty, d.unit)})`)
                               .join(', ')}
@@ -1977,8 +1972,8 @@ export const SalesView: React.FC<SalesViewProps> = ({
                       value={returnReason}
                       onChange={(e) => setReturnReason(e.target.value)}
                       placeholder={
-                        isVi
-                          ? 'Lý do trả hàng (VD: Khách đổi ý, giao nhầm...)'
+                        isKm
+                          ? 'មូលហេតុបង្វិល (ឧ. អតិថិជនប្តូរចិត្ត, ខុសទំហំ...)'
                           : 'Return reason (e.g., Customer changed mind, wrong size...)'
                       }
                       className="flex-1 h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#0B110E] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
@@ -1990,15 +1985,15 @@ export const SalesView: React.FC<SalesViewProps> = ({
                         Object.values(returnQtyMap).every((q) => !q || q <= 0)
                       }
                       onClick={handleProcessPartialReturn}
-                      className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 disabled:opacity-45 rounded-lg whitespace-nowrap"
+                      className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 disabled:opacity-45 rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
-                      {isVi ? 'Xác nhận hoàn trả' : 'Process Return'}
+                      {isKm ? 'បញ្ជាក់ការបង្វិល' : 'Process Return'}
                     </button>
                   </div>
                   <p className="text-[11px] text-stone-500 dark:text-[#94A39B]">
-                    {isVi
-                      ? 'Hoàn trả luôn cộng lại đúng số lượng đã trừ khi bán (không bị ảnh hưởng nếu bạn đã sửa công thức sau đó).'
+                    {isKm
+                      ? 'ការបង្វិលតែងតែបន្ថែមស្តុកត្រឡប់វិញតាមបរិមាណកាត់ស្តុកដើមយ៉ាងជាក់លាក់ (មានសុវត្ថិភាពទោះបីរូបមន្តត្រូវបានកែប្រែនៅពេលក្រោយក៏ដោយ)។'
                       : 'Returns always restore exact original deduction snapshots (safe even if product recipes were edited later).'}
                   </p>
                 </div>
@@ -2012,7 +2007,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
               {detailSale.returns && detailSale.returns.length > 0 && (
                 <div className="space-y-1.5">
                   <h4 className="text-xs font-semibold text-stone-700 dark:text-[#94A39B]">
-                    {isVi ? 'Lịch sử hoàn trả' : 'Return History'}
+                    {isKm ? 'ប្រវត្តិការបង្វិល' : 'Return History'}
                   </h4>
                   {detailSale.returns.map((ret) => (
                     <div
@@ -2035,10 +2030,10 @@ export const SalesView: React.FC<SalesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setReceiptSale(detailSale)}
-                className="inline-flex items-center gap-1.5 h-11 px-4 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] border border-transparent dark:border-[#24352C] hover:bg-stone-200 dark:hover:bg-[#1F3028] rounded-lg"
+                className="inline-flex items-center gap-1.5 h-11 px-4 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] border border-transparent dark:border-[#24352C] hover:bg-stone-200 dark:hover:bg-[#1F3028] rounded-lg transition-all active:scale-[0.97]"
               >
                 <Printer className="w-3.5 h-3.5" />
-                {isVi ? 'In / Chép hóa đơn' : 'Print / Copy Receipt'}
+                {isKm ? 'បោះពុម្ពវិក្កយបត្រ' : 'Print Receipt'}
               </button>
               <button
                 type="button"
@@ -2079,13 +2074,13 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     id="cash-payment-modal-title"
                     className="font-display text-lg font-bold text-stone-900 dark:text-[#F1F5F3] truncate"
                   >
-                    {isVi ? 'Thanh toán tiền mặt' : 'Cash Payment'}
+                    {isKm ? 'ទូទាត់សាច់ប្រាក់' : 'Cash Payment'}
                   </h2>
                   <p className="text-[11px] font-mono-num text-stone-500 dark:text-[#94A39B]">
                     {cartLines.reduce((s, l) => s + l.quantity, 0)}{' '}
-                    {isVi ? 'món' : cartLines.reduce((s, l) => s + l.quantity, 0) === 1 ? 'item' : 'items'}
+                    {isKm ? 'មុខ' : cartLines.reduce((s, l) => s + l.quantity, 0) === 1 ? 'item' : 'items'}
                     {' · '}
-                    {isVi ? 'Tỷ giá' : 'Rate'}: {posExchangeRate.toLocaleString('en-US')} ៛/$
+                    {isKm ? 'អត្រា' : 'Rate'}: {posExchangeRate.toLocaleString('en-US')} ៛/$
                   </p>
                 </div>
               </div>
@@ -2104,7 +2099,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
               {/* Order Total Summary Banner */}
               <div className="rounded-xl bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] px-4 py-3.5 flex items-center justify-between gap-3">
                 <span className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-[#94A39B]">
-                  {isVi ? 'Tổng đơn hàng' : 'Order Total'}
+                  {isKm ? 'សរុបរួម' : 'Order Total'}
                 </span>
                 <div className="text-right">
                   <div className="font-mono-num text-2xl sm:text-3xl font-bold text-stone-900 dark:text-[#F1F5F3] leading-tight">
@@ -2123,7 +2118,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     htmlFor="cash-modal-khr-input"
                     className="text-xs font-semibold text-stone-700 dark:text-[#F1F5F3]"
                   >
-                    {isVi ? 'Tiền khách đưa (KHR ៛)' : 'Cash Received (KHR ៛)'}
+                    {isKm ? 'ប្រាក់ទទួលបាន (KHR ៛)' : 'Cash Received (KHR ៛)'}
                   </label>
                   {cashCalc.hasAnyInput && (
                     <button
@@ -2135,7 +2130,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                       }}
                       className="text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] underline px-1 py-0.5"
                     >
-                      {isVi ? 'Xóa số tiền' : 'Clear'}
+                      {isKm ? 'សម្អាត' : 'Clear'}
                     </button>
                   )}
                 </div>
@@ -2163,7 +2158,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                           setCashKhrInput('');
                           cashKhrInputRef.current?.focus();
                         }}
-                        aria-label={isVi ? 'Xóa tiền KHR' : 'Clear KHR'}
+                        aria-label={isKm ? 'សម្អាតប្រាក់រៀល' : 'Clear KHR'}
                         className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 inline-flex items-center justify-center rounded-lg text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]"
                       >
                         <X className="w-4 h-4" />
@@ -2179,9 +2174,9 @@ export const SalesView: React.FC<SalesViewProps> = ({
                     type="button"
                     onClick={handleExactKhr}
                     disabled={cartTotal <= 0}
-                    className="h-12 px-4 sm:px-5 text-sm font-bold text-[#0D5C3E] dark:text-[#6EE7B7] bg-[#E6F2ED] dark:bg-[#064E3B] border border-[#0D5C3E]/30 dark:border-[#10B981]/50 hover:bg-[#D5EAE0] dark:hover:bg-[#065F46] disabled:opacity-45 rounded-xl transition-all duration-150 ease-out whitespace-nowrap shrink-0"
+                    className="h-12 px-4 sm:px-5 text-sm font-bold text-[#0D5C3E] dark:text-[#6EE7B7] bg-[#E6F2ED] dark:bg-[#064E3B] border border-[#0D5C3E]/30 dark:border-[#10B981]/50 hover:bg-[#D5EAE0] dark:hover:bg-[#065F46] disabled:opacity-45 rounded-xl transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0"
                   >
-                    {isVi ? 'Đủ tiền' : 'Exact'}
+                    {isKm ? 'គ្រប់ចំនួន' : 'Exact'}
                   </button>
                 </div>
               </div>
@@ -2190,7 +2185,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-[#94A39B]">
-                    {isVi ? 'Chọn nhanh' : 'Quick Cash'}
+                    {isKm ? 'ជ្រើសរើសរហ័ស' : 'Quick Cash'}
                   </span>
                 </div>
                 {cashPresets.length > 0 ? (
@@ -2203,7 +2198,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                           key={amt}
                           type="button"
                           onClick={() => handleSelectKhrPreset(amt)}
-                          className={`h-12 px-3 text-sm font-mono-num font-bold rounded-xl border transition-all duration-150 ease-out whitespace-nowrap ${
+                          className={`h-12 px-3 text-sm font-mono-num font-bold rounded-xl border transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap ${
                             isActivePreset
                               ? 'border-[#0D5C3E] bg-[#E6F2ED] text-[#0D5C3E] dark:border-[#10B981] dark:bg-[#064E3B] dark:text-[#D1FAE5]'
                               : 'border-stone-200 dark:border-[#24352C] bg-stone-50/70 dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] hover:border-[#0D5C3E] dark:hover:border-[#10B981] hover:bg-[#E6F2ED]/50 dark:hover:bg-[#1F3028]'
@@ -2216,8 +2211,8 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   </div>
                 ) : (
                   <p className="text-xs text-stone-500 dark:text-[#94A39B]">
-                    {isVi
-                      ? 'Bạn có thể thêm nút chọn nhanh trong Cài đặt.'
+                    {isKm
+                      ? 'អ្នកអាចបន្ថែមប៊ូតុងសាច់ប្រាក់រហ័សក្នុងការកំណត់។'
                       : 'Add custom quick-cash buttons in Settings.'}
                   </p>
                 )}
@@ -2232,7 +2227,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   className="h-11 w-full px-2 flex items-center justify-between text-xs font-semibold text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] rounded-lg hover:bg-stone-50 dark:hover:bg-[#18251F] transition-colors"
                 >
                   <span>
-                    {isVi ? 'Khách đưa thêm tiền USD ($)?' : 'Also received USD bills ($)?'}
+                    {isKm ? 'ទទួលបានប្រាក់ដុល្លារ ($) បន្ថែម?' : 'Also received USD bills ($)?'}
                     {cashCalc.usdReceived > 0 && !showUsdTender && (
                       <span className="ml-1.5 font-mono-num text-[#0D5C3E] dark:text-[#34D399]">
                         · {formatUsdClean(cashCalc.usdReceived)}
@@ -2265,7 +2260,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                           value={cashUsdInput}
                           onChange={(e) => setCashUsdInput(e.target.value)}
                           placeholder="0"
-                          aria-label={isVi ? 'Nhận USD ($)' : 'USD Received ($)'}
+                          aria-label={isKm ? 'ប្រាក់ USD ទទួលបាន ($)' : 'USD Received ($)'}
                           className="w-full h-11 pl-8 pr-9 text-sm font-mono-num font-bold text-stone-900 dark:text-[#F1F5F3] bg-white dark:bg-[#0B110E] border border-stone-200 dark:border-[#24352C] rounded-lg focus:outline-none focus:border-[#0D5C3E] dark:focus:border-[#10B981]"
                         />
                         {cashUsdInput && (
@@ -2285,7 +2280,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                             key={amt}
                             type="button"
                             onClick={() => handleQuickAddUsd(amt)}
-                            className="h-11 text-xs font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] rounded-lg transition-all duration-150 ease-out"
+                            className="h-11 text-xs font-mono-num font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] hover:border-[#0D5C3E] dark:hover:border-[#10B981] rounded-lg transition-all duration-150 ease-out active:scale-[0.96]"
                           >
                             +${amt}
                           </button>
@@ -2313,11 +2308,11 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 >
                   <div>
                     <span className="block text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5]">
-                      {isVi ? 'Tiền thối lại' : 'Change Due'}
+                      {isKm ? 'ប្រាក់អាប់' : 'Change Due'}
                     </span>
                     {cashCalc.changeDueKhr === 0 && cartTotal > 0 && (
                       <span className="text-[11px] text-emerald-700 dark:text-[#6EE7B7]">
-                        {isVi ? 'Khách đưa vừa đủ' : 'Exact amount received'}
+                        {isKm ? 'ទទួលបានប្រាក់គ្រប់ចំនួន' : 'Exact amount received'}
                       </span>
                     )}
                   </div>
@@ -2333,12 +2328,12 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   <div className="flex items-center gap-2 text-red-800 dark:text-red-200 min-w-0">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     <span className="text-xs font-semibold">
-                      {isVi ? 'Tiền mặt chưa đủ' : 'Insufficient cash'}
+                      {isKm ? 'សាច់ប្រាក់មិនទាន់គ្រប់' : 'Insufficient cash'}
                     </span>
                   </div>
                   <span className="font-mono-num text-sm font-bold text-red-700 dark:text-[#F87171] whitespace-nowrap">
-                    {isVi
-                      ? `Thiếu ${formatKhr(cashCalc.remainingDueKhr)}`
+                    {isKm
+                      ? `ខ្វះ ${formatKhr(cashCalc.remainingDueKhr)}`
                       : `Short by ${formatKhr(cashCalc.remainingDueKhr)}`}
                   </span>
                 </div>
@@ -2373,17 +2368,17 @@ export const SalesView: React.FC<SalesViewProps> = ({
                   !liveStockValidation.ok ||
                   (cartTotal > 0 && !cashCalc.isCovered)
                 }
-                className="h-12 flex-1 px-4 text-sm font-bold text-white dark:text-[#042419] bg-[#0D5C3E] hover:bg-[#0A4A31] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-xl transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                className="h-12 flex-1 px-4 text-sm font-bold text-white dark:text-[#042419] bg-[#0D5C3E] hover:bg-[#0A4A31] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-xl transition-all active:scale-[0.98] inline-flex items-center justify-center gap-2 whitespace-nowrap"
               >
                 {submitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    {isVi ? 'Đang hoàn tất...' : 'Completing Sale...'}
+                    {isKm ? 'កំពុងបញ្ចប់ការលក់...' : 'Completing Sale...'}
                   </>
                 ) : (
                   <>
                     <Check className="w-4 h-4" />
-                    {isVi ? 'Xác nhận & Hoàn tất đơn' : 'Confirm Payment & Complete Sale'}
+                    {isKm ? 'បញ្ចប់ការលក់' : 'Complete Sale'}
                   </>
                 )}
               </button>
@@ -2427,14 +2422,14 @@ export const SalesView: React.FC<SalesViewProps> = ({
             addEntryToCart(newProd.id, newProd.variants?.[0]?.id, 1);
           }
           setLastCompletedSale(null);
-          const displayName = isVi ? newProd.nameVi || newProd.name : newProd.name;
+          const displayName = getLocalizedName(newProd.name, newProd.nameVi);
           setToastMessage(
             canAddNow
-              ? isVi
-                ? `Đã đăng ký "${displayName}" và thêm vào giỏ POS.`
+              ? isKm
+                ? `បានចុះឈ្មោះ "${displayName}" និងបន្ថែមទៅក្នុងការកុម្ម៉ង់ POS ។`
                 : `Registered "${displayName}" and added to POS cart.`
-              : isVi
-              ? `Đã đăng ký "${displayName}" — sẵn sàng trong POS & Kho hàng.`
+              : isKm
+              ? `បានចុះឈ្មោះ "${displayName}" — អាចស្វែងរកបានក្នុង POS និងស្តុកទំនិញ។`
               : `Registered "${displayName}" — now searchable in POS & Inventory.`
           );
           window.setTimeout(() => setToastMessage(''), 4500);

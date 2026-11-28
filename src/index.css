@@ -3,9 +3,10 @@
 
 @layer base {
   :root {
-    --font-display: 'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
-    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-display: 'Bricolage Grotesque', 'Inter', system-ui, -apple-system, sans-serif;
+    --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
     color-scheme: light;
   }
 
@@ -14,6 +15,52 @@
     background-color: #f6f7f5;
     color: #1c1917;
     overflow-x: clip;
+  }
+
+  /* Khmer Localization: Battambang font + diacritic-safe line-heights (ស្រៈលើ / ស្រៈក្រោម) */
+  html[lang="km"] {
+    --font-display: 'Battambang', 'Inter', system-ui, -apple-system, sans-serif;
+    --font-sans: 'Battambang', 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Battambang', 'Inter', sans-serif;
+    line-height: 1.65;
+  }
+
+  html[lang="km"] body,
+  html[lang="km"] p,
+  html[lang="km"] li,
+  html[lang="km"] td,
+  html[lang="km"] dd {
+    line-height: 1.65;
+  }
+
+  html[lang="km"] h1,
+  html[lang="km"] h2,
+  html[lang="km"] h3,
+  html[lang="km"] .font-display {
+    font-family: 'Battambang', 'Inter', sans-serif;
+    line-height: 1.48;
+    letter-spacing: 0;
+  }
+
+  html[lang="km"] button,
+  html[lang="km"] a,
+  html[lang="km"] input,
+  html[lang="km"] select,
+  html[lang="km"] textarea,
+  html[lang="km"] label,
+  html[lang="km"] [role="tab"] {
+    line-height: 1.5;
+  }
+
+  /* Prevent Khmer upper/lower vowel diacritics from clipping inside single-line truncated elements */
+  html[lang="km"] .truncate {
+    padding-top: 0.08em;
+    padding-bottom: 0.08em;
+    line-height: 1.5;
+  }
+
+  html[lang="km"] .font-mono-num {
+    font-family: var(--font-mono), 'Battambang', sans-serif;
   }
 
   html.dark {
@@ -55,13 +102,17 @@
   button:not(:disabled) {
     transition-property: color, background-color, border-color, box-shadow, opacity, scale, translate, transform;
     transition-duration: 150ms;
-    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    transition-timing-function: var(--ease-smooth);
   }
 
   button:not(:disabled):active {
     scale: 0.97;
   }
 }
+
+/* ========================================================================== */
+/* 60fps GPU-Accelerated Motion Choreography (transform + opacity only)       */
+/* ========================================================================== */
 
 @keyframes jf-fade-in {
   from {
@@ -72,10 +123,21 @@
   }
 }
 
+@keyframes jf-view-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes jf-modal-in {
   from {
     opacity: 0;
-    transform: translateY(4px) scale(0.96);
+    transform: translate3d(0, 8px, 0) scale(0.96);
   }
   to {
     opacity: 1;
@@ -86,7 +148,7 @@
 @keyframes jf-sheet-up {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translate3d(0, 20px, 0);
   }
   to {
     opacity: 1;
@@ -97,7 +159,7 @@
 @keyframes jf-toast-in {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.96);
+    transform: translate3d(0, 12px, 0) scale(0.97);
   }
   to {
     opacity: 1;
@@ -105,19 +167,21 @@
   }
 }
 
-@keyframes jf-view-enter {
+@keyframes jf-toast-out {
   from {
-    opacity: 0;
+    opacity: 1;
+    transform: none;
   }
   to {
-    opacity: 1;
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.97);
   }
 }
 
 @keyframes jf-drawer-in {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translate3d(0, -6px, 0);
   }
   to {
     opacity: 1;
@@ -128,7 +192,18 @@
 @keyframes jf-popover-in {
   from {
     opacity: 0;
-    transform: scale(0.95);
+    transform: translate3d(0, -4px, 0) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes jf-cart-item-in {
+  from {
+    opacity: 0;
+    transform: translate3d(10px, 0, 0);
   }
   to {
     opacity: 1;
@@ -137,38 +212,49 @@
 }
 
 .animate-backdrop {
-  animation: jf-fade-in 180ms ease-out;
+  animation: jf-fade-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .animate-modal {
-  animation: jf-modal-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: jf-modal-in 190ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .animate-sheet-up {
-  animation: jf-sheet-up 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: jf-sheet-up 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .animate-toast {
-  animation: jf-toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: jf-toast-in 210ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.animate-toast-exit {
+  animation: jf-toast-out 170ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+/* Ends at transform: none so fixed modals/portals never clip */
 .animate-view-enter {
-  animation: jf-view-enter 180ms ease-out;
+  animation: jf-view-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .animate-drawer-in {
-  animation: jf-drawer-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: jf-drawer-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .animate-popover {
-  animation: jf-popover-in 150ms ease-out;
+  animation: jf-popover-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.animate-cart-item {
+  animation: jf-cart-item-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Tactile POS tile / card lift & glow */
 .pos-lift {
-  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
-    translate 150ms cubic-bezier(0.16, 1, 0.3, 1),
-    scale 150ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 150ms ease-out,
+  transition:
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    translate 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    scale 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
     border-color 150ms ease-out,
     background-color 150ms ease-out;
 }
@@ -176,21 +262,43 @@
 @media (hover: hover) and (pointer: fine) {
   .pos-lift:not(:disabled):hover {
     translate: 0 -2px;
+    box-shadow: 0 10px 24px -12px rgba(15, 92, 67, 0.22);
+  }
+
+  .dark .pos-lift:not(:disabled):hover {
+    box-shadow: 0 12px 28px -12px rgba(16, 185, 129, 0.2);
   }
 }
 
+.pos-lift:not(:disabled):active {
+  scale: 0.97;
+}
+
+/* Respect prefers-reduced-motion: disable translate/scale while keeping clean opacity fades */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  .animate-view-enter,
+  .animate-modal,
+  .animate-sheet-up,
+  .animate-toast,
+  .animate-drawer-in,
+  .animate-popover,
+  .animate-cart-item {
+    animation-name: jf-fade-in !important;
+    animation-duration: 120ms !important;
+    animation-timing-function: ease-out !important;
+  }
+
+  .animate-toast-exit {
+    animation-duration: 100ms !important;
+    transform: none !important;
   }
 
   button:not(:disabled):active,
-  .pos-lift:not(:disabled):hover {
+  .pos-lift:not(:disabled):hover,
+  .pos-lift:not(:disabled):active {
     scale: none !important;
     translate: none !important;
+    transform: none !important;
   }
 }
 

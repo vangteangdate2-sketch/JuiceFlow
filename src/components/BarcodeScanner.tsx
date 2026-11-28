@@ -28,7 +28,7 @@ export interface BarcodeScanResult {
 export interface BarcodeScannerProps {
   /** Whether global USB/Bluetooth HID keyboard-wedge capture is allowed (e.g. disabled while modals are open) */
   enabled: boolean;
-  isVi?: boolean;
+  isKm?: boolean;
   /** Controlled product search text shared with the POS catalog filter */
   searchValue: string;
   onSearchChange: (value: string) => void;
@@ -84,7 +84,7 @@ function playScanTone(success: boolean) {
 
 export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   enabled,
-  isVi = false,
+  isKm = false,
   searchValue,
   onSearchChange,
   onScan,
@@ -166,7 +166,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
         if (cancelled) return;
         const mapped = devices.map((d, idx) => ({
           id: d.id,
-          label: d.label || `${isVi ? 'Camera' : 'Camera'} ${idx + 1}`,
+          label: d.label || `${isKm ? 'កាមេរ៉ា' : 'Camera'} ${idx + 1}`,
         }));
         setCameras(mapped);
         if (mapped.length > 0 && !selectedCameraId) {
@@ -183,7 +183,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [cameraOpen, isVi, selectedCameraId]);
+  }, [cameraOpen, isKm, selectedCameraId]);
 
   // Start / stop live camera viewfinder
   useEffect(() => {
@@ -272,11 +272,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           const msg = err instanceof Error ? err.message : '';
           setCameraError(
             /permission|denied|notallowed/i.test(msg)
-              ? isVi
-                ? 'Chưa cấp quyền camera. Bạn vẫn có thể dùng máy quét USB/Bluetooth hoặc nhập mã thủ công bên dưới.'
+              ? isKm
+                ? 'មិនទាន់អនុញ្ញាតកាមេរ៉ា។ អ្នកនៅតែអាចប្រើម៉ាស៊ីនស្កេន USB/Bluetooth ឬវាយបាកូដខាងក្រោមបាន។'
                 : 'Camera permission denied. You can still use a USB/Bluetooth scanner or type the barcode below.'
-              : isVi
-                ? 'Không tìm thấy camera trên thiết bị này. Hãy dùng máy quét USB/Bluetooth hoặc nhập mã bên dưới.'
+              : isKm
+                ? 'រកមិនឃើញកាមេរ៉ានៅលើឧបករណ៍នេះទេ។ សូមប្រើម៉ាស៊ីនស្កេន USB/Bluetooth ឬវាយបាកូដខាងក្រោម។'
                 : 'No camera detected on this device. Use a USB/Bluetooth scanner or enter the barcode manually below.'
           );
         }
@@ -292,7 +292,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       window.clearTimeout(timer);
       void stopExisting();
     };
-  }, [cameraOpen, selectedCameraId, viewfinderId, dispatchScan, isVi]);
+  }, [cameraOpen, selectedCameraId, viewfinderId, dispatchScan, isKm]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
@@ -328,8 +328,8 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
   const sourceLabel = (source: BarcodeScanSource) => {
     if (source === 'hardware') return 'USB / BT';
-    if (source === 'camera') return isVi ? 'Camera' : 'Camera';
-    return isVi ? 'Nhập tay' : 'Manual';
+    if (source === 'camera') return isKm ? 'កាមេរ៉ា' : 'Camera';
+    return isKm ? 'វាយបញ្ចូល' : 'Manual';
   };
 
   return (
@@ -344,14 +344,14 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             onChange={(e) => onSearchChange(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             data-barcode-capture="true"
-            placeholder={isVi ? 'Tìm kiếm' : 'Search'}
+            placeholder={isKm ? 'ស្វែងរក...' : 'Search'}
             className="flex-1 min-w-0 h-full px-2.5 text-sm bg-transparent text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus:outline-none"
           />
           {searchValue && (
             <button
               type="button"
               onClick={() => onSearchChange('')}
-              aria-label={isVi ? 'Xóa tìm kiếm' : 'Clear search'}
+              aria-label={isKm ? 'សម្អាតការស្វែងរក' : 'Clear search'}
               className="inline-flex items-center justify-center w-11 h-11 text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-md shrink-0"
             >
               <X className="w-4 h-4" />
@@ -362,7 +362,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
               type="button"
               onClick={() => setCameraOpen((prev) => !prev)}
               aria-expanded={cameraOpen}
-              className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[8px] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
+              className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[8px] transition-all duration-150 active:scale-[0.97] whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
                 cameraOpen
                   ? 'bg-stone-800 text-white hover:bg-stone-900 dark:bg-[#1F3028] dark:text-[#F1F5F3] dark:hover:bg-[#2A3F35]'
                   : 'bg-[#0D5C3E] text-white hover:bg-[#0A4A31] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399]'
@@ -371,11 +371,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
               <ScanBarcode className="w-4 h-4 shrink-0" />
               <span>
                 {cameraOpen
-                  ? isVi
-                    ? 'Đóng'
+                  ? isKm
+                    ? 'បិទ'
                     : 'Close'
-                  : isVi
-                    ? 'Quét'
+                  : isKm
+                    ? 'ស្កេន'
                     : 'Scan'}
               </span>
             </button>
@@ -389,14 +389,14 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           aria-label={soundEnabled ? 'Mute scan beep' : 'Enable scan beep'}
           title={
             soundEnabled
-              ? isVi
-                ? 'Tắt âm thanh báo quét'
+              ? isKm
+                ? 'បិទសំឡេងស្កេន'
                 : 'Mute scan beep'
-              : isVi
-                ? 'Bật âm thanh báo quét'
+              : isKm
+                ? 'បើកសំឡេងស្កេន'
                 : 'Enable scan beep'
           }
-          className={`inline-flex items-center justify-center h-12 w-12 rounded-[10px] border transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
+          className={`inline-flex items-center justify-center h-12 w-12 rounded-[10px] border transition-all duration-150 active:scale-[0.96] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
             soundEnabled
               ? 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#F1F5F3] hover:bg-stone-50 dark:hover:bg-[#1F3028] hover:text-stone-900'
               : 'border-stone-200 dark:border-[#24352C] bg-stone-50 dark:bg-[#131D18] text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3]'
@@ -420,11 +420,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             type="button"
             onClick={() => setHardwareEnabled((prev) => !prev)}
             title={
-              isVi
-                ? 'Bật/tắt nhận tín hiệu trực tiếp từ máy quét mã vạch USB hoặc Bluetooth'
+              isKm
+                ? 'បើក/បិទការទទួលសញ្ញាពីម៉ាស៊ីនស្កេនបាកូដ USB ឬ Bluetooth'
                 : 'Toggle external USB / Bluetooth barcode scanner listening'
             }
-            className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-xs font-medium rounded-full border transition-colors whitespace-nowrap shrink-0 ${
+            className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-xs font-medium rounded-full border transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0 ${
               hardwareEnabled
                 ? 'border-[#0D5C3E]/15 dark:border-[#10B981]/35 bg-[#E6F2ED] dark:bg-[#064E3B] text-[#0D5C3E] dark:text-[#6EE7B7] hover:bg-[#D9ECE4] dark:hover:bg-[#065F46]'
                 : 'border-stone-200 dark:border-[#24352C] bg-stone-100 dark:bg-[#18251F] text-stone-500 dark:text-[#94A39B] hover:text-stone-800 dark:hover:text-[#F1F5F3]'
@@ -439,11 +439,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             <Usb className="w-3.5 h-3.5 shrink-0 opacity-85" />
             <span>
               {hardwareEnabled
-                ? isVi
-                  ? 'USB/BT Sẵn sàng'
+                ? isKm
+                  ? 'USB/BT រួចរាល់'
                   : 'USB/BT Ready'
-                : isVi
-                  ? 'USB/BT Tạm dừng'
+                : isKm
+                  ? 'USB/BT បានផ្អាក'
                   : 'USB/BT Paused'}
             </span>
           </button>
@@ -458,7 +458,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       {lastScan && (
         <div
           role="status"
-          className={`flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border text-xs ${
+          className={`animate-drawer-in flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border text-xs ${
             lastScan.ok
               ? 'bg-emerald-50/70 dark:bg-[#064E3B]/50 border-emerald-200 dark:border-[#10B981]/35 text-emerald-900 dark:text-[#D1FAE5]'
               : 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-500/35 text-red-800 dark:text-red-200'
@@ -485,7 +485,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           <button
             type="button"
             onClick={() => setLastScan(null)}
-            aria-label={isVi ? 'Đóng thông báo' : 'Dismiss'}
+            aria-label={isKm ? 'បិទការជូនដំណឹង' : 'Dismiss'}
             className="w-9 h-9 inline-flex items-center justify-center rounded-md opacity-70 hover:opacity-100 shrink-0"
           >
             <X className="w-3.5 h-3.5" />
@@ -495,12 +495,12 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
       {/* Expandable Live Camera Scanner Panel (Inline above product grid so cart stays visible) */}
       {cameraOpen && (
-        <div className="border-t border-stone-200 dark:border-[#24352C] pt-3.5 space-y-3">
+        <div className="animate-drawer-in border-t border-stone-200 dark:border-[#24352C] pt-3.5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs text-stone-700 dark:text-[#94A39B]">
               <Camera className="w-4 h-4 text-[#0F5C43] dark:text-[#10B981] shrink-0" />
               <span className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                {isVi ? 'Máy quét mã vạch bằng Camera' : 'Live Camera Barcode Scanner'}
+                {isKm ? 'ម៉ាស៊ីនស្កេនបាកូដតាមកាមេរ៉ា' : 'Live Camera Barcode Scanner'}
               </span>
               {sessionScanCount > 0 && (
                 <>
@@ -508,7 +508,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                     ·
                   </span>
                   <span className="font-mono-num text-[#0F5C43] dark:text-[#34D399] font-semibold">
-                    {sessionScanCount} {isVi ? 'món đã thêm' : 'added'}
+                    {sessionScanCount} {isKm ? 'មុខបានបន្ថែម' : 'added'}
                   </span>
                 </>
               )}
@@ -526,7 +526,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                       : 'text-stone-600 dark:text-[#94A39B]'
                   }`}
                 >
-                  {isVi ? 'Quét liên tục' : 'Multi-Scan'}
+                  {isKm ? 'ស្កេនបន្តបន្ទាប់' : 'Multi-Scan'}
                 </button>
                 <button
                   type="button"
@@ -537,7 +537,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                       : 'text-stone-600 dark:text-[#94A39B]'
                   }`}
                 >
-                  {isVi ? 'Quét 1 lần' : 'Single'}
+                  {isKm ? 'ស្កេនម្ដង' : 'Single'}
                 </button>
               </div>
 
@@ -548,7 +548,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                   className="inline-flex items-center gap-1.5 h-11 px-3 text-xs font-medium text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg whitespace-nowrap"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  {isVi ? 'Đổi camera' : 'Switch'}
+                  {isKm ? 'ប្ដូរកាមេរ៉ា' : 'Switch'}
                 </button>
               )}
             </div>
@@ -562,7 +562,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-stone-300 text-xs px-4 text-center">
                   <Camera className="w-6 h-6 text-stone-400" />
                   <span>
-                    {isVi ? 'Đang khởi động camera...' : 'Starting camera viewfinder...'}
+                    {isKm ? 'កំពុងបើកកាមេរ៉ា...' : 'Starting camera viewfinder...'}
                   </span>
                 </div>
               )}
@@ -579,11 +579,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
               <div className="space-y-1.5 text-xs text-stone-600 dark:text-[#94A39B]">
                 <p className="font-semibold text-stone-900 dark:text-[#F1F5F3] flex items-center gap-1.5">
                   <Keyboard className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#10B981]" />
-                  {isVi ? 'Nhập mã nhanh hoặc máy quét rời' : 'Manual Entry or USB/BT Scan'}
+                  {isKm ? 'វាយបញ្ចូលបាកូដ ឬស្កេន USB/BT' : 'Manual Entry or USB/BT Scan'}
                 </p>
                 <p className="leading-relaxed">
-                  {isVi
-                    ? 'Hỗ trợ mã vạch sản phẩm (EAN-13, UPC, Code-128), mã biến thể kích cỡ và mã thùng.'
+                  {isKm
+                    ? 'គាំទ្របាកូដ EAN-13, UPC, Code-128, QR, កូដទំហំ និងបាកូដកេស។'
                     : 'Supports EAN-13, UPC, Code-128, QR, size-variant codes, and carton barcodes.'}
                 </p>
               </div>
@@ -600,9 +600,9 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 <button
                   type="submit"
                   disabled={!manualCode.trim()}
-                  className="w-full h-11 px-3 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                  className="w-full h-11 px-3 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                 >
-                  {isVi ? 'Thêm vào giỏ hàng' : 'Add to Cart'}
+                  {isKm ? 'បន្ថែមទៅកន្ត្រក' : 'Add to Cart'}
                 </button>
               </form>
             </div>

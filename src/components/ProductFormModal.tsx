@@ -154,7 +154,7 @@ const CollapsibleFieldset: React.FC<CollapsibleFieldsetProps> = ({
       </button>
 
       {open && (
-        <div id={`${id}-panel`} className={bodyClass}>
+        <div id={`${id}-panel`} className={`animate-drawer-in ${bodyClass}`}>
           {children}
         </div>
       )}
@@ -208,7 +208,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   onRestockExistingIngredient,
   onClose,
 }) => {
-  const isVi = settings.language === 'vi';
+  const isKm = settings.language === 'km';
+  const khmerRe = /[\u1780-\u17FF]/;
+  const displayLocalName = (primary: string, secondary?: string) =>
+    isKm && secondary && khmerRe.test(secondary) ? secondary : primary;
   const [internalEditingProduct, setInternalEditingProduct] = useState<Product | null>(null);
   const activeEditingProduct = internalEditingProduct ?? editingProduct;
   const isEditing = Boolean(activeEditingProduct);
@@ -564,8 +567,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const draftProductForLabels = useMemo<Product>(
     () => ({
       id: editingProduct?.id || 'draft',
-      name: name.trim() || (isVi ? 'Sản phẩm mới' : 'New Product'),
-      nameVi: nameVi.trim() || name.trim() || 'Sản phẩm mới',
+      name: name.trim() || (isKm ? 'ផលិតផលថ្មី' : 'New Product'),
+      nameVi: nameVi.trim() || name.trim() || 'ផលិតផលថ្មី',
       brand: brand.trim(),
       category,
       productType,
@@ -602,7 +605,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       supplier,
       recipe,
       variants,
-      isVi,
+      isKm,
     ]
   );
 
@@ -611,34 +614,30 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const validateStep = (step: WizardStep): string | null => {
     if (step === 1) {
       if (!name.trim()) {
-        return isVi
-          ? 'Vui lòng nhập tên sản phẩm trước khi tiếp tục.'
+        return isKm
+          ? 'សូមបញ្ចូលឈ្មោះផលិតផលមុនពេលបន្ត។'
           : 'Please enter a product name before continuing.';
       }
       if (!category) {
-        return isVi ? 'Vui lòng chọn danh mục sản phẩm.' : 'Please select a product category.';
+        return isKm ? 'សូមជ្រើសរើសប្រភេទផលិតផល។' : 'Please select a product category.';
       }
       if (duplicateGuard) {
         const existingName =
           duplicateGuard.kind === 'product'
-            ? isVi
-              ? duplicateGuard.product.nameVi || duplicateGuard.product.name
-              : duplicateGuard.product.name
-            : isVi
-              ? duplicateGuard.ingredient.nameVi || duplicateGuard.ingredient.name
-              : duplicateGuard.ingredient.name;
-        return isVi
-          ? `"${existingName}" đã tồn tại. Hãy chỉnh sửa hoặc nhập thêm kho cho mục này.`
+            ? displayLocalName(duplicateGuard.product.name, duplicateGuard.product.nameVi)
+            : displayLocalName(duplicateGuard.ingredient.name, duplicateGuard.ingredient.nameVi);
+        return isKm
+          ? `"${existingName}" មានរួចហើយ។ សូមកែប្រែ ឬបញ្ចូលស្តុកបន្ថែមជំនួសវិញ។`
           : `"${existingName}" already exists. Edit or restock the existing item instead.`;
       }
       if (unitBarcodeConflicts.length > 0) {
         const first = unitBarcodeConflicts[0];
         return first.isInternalDuplicate
-          ? isVi
-            ? `Mã vạch "${first.code}" bị lặp lại trên sản phẩm này.`
+          ? isKm
+            ? `បាកូដ "${first.code}" ត្រូវបានបញ្ចូលស្ទួនលើផលិតផលនេះ។`
             : `Barcode "${first.code}" is entered more than once on this product.`
-          : isVi
-            ? `Mã vạch "${first.code}" đã thuộc về "${first.existingProductName}".`
+          : isKm
+            ? `បាកូដ "${first.code}" ត្រូវបានប្រើសម្រាប់ "${first.existingProductName}" រួចហើយ។`
             : `Barcode "${first.code}" is already assigned to "${first.existingProductName}".`;
       }
       return null;
@@ -649,21 +648,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         for (let i = 0; i < variants.length; i++) {
           const v = variants[i];
           if (!v.name.trim()) {
-            return isVi
-              ? `Vui lòng nhập tên kích cỡ cho dòng thứ ${i + 1}.`
+            return isKm
+              ? `សូមបញ្ចូលឈ្មោះទំហំសម្រាប់ជួរទី ${i + 1}។`
               : `Please enter a size name for variant #${i + 1}.`;
           }
           if (!Number.isFinite(Number(v.priceKhr)) || Number(v.priceKhr) <= 0) {
-            return isVi
-              ? `Vui lòng nhập giá bán hợp lệ (lớn hơn 0) cho cỡ "${v.name.trim()}".`
+            return isKm
+              ? `សូមបញ្ចូលតម្លៃលក់ (> 0 រៀល) សម្រាប់ "${v.name.trim()}"។`
               : `Please enter a valid selling price (> 0 KHR) for "${v.name.trim()}".`;
           }
         }
       } else {
         const parsed = Number(priceKhr);
         if (priceKhr.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) {
-          return isVi
-            ? 'Vui lòng nhập giá bán (KHR) lớn hơn 0 trước khi tiếp tục.'
+          return isKm
+            ? 'សូមបញ្ចូលតម្លៃលក់ (KHR) ធំជាង 0 មុនពេលបន្ត។'
             : 'Please enter a selling price in KHR greater than 0 before continuing.';
         }
       }
@@ -671,11 +670,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       if (barcodeConflicts.length > 0) {
         const first = barcodeConflicts[0];
         return first.isInternalDuplicate
-          ? isVi
-            ? `Mã vạch "${first.code}" bị trùng lặp trong cùng sản phẩm.`
+          ? isKm
+            ? `បាកូដ "${first.code}" ស្ទួនគ្នាក្នុងផលិតផលតែមួយ។`
             : `Barcode "${first.code}" is entered more than once on this product.`
-          : isVi
-            ? `Mã vạch "${first.code}" đã được gắn cho "${first.existingProductName}".`
+          : isKm
+            ? `បាកូដ "${first.code}" ត្រូវបានភ្ជាប់ទៅ "${first.existingProductName}" រួចហើយ។`
             : `Barcode "${first.code}" is already assigned to "${first.existingProductName}".`;
       }
       return null;
@@ -744,13 +743,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setStepError('');
       setSaveError('');
       showNoticeToast({
-        message: isVi
-          ? `Đã chuyển sang chỉnh sửa "${target.nameVi || target.name}"`
+        message: isKm
+          ? `បានប្ដូរទៅកែប្រែ "${displayLocalName(target.name, target.nameVi)}"`
           : `Switched to editing "${target.name}"`,
         detail:
           target.productType === 'PREPARED_TO_ORDER'
-            ? isVi
-              ? 'Mở Bước 2 nếu bạn muốn thêm kích cỡ mới cho món này.'
+            ? isKm
+              ? 'បើកជំហានទី ២ ដើម្បីបន្ថែម ឬកែប្រែទំហំកែវ។'
               : 'Open Step 2 to add or update size variants.'
             : undefined,
       });
@@ -804,7 +803,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       });
       if (!res.ok || !res.category) {
         setInlineCategoryError(
-          res.error || (isVi ? 'Không thể tạo danh mục.' : 'Could not create category.')
+          res.error || (isKm ? 'មិនអាចបង្កើតប្រភេទបានទេ។' : 'Could not create category.')
         );
         return;
       }
@@ -876,11 +875,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       const first = barcodeConflicts[0];
       setSaveError(
         first.isInternalDuplicate
-          ? isVi
-            ? `Mã vạch "${first.code}" bị lặp lại nhiều lần trong cùng sản phẩm.`
+          ? isKm
+            ? `បាកូដ "${first.code}" ត្រូវបានបញ្ចូលស្ទួនលើផលិតផលនេះ។`
             : `Barcode "${first.code}" is entered more than once on this product.`
-          : isVi
-            ? `Mã vạch "${first.code}" đã thuộc về sản phẩm "${first.existingProductName}".`
+          : isKm
+            ? `បាកូដ "${first.code}" ត្រូវបានប្រើសម្រាប់ "${first.existingProductName}" រួចហើយ។`
             : `Barcode "${first.code}" is already assigned to "${first.existingProductName}".`
       );
       return;
@@ -958,8 +957,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
       if (mode === 'add_another' && !isEditing) {
         showNoticeToast({
-          message: isVi ? `Đã lưu "${trimmedName}"` : `Saved "${trimmedName}"`,
-          detail: isVi ? 'Sẵn sàng thêm sản phẩm tiếp theo' : 'Ready for next product',
+          message: isKm ? `បានរក្សាទុក "${trimmedName}"` : `Saved "${trimmedName}"`,
+          detail: isKm ? 'រួចរាល់សម្រាប់បន្ថែមផលិតផលបន្ទាប់' : 'Ready for next product',
         });
         // Reset per-product fields while keeping smart defaults (productType, category, unit, reorderLevel, supplier, active)
         setName('');
@@ -1213,8 +1212,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       const prefill = await lookupOpenFoodFactsV3(code);
       if (!prefill) {
         setExternalLookupNote(
-          isVi
-            ? 'Không tìm thấy trên Open Food Facts — bạn có thể nhập thông tin thủ công bên trên.'
+          isKm
+            ? 'រកមិនឃើញនៅលើ Open Food Facts — សូមបញ្ចូលព័ត៌មានផលិតផលដោយដៃខាងលើ។'
             : 'Not found on Open Food Facts — fill in product details manually above.'
         );
         return;
@@ -1235,8 +1234,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setBarcodeSource('open_food_facts');
       setPrefillBanner('off_prefill');
       setExternalLookupNote(
-        isVi
-          ? `Đã điền gợi ý "${prefill.name}" từ Open Food Facts. Hãy nhập giá bán KHR ở Bước 2.`
+        isKm
+          ? `បានបំពេញព័ត៌មាន "${prefill.name}" ពី Open Food Facts។ សូមបញ្ចូលតម្លៃលក់ KHR នៅជំហានទី ២។`
           : `Prefilled "${prefill.name}" from Open Food Facts. Enter your local KHR price in Step 2.`
       );
     } finally {
@@ -1267,24 +1266,24 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const wizardSteps: { step: WizardStep; shortLabel: string; fullLabel: string }[] = [
     {
       step: 1,
-      shortLabel: isVi ? 'Cơ bản' : 'Basic Info',
-      fullLabel: isVi ? 'Thông tin & Ảnh' : 'Basic Info',
+      shortLabel: isKm ? 'ព័ត៌មាន' : 'Basic Info',
+      fullLabel: isKm ? 'ព័ត៌មាន និងរូបភាព' : 'Basic Info',
     },
     {
       step: 2,
-      shortLabel: isVi ? 'Giá & Cỡ' : 'Pricing',
-      fullLabel: isVi ? 'Giá bán & Kích cỡ' : 'Pricing & Variants',
+      shortLabel: isKm ? 'តម្លៃ' : 'Pricing',
+      fullLabel: isKm ? 'តម្លៃ និងទំហំ' : 'Pricing & Variants',
     },
     {
       step: 3,
-      shortLabel: isVi ? 'Kho & Công thức' : 'Recipe & Stock',
+      shortLabel: isKm ? 'រូបមន្ត/ស្តុក' : 'Recipe & Stock',
       fullLabel:
         productType === 'PREPARED_TO_ORDER'
-          ? isVi
-            ? 'Công thức & Giá vốn'
+          ? isKm
+            ? 'រូបមន្ត និងថ្លៃដើម'
             : 'Recipe & Stock'
-          : isVi
-            ? 'Tồn kho & Giá vốn'
+          : isKm
+            ? 'ស្តុក និងថ្លៃដើម'
             : 'Recipe & Stock',
     },
   ];
@@ -1325,12 +1324,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   </h2>
                   <InfoHint
                     compact
-                    label={isVi ? 'Hướng dẫn thêm sản phẩm 3 bước' : 'About 3-step product wizard'}
+                    label={isKm ? 'អំពីការបន្ថែមផលិតផល ៣ ជំហាន' : 'About 3-step product wizard'}
                     text={
-                      isVi
+                      isKm
                         ? isEditing
-                          ? 'Bạn có thể bấm trực tiếp vào bất kỳ bước nào bên dưới để chỉnh sửa nhanh.'
-                          : 'Hoàn thành 3 bước: Thông tin cơ bản, Giá bán & Kích cỡ, và Công thức / Tồn kho.'
+                          ? 'អ្នកអាចចុចលើជំហានណាមួយខាងក្រោមដើម្បីកែប្រែបានភ្លាមៗ។'
+                          : 'បំពេញតាម ៣ ជំហាន៖ ព័ត៌មានមូលដ្ឋាន តម្លៃលក់ និងរូបមន្ត/ស្តុក។'
                         : isEditing
                           ? 'Jump directly to any step tab below to edit details without clicking through sequentially.'
                           : 'Follow the 3 steps to set up basic info, selling prices, and recipe or stock tracking.'
@@ -1356,7 +1355,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
             {/* 3-Step Interactive Progress Header (44px+ touch targets) */}
             <nav
-              aria-label={isVi ? 'Các bước thiết lập sản phẩm' : 'Product setup steps'}
+              aria-label={isKm ? 'ជំហានកំណត់ផលិតផល' : 'Product setup steps'}
               className="grid grid-cols-3 border-t border-stone-100 dark:border-[#1F3028] px-2 sm:px-4"
             >
               {wizardSteps.map(({ step, shortLabel, fullLabel }) => {
@@ -1409,21 +1408,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     <p className="font-semibold">
                       {stepError ||
                         saveError ||
-                        (isVi
-                          ? 'Phát hiện mã vạch trùng lặp đang hoạt động'
+                        (isKm
+                          ? 'រកឃើញបាកូដស្ទួនដែលកំពុងប្រើប្រាស់'
                           : 'Duplicate active barcode detected')}
                     </p>
                     {!stepError &&
                       barcodeConflicts.map((c, idx) => (
                         <p key={`${c.code}-${idx}`} className="font-mono-num">
                           {c.isInternalDuplicate
-                            ? isVi
-                              ? `Mã "${c.code}" xuất hiện hơn 1 lần trên sản phẩm này.`
+                            ? isKm
+                              ? `កូដ "${c.code}" ត្រូវបានបញ្ចូលស្ទួនលើផលិតផលនេះ។`
                               : `"${c.code}" is entered more than once on this product.`
-                            : isVi
-                              ? `Mã "${c.code}" đang được gắn cho "${c.existingProductName}"${
+                            : isKm
+                              ? `កូដ "${c.code}" ត្រូវបានប្រើសម្រាប់ "${c.existingProductName}"${
                                   c.existingVariantName ? ` (${c.existingVariantName})` : ''
-                                }.`
+                                } រួចហើយ។`
                               : `"${c.code}" is already assigned to "${c.existingProductName}"${
                                   c.existingVariantName ? ` (${c.existingVariantName})` : ''
                                 }.`}
@@ -1452,20 +1451,20 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       <div className="space-y-0.5">
                         <p className="font-semibold text-stone-900 dark:text-[#F1F5F3]">
                           {prefillBanner === 'off_prefill'
-                            ? isVi
-                              ? 'Đã điền thông tin tham khảo từ Open Food Facts'
+                            ? isKm
+                              ? 'បានបំពេញព័ត៌មានផលិតផលពី Open Food Facts'
                               : 'Product details prefilled from Open Food Facts'
-                            : isVi
-                              ? `Đăng ký sản phẩm mới cho mã vạch ${barcode}`
+                            : isKm
+                              ? `ចុះឈ្មោះផលិតផលថ្មីសម្រាប់បាកូដ ${barcode}`
                               : `Registering new product for barcode ${barcode}`}
                         </p>
                         <p className="text-stone-600 dark:text-[#D5DFDA]">
                           {prefillBanner === 'off_prefill'
-                            ? isVi
-                              ? 'Chỉ tự động gợi ý tên, thương hiệu và danh mục. Bạn sẽ nhập giá bán KHR ở Bước 2 và tồn kho ở Bước 3.'
+                            ? isKm
+                              ? 'បានបំពេញតែឈ្មោះ ម៉ាក និងប្រភេទប៉ុណ្ណោះ។ សូមបញ្ចូលតម្លៃលក់ KHR នៅជំហានទី ២ និងស្តុកនៅជំហានទី ៣។'
                               : 'Only name, brand, and category were prefilled. Enter your selling price in Step 2 and stock in Step 3.'
-                            : isVi
-                              ? 'Không tìm thấy trong danh mục ngoài — hãy nhập tên sản phẩm bên dưới, sau đó nhập giá và tồn kho ở các bước tiếp theo.'
+                            : isKm
+                              ? 'រកមិនឃើញក្នុងបញ្ជីខាងក្រៅ — សូមបញ្ចូលព័ត៌មានខាងក្រោម រួចកំណត់តម្លៃ និងស្តុកនៅជំហានបន្ទាប់។'
                               : 'Not found in external food catalog — enter product details below, then set local price and stock in the next steps.'}
                         </p>
                       </div>
@@ -1477,7 +1476,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     {/* Left: Name, Category, Item Type */}
                     <fieldset className="lg:col-span-7 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between">
                       <legend className="sr-only">
-                        {isVi ? 'Thông tin cơ bản' : 'Basic Information'}
+                        {isKm ? 'ព័ត៌មានមូលដ្ឋាន' : 'Basic Information'}
                       </legend>
 
                       <div className="space-y-4">
@@ -1487,7 +1486,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               htmlFor="pf-name"
                               className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                             >
-                              {isVi ? 'Tên sản phẩm' : 'Product Name'} *
+                              {isKm ? 'ឈ្មោះផលិតផល' : 'Product Name'} *
                             </label>
                             <input
                               id="pf-name"
@@ -1500,8 +1499,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 if (stepError) setStepError('');
                               }}
                               placeholder={
-                                isVi
-                                  ? 'VD: Nước cam tươi, Dasani 500ml'
+                                isKm
+                                  ? 'ឧ. ទឹកក្រូចស្រស់, Dasani 500ml'
                                   : 'e.g. Fresh Orange Juice, Dasani 500ml'
                               }
                               className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
@@ -1530,16 +1529,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             >
                               {productCategories.map((c) => (
                                 <option key={c.id} value={c.id}>
-                                  {getCategoryDisplayName(c, isVi)}
+                                  {getCategoryDisplayName(c, isKm)}
                                 </option>
                               ))}
                               <option value={NEW_CATEGORY_SENTINEL}>
-                                {isVi ? '+ Thêm danh mục mới...' : '+ New Category...'}
+                                {isKm ? '+ បង្កើតប្រភេទថ្មី...' : '+ New Category...'}
                               </option>
                             </select>
 
                             {creatingCategory && (
-                              <div className="mt-2 p-2.5 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2">
+                              <div className="animate-drawer-in mt-2 p-2.5 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2">
                                 <div className="flex items-center gap-1.5">
                                   <input
                                     type="text"
@@ -1557,7 +1556,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                         setCreatingCategory(false);
                                       }
                                     }}
-                                    placeholder={isVi ? 'Tên danh mục mới...' : 'New category name...'}
+                                    placeholder={isKm ? 'ឈ្មោះប្រភេទថ្មី...' : 'New category name...'}
                                     autoFocus
                                     className="flex-1 min-w-0 h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3]"
                                   />
@@ -1567,7 +1566,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                     onClick={() => void handleCreateInlineCategory()}
                                     className="h-11 px-3 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] disabled:opacity-50 rounded-lg shrink-0"
                                   >
-                                    {isVi ? 'Lưu' : 'Add'}
+                                    {isKm ? 'បន្ថែម' : 'Add'}
                                   </button>
                                   <button
                                     type="button"
@@ -1596,18 +1595,24 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         {duplicateGuard && (
                           <div
                             role="alert"
-                            className="p-3.5 rounded-xl border border-amber-300/90 dark:border-amber-500/45 bg-amber-50/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 space-y-2.5 animate-fade-in"
+                            className="p-3.5 rounded-xl border border-amber-300/90 dark:border-amber-500/45 bg-amber-50/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 space-y-2.5 animate-drawer-in"
                           >
                             <div className="flex items-start gap-2.5">
                               <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                               <div className="min-w-0 flex-1 space-y-0.5">
                                 <p className="text-xs sm:text-[13px] font-bold text-amber-950 dark:text-amber-100">
-                                  {isVi
+                                  {isKm
                                     ? `"${
                                         duplicateGuard.kind === 'product'
-                                          ? duplicateGuard.product.nameVi || duplicateGuard.product.name
-                                          : duplicateGuard.ingredient.nameVi || duplicateGuard.ingredient.name
-                                      }" đã tồn tại`
+                                          ? displayLocalName(
+                                              duplicateGuard.product.name,
+                                              duplicateGuard.product.nameVi
+                                            )
+                                          : displayLocalName(
+                                              duplicateGuard.ingredient.name,
+                                              duplicateGuard.ingredient.nameVi
+                                            )
+                                      }" មានរួចហើយ`
                                     : `"${
                                         duplicateGuard.kind === 'product'
                                           ? duplicateGuard.product.name
@@ -1617,18 +1622,18 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 <p className="text-[11px] text-amber-900/85 dark:text-amber-200/85 leading-relaxed">
                                   {duplicateGuard.kind === 'product' ? (
                                     duplicateGuard.reason === 'barcode' ? (
-                                      isVi ? (
-                                        `Mã vạch ${duplicateGuard.matchedCode} đã gắn cho sản phẩm này. Hãy chỉnh sửa hoặc nhập thêm kho thay vì tạo trùng.`
+                                      isKm ? (
+                                        `បាកូដ ${duplicateGuard.matchedCode} ត្រូវបានភ្ជាប់ទៅទំនិញនេះរួចហើយ។ សូមកែប្រែ ឬបញ្ចូលស្តុកបន្ថែមជំនួសការបង្កើតស្ទួន។`
                                       ) : (
                                         `Barcode ${duplicateGuard.matchedCode} is already assigned to this item. Edit or restock it instead of creating a duplicate.`
                                       )
                                     ) : duplicateGuard.product.productType === 'PREPARED_TO_ORDER' ? (
-                                      isVi ? (
+                                      isKm ? (
                                         `${t.productTypes[duplicateGuard.product.productType]}${
                                           duplicateGuard.product.variants.length > 0
-                                            ? ` · ${duplicateGuard.product.variants.length} kích cỡ`
+                                            ? ` · ${duplicateGuard.product.variants.length} ទំហំ`
                                             : ''
-                                        } — Muốn thêm cỡ mới? Hãy chỉnh sửa sản phẩm hiện có thay vì tạo trùng.`
+                                        } — ចង់បន្ថែមទំហំថ្មី? សូមកែប្រែផលិតផលដែលមានស្រាប់ជំនួសការបង្កើតស្ទួន។`
                                       ) : (
                                         `${t.productTypes[duplicateGuard.product.productType]}${
                                           duplicateGuard.product.variants.length > 0
@@ -1636,11 +1641,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                             : ''
                                         } — Adding a new size? Edit the existing item instead of duplicating.`
                                       )
-                                    ) : isVi ? (
-                                      `${t.productTypes[duplicateGuard.product.productType]} · Hiện còn ${formatQty(
+                                    ) : isKm ? (
+                                      `${t.productTypes[duplicateGuard.product.productType]} · ស្តុកបច្ចុប្បន្ន ${formatQty(
                                         duplicateGuard.product.stockQty,
                                         duplicateGuard.product.unit
-                                      )} — Chỉnh sửa hoặc nhập thêm kho để không bị tách tồn kho.`
+                                      )} — កែប្រែ ឬបញ្ចូលស្តុកបន្ថែមដើម្បីកុំឱ្យបែកស្តុក។`
                                     ) : (
                                       `${t.productTypes[duplicateGuard.product.productType]} · Currently ${formatQty(
                                         duplicateGuard.product.stockQty,
@@ -1648,16 +1653,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                       )} in stock — Edit or restock the existing record so stock stays unified.`
                                     )
                                   ) : duplicateGuard.reason === 'barcode' ? (
-                                    isVi ? (
-                                      `Mã vạch ${duplicateGuard.matchedCode} đã được gắn cho nguyên liệu này trong kho. Hãy chỉnh sửa hoặc nhập thêm kho thay vì tạo trùng.`
+                                    isKm ? (
+                                      `បាកូដ ${duplicateGuard.matchedCode} ត្រូវបានចុះបញ្ជីសម្រាប់វត្ថុធាតុដើមនេះរួចហើយ។ សូមកែប្រែ ឬបញ្ចូលស្តុកបន្ថែមជំនួសការបង្កើតស្ទួន។`
                                     ) : (
                                       `Barcode ${duplicateGuard.matchedCode} is already registered to this Raw Ingredient in inventory. Edit or restock it instead of creating a duplicate.`
                                     )
-                                  ) : isVi ? (
-                                    `Nguyên liệu trong kho · Hiện còn ${formatQty(
+                                  ) : isKm ? (
+                                    `វត្ថុធាតុដើមក្នុងស្តុក · បច្ចុប្បន្ន ${formatQty(
                                       duplicateGuard.ingredient.stockQty,
                                       duplicateGuard.ingredient.unit
-                                    )} — Chỉnh sửa hoặc nhập thêm kho cho mục này.`
+                                    )} — កែប្រែ ឬបញ្ចូលស្តុកបន្ថែមជំនួសវិញ។`
                                   ) : (
                                     `Raw Ingredient in inventory · Currently ${formatQty(
                                       duplicateGuard.ingredient.stockQty,
@@ -1675,7 +1680,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   className="h-10 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
-                                  {isVi ? 'Chỉnh sửa mục này' : 'Edit Existing Item'}
+                                  {isKm ? 'កែប្រែទំនិញដែលមានស្រាប់' : 'Edit Existing Item'}
                                 </button>
                               )}
                               {((duplicateGuard.kind === 'product' && Boolean(onRestockExisting)) ||
@@ -1687,7 +1692,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   className="h-10 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-950 dark:text-amber-100 bg-white dark:bg-[#18251F] border border-amber-300 dark:border-amber-500/50 hover:bg-amber-100/70 dark:hover:bg-[#1F3028] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                                 >
                                   <PackagePlus className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
-                                  {isVi ? 'Nhập kho mục này' : 'Restock Existing'}
+                                  {isKm ? 'បញ្ចូលស្តុកបន្ថែម' : 'Restock Existing'}
                                 </button>
                               )}
                             </div>
@@ -1698,14 +1703,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         <div className="pt-1">
                           <div className="flex items-center gap-1 mb-2">
                             <span className="text-xs font-semibold text-stone-700 dark:text-[#D5DFDA]">
-                              {isVi ? 'Loại sản phẩm' : 'Item Type'}
+                              {isKm ? 'ប្រភេទទំនិញ' : 'Item Type'}
                             </span>
                             <InfoHint
                               compact
-                              label={isVi ? 'Giải thích loại sản phẩm' : 'About Item Type'}
+                              label={isKm ? 'អំពីប្រភេទទំនិញ' : 'About Item Type'}
                               text={
-                                isVi
-                                  ? 'Quyết định cách trừ kho khi bán: Pha chế tại chỗ (trừ Nguyên liệu thô theo công thức) hoặc Đóng gói bán lẻ (trừ trực tiếp số lượng chai/lon).'
+                                isKm
+                                  ? 'កំណត់វិធីកាត់ស្តុកពេលលក់លើ POS៖ ធ្វើតាមការកុម្ម៉ង់ (កាត់វត្ថុធាតុដើមតាមរូបមន្ត) ឬ ទំនិញវេចខ្ចប់ស្រាប់ (កាត់ស្តុកចំនួនដប/កំប៉ុងដោយផ្ទាល់)។'
                                   : 'Controls how stock deducts on POS sales: Made-to-Order deducts Raw Ingredients via recipe, while Retail Packaged deducts unit stock directly.'
                               }
                             />
@@ -1724,7 +1729,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   type="button"
                                   onClick={() => handleProductTypeChange(pt)}
                                   aria-pressed={selected}
-                                  className={`min-h-[68px] px-3.5 py-3 rounded-xl border text-left transition-colors flex items-start gap-3 ${
+                                  className={`min-h-[68px] px-3.5 py-3 rounded-xl border text-left transition-all duration-150 active:scale-[0.98] flex items-start gap-3 ${
                                     selected
                                       ? isMadeToOrder
                                         ? 'border-emerald-600/60 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-300'
@@ -1747,11 +1752,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                     </div>
                                     <div className="text-[11px] font-normal text-stone-500 dark:text-[#94A39B] mt-0.5 leading-snug">
                                       {isMadeToOrder
-                                        ? isVi
-                                          ? 'Pha chế trực tiếp theo đơn từ Nguyên liệu thô.'
+                                        ? isKm
+                                          ? 'ឆុង ឬលាយថ្មីៗតាមការកុម្ម៉ង់ ដោយកាត់វត្ថុធាតុដើមតាមរូបមន្ត។'
                                           : 'Freshly prepared per order using linked Raw Ingredients.'
-                                        : isVi
-                                          ? 'Nhập đóng gói sẵn từ nhà cung cấp và bán nguyên chai/lon (nước ngọt, nước suối, bánh kẹo).'
+                                        : isKm
+                                          ? 'ទំនិញទិញចូលវេចខ្ចប់ស្រាប់ ហើយលក់ចេញជាដប/កំប៉ុង (ភេសជ្ជៈ ទឹកសុទ្ធ អាហារសម្រន់)។'
                                           : 'Bought sealed from a supplier and sold as-is (e.g., canned drinks, water, snacks).'}
                                     </div>
                                   </div>
@@ -1767,8 +1772,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         id="pf-secondary-naming"
                         variant="nested"
                         title={
-                          isVi
-                            ? 'Tên tiếng Việt & Thương hiệu (tùy chọn)'
+                          isKm
+                            ? 'ឈ្មោះភាសាខ្មែរ និងម៉ាក (ស្រេចចិត្ត)'
                             : 'Secondary Name & Brand (optional)'
                         }
                         summary={secondaryNamingSummary}
@@ -1790,9 +1795,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               value={nameVi}
                               onChange={(e) => setNameVi(e.target.value)}
                               placeholder={
-                                isVi
-                                  ? 'Tên hiển thị khi dùng tiếng Việt'
-                                  : 'Optional Vietnamese display name'
+                                isKm
+                                  ? 'ឈ្មោះបង្ហាញជាភាសាខ្មែរ (ស្រេចចិត្ត)'
+                                  : 'Optional Khmer display name'
                               }
                               className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                             />
@@ -1803,7 +1808,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               htmlFor="pf-brand"
                               className="block text-xs font-medium text-stone-600 dark:text-[#D5DFDA] mb-1.5"
                             >
-                              {isVi ? 'Thương hiệu' : 'Brand'}
+                              {isKm ? 'ម៉ាកផលិតផល' : 'Brand'}
                             </label>
                             <input
                               id="pf-brand"
@@ -1829,7 +1834,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             {t.products.imagePreset}
                           </span>
                           <span className="text-[11px] text-stone-400 dark:text-[#94A39B]">
-                            {isVi ? 'Hiển thị trên POS' : 'POS thumbnail'}
+                            {isKm ? 'រូបភាពលើ POS' : 'POS thumbnail'}
                           </span>
                         </div>
 
@@ -1898,7 +1903,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 ? 'border-[#0F5C43] dark:border-[#10B981]'
                                 : 'border-transparent hover:border-stone-300 dark:hover:border-[#24352C]'
                             }`}
-                            title={isVi ? preset.labelVi : preset.label}
+                            title={preset.label}
                           >
                             <ProductPhoto src={preset.url} alt={preset.label} className="w-full h-11" />
                           </button>
@@ -1910,7 +1915,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   {/* Compact Barcode + Scan / Lookup Row */}
                   <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-4 sm:p-5 space-y-2.5">
                     <legend className="sr-only">
-                      {isVi ? 'Mã vạch & Tra cứu' : 'Barcode & Lookup'}
+                      {isKm ? 'បាកូដ និងស្វែងរក' : 'Barcode & Lookup'}
                     </legend>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-1">
@@ -1919,14 +1924,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           htmlFor="pf-barcode"
                           className="text-xs font-semibold text-stone-800 dark:text-[#F1F5F3]"
                         >
-                          {isVi ? 'Mã vạch / SKU (tùy chọn)' : 'Barcode / SKU (optional)'}
+                          {isKm ? 'បាកូដ / SKU (ស្រេចចិត្ត)' : 'Barcode / SKU (optional)'}
                         </label>
                         <InfoHint
                           compact
-                          label={isVi ? 'Giải thích tra cứu mã vạch' : 'About barcode lookup'}
+                          label={isKm ? 'អំពីការស្វែងរកបាកូដ' : 'About barcode lookup'}
                           text={
-                            isVi
-                              ? 'Quét hoặc nhập mã vạch EAN-13/UPC/Code 128 (giữ nguyên số 0 ở đầu). Dùng nút Tra cứu Open Food Facts để tự động gợi ý tên, thương hiệu và danh mục — hoặc bấm Tạo mã SKU để in tem nội bộ.'
+                            isKm
+                              ? 'ស្កេន ឬវាយបញ្ចូលបាកូដ EAN-13, UPC ឬ Code 128។ ប្រើប៊ូតុងស្វែងរកដើម្បីទាញឈ្មោះ និងម៉ាកពី Open Food Facts ឬបង្កើត SKU ស្វ័យប្រវត្តិសម្រាប់បោះពុម្ពស្លាក។'
                               : 'Scan or enter EAN-13, UPC, or Code 128 barcodes (leading zeros preserved). Use Lookup to fetch product name and brand from Open Food Facts, or Auto-SKU to generate a printable store label.'
                           }
                         />
@@ -1959,18 +1964,18 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         className="h-11 px-3.5 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
                       >
                         <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
-                        {isVi ? 'Quét' : 'Scan'}
+                        {isKm ? 'ស្កេន' : 'Scan'}
                       </button>
                       <button
                         type="button"
                         onClick={handleAutoGenerateSku}
                         className="h-11 px-3.5 text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
                         title={
-                          isVi ? 'Tự động tạo mã SKU duy nhất' : 'Automatically generate a unique SKU'
+                          isKm ? 'បង្កើតកូដ SKU ស្វ័យប្រវត្តិ' : 'Automatically generate a unique SKU'
                         }
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
-                        {isVi ? 'Tạo SKU' : 'Auto-SKU'}
+                        {isKm ? 'បង្កើត SKU' : 'Auto-SKU'}
                       </button>
                       {settings.enableOpenFoodFactsLookup !== false &&
                         barcode.trim().length >= 6 &&
@@ -1986,7 +1991,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             ) : (
                               <Globe className="w-3.5 h-3.5" />
                             )}
-                            {isVi ? 'Tra cứu' : 'Lookup'}
+                            {isKm ? 'ស្វែងរក' : 'Lookup'}
                           </button>
                         )}
                       {hasAnyLabelableCode && (
@@ -1994,10 +1999,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           type="button"
                           onClick={() => setLabelModalOpen(true)}
                           className="h-11 px-3.5 text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
-                          title={isVi ? 'In tem mã vạch / QR' : 'Print Code 128 / QR label'}
+                          title={isKm ? 'បោះពុម្ពស្លាកបាកូដ / QR' : 'Print Code 128 / QR label'}
                         >
                           <Printer className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
-                          <span className="hidden sm:inline">{isVi ? 'In tem' : 'Print Label'}</span>
+                          <span className="hidden sm:inline">{isKm ? 'ស្លាកបាកូដ' : 'Print Label'}</span>
                         </button>
                       )}
                     </div>
@@ -2011,11 +2016,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   <div className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl px-5 py-3.5 flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <span className="block text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                        {isVi ? 'Hiển thị trên màn hình POS' : 'Available on POS'}
+                        {isKm ? 'បង្ហាញលើ POS' : 'Available on POS'}
                       </span>
                       <span className="block text-xs text-stone-500 dark:text-[#94A39B]">
-                        {isVi
-                          ? 'Bật để thu ngân có thể chọn và bán món này ngay lập tức.'
+                        {isKm
+                          ? 'បើកដើម្បីឱ្យបុគ្គលិកគិតលុយអាចចុចលក់មុខទំនិញនេះបានភ្លាមៗ។'
                           : 'Enable so cashiers can tap and ring up this item at the register.'}
                       </span>
                     </div>
@@ -2025,7 +2030,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       aria-checked={active}
                       onClick={() => setActive((prev) => !prev)}
                       className="min-h-[44px] min-w-[52px] inline-flex items-center justify-end shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981] rounded-lg"
-                      aria-label={isVi ? 'Hiển thị trên POS' : 'Available on POS'}
+                      aria-label={isKm ? 'បង្ហាញលើ POS' : 'Available on POS'}
                     >
                       <span
                         className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
@@ -2053,19 +2058,19 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   {/* Primary Selling Price Card with Live USD Conversion */}
                   <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 space-y-4">
                     <legend className="sr-only">
-                      {isVi ? 'Giá bán cơ bản' : 'Base Selling Price'}
+                      {isKm ? 'តម្លៃលក់មូលដ្ឋាន' : 'Base Selling Price'}
                     </legend>
                     <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-[#1F3028]">
                       <div className="flex items-center gap-1">
                         <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                          {isVi ? 'Giá bán (KHR)' : 'Base Selling Price'}
+                          {isKm ? 'តម្លៃលក់ (KHR)' : 'Base Selling Price'}
                         </h3>
                         <InfoHint
                           compact
-                          label={isVi ? 'Giải thích tỷ giá quy đổi' : 'About USD conversion'}
+                          label={isKm ? 'អំពីការបម្លែងប្រាក់ដុល្លារ' : 'About USD conversion'}
                           text={
-                            isVi
-                              ? `Tự động quy đổi tham khảo theo tỷ giá POS (${exchangeRate.toLocaleString('en-US')} ៛/$). Giá bán trên hóa đơn vẫn tính bằng KHR.`
+                            isKm
+                              ? `បង្ហាញតម្លៃដុល្លារប្រហាក់ប្រហែលតាមអត្រាប្ដូរប្រាក់ POS (${exchangeRate.toLocaleString('en-US')} ៛/$)។ តម្លៃវិក្កយបត្រនៅតែគិតជាប្រាក់រៀល។`
                               : `Shows live USD reference using your POS exchange rate (${exchangeRate.toLocaleString('en-US')} ៛/$). Register totals remain in KHR.`
                           }
                         />
@@ -2107,7 +2112,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       {/* Live USD Reference Box */}
                       <div className="sm:col-span-5 h-12 px-4 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-2">
                         <span className="text-xs text-stone-500 dark:text-[#94A39B]">
-                          {isVi ? 'Quy đổi USD' : 'USD Equivalent'}
+                          {isKm ? 'សមមូលជាដុល្លារ' : 'USD Equivalent'}
                         </span>
                         <span className="font-mono-num text-base font-bold text-[#0F5C43] dark:text-[#34D399]">
                           {formatUsdRef(basePriceNum, exchangeRate) || '≈ $0.00'}
@@ -2117,8 +2122,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
                     {hasVariantsEnabled && (
                       <p className="text-xs text-stone-500 dark:text-[#94A39B]">
-                        {isVi
-                          ? 'Đang bật nhiều kích cỡ bên dưới — thu ngân sẽ chọn giá theo từng cỡ (S / M / L).'
+                        {isKm
+                          ? 'កំពុងបើកទំហំច្រើនខាងក្រោម — បុគ្គលិក POS នឹងជ្រើសរើសតម្លៃតាមទំហំកែវនីមួយៗ។'
                           : 'Size variants are enabled below — POS cashiers will ring up each size at its variant price.'}
                       </p>
                     )}
@@ -2129,8 +2134,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         id="pf-markup"
                         variant="nested"
                         title={
-                          isVi
-                            ? 'Tính giá tự động theo % lãi (tùy chọn)'
+                          isKm
+                            ? 'គណនាតម្លៃស្វ័យប្រវត្តិតាម % ចំណេញ (ស្រេចចិត្ត)'
                             : 'Markup Auto-Pricing Calculator (optional)'
                         }
                         summary={markupPercent ? `+${markupPercent}%` : undefined}
@@ -2143,7 +2148,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               htmlFor="pf-cost-step2"
                               className="block text-xs font-medium text-stone-600 dark:text-[#D5DFDA] mb-1.5"
                             >
-                              {isVi ? 'Giá vốn tham chiếu (KHR)' : 'Unit Cost Reference (KHR)'}
+                              {isKm ? 'ថ្លៃដើមយោង (KHR)' : 'Unit Cost Reference (KHR)'}
                             </label>
                             <input
                               id="pf-cost-step2"
@@ -2162,7 +2167,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               htmlFor="pf-markup-input"
                               className="block text-xs font-medium text-stone-600 dark:text-[#D5DFDA] mb-1.5"
                             >
-                              {isVi ? 'Phần trăm lãi mục tiêu (%)' : 'Target Markup (%)'}
+                              {isKm ? 'ភាគរយចំណេញគោលដៅ (%)' : 'Target Markup (%)'}
                             </label>
                             <input
                               id="pf-markup-input"
@@ -2192,8 +2197,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             }}
                             className="w-5 h-5 accent-[#0F5C43] dark:accent-[#10B981] rounded"
                           />
-                          {isVi
-                            ? 'Giữ giá bán nhập tay (không tự tính theo % lãi)'
+                          {isKm
+                            ? 'រក្សាតម្លៃលក់ដែលវាយបញ្ចូលដោយដៃ (មិនប្តូរតាម % ចំណេញ)'
                             : 'Keep manual selling price override'}
                         </label>
                       </CollapsibleFieldset>
@@ -2204,28 +2209,28 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   {productType === 'PREPARED_TO_ORDER' && (
                     <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 space-y-4">
                       <legend className="sr-only">
-                        {isVi ? 'Kích cỡ sản phẩm' : 'Size Variants'}
+                        {isKm ? 'ទំហំកែវ' : 'Size Variants'}
                       </legend>
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <Layers className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
                             <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                              {isVi ? 'Kích cỡ (Small / Medium / Large)' : 'Size Variants'}
+                              {isKm ? 'ទំហំកែវ (Small / Medium / Large)' : 'Size Variants'}
                             </h3>
                             <InfoHint
                               compact
-                              label={isVi ? 'Giải thích giá theo kích cỡ' : 'About size variant pricing'}
+                              label={isKm ? 'អំពីតម្លៃតាមទំហំ' : 'About size variant pricing'}
                               text={
-                                isVi
-                                  ? 'Bật nếu đồ uống có nhiều cỡ (Nhỏ, Vừa, Lớn). Mỗi cỡ có giá bán riêng, mã vạch riêng và công thức nguyên liệu riêng ở Bước 3.'
+                                isKm
+                                  ? 'បើកនៅពេលភេសជ្ជៈមានច្រើនទំហំ (តូច កណ្តាល ធំ)។ ទំហំនីមួយៗមានតម្លៃលក់ បាកូដ និងរូបមន្តវត្ថុធាតុដើមផ្ទាល់ខ្លួននៅជំហានទី ៣។'
                                   : 'Enable when a drink comes in multiple cup sizes (Small, Medium, Large). Each size has its own selling price, optional barcode, and recipe in Step 3.'
                               }
                             />
                           </div>
                           <p className="text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
-                            {isVi
-                              ? 'Tùy chọn bán theo nhiều kích cỡ ly với giá và định lượng riêng.'
+                            {isKm
+                              ? 'ផ្តល់ជម្រើសច្រើនទំហំជាមួយតម្លៃ និងរូបមន្តផ្សេងៗគ្នា។'
                               : 'Offer multiple cup sizes with individual prices and recipe margins.'}
                           </p>
                         </div>
@@ -2238,7 +2243,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             onClick={toggleSizeVariants}
                             className="min-h-[44px] inline-flex items-center gap-2 text-xs font-semibold text-stone-700 dark:text-[#D5DFDA]"
                           >
-                            <span>{hasVariantsEnabled ? (isVi ? 'Đang bật' : 'Enabled') : isVi ? 'Tắt' : 'Off'}</span>
+                            <span>{hasVariantsEnabled ? (isKm ? 'បើក' : 'Enabled') : isKm ? 'បិទ' : 'Off'}</span>
                             <span
                               className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
                                 hasVariantsEnabled
@@ -2257,7 +2262,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                       </div>
 
                       {hasVariantsEnabled && (
-                        <div className="space-y-3 pt-2 border-t border-stone-100 dark:border-[#1F3028]">
+                        <div className="animate-drawer-in space-y-3 pt-2 border-t border-stone-100 dark:border-[#1F3028]">
                           {variants.map((variant, vIdx) => {
                             const vCost = Math.round(
                               calculateRecipeCogs(variant.recipe, ingredients)
@@ -2276,7 +2281,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   {/* Size Name */}
                                   <div className="sm:col-span-3">
                                     <label className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1">
-                                      {isVi ? 'Tên kích cỡ *' : 'Size Name *'}
+                                      {isKm ? 'ឈ្មោះទំហំ *' : 'Size Name *'}
                                     </label>
                                     <input
                                       type="text"
@@ -2284,7 +2289,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                       onChange={(e) =>
                                         updateVariant(vIdx, { name: e.target.value })
                                       }
-                                      placeholder={isVi ? 'VD: Nhỏ / Vừa / Lớn' : 'e.g. Small'}
+                                      placeholder={isKm ? 'ឧ. Small / Medium / Large' : 'e.g. Small'}
                                       className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                                     />
                                   </div>
@@ -2292,7 +2297,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   {/* Selling Price */}
                                   <div className="sm:col-span-3">
                                     <label className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1">
-                                      {isVi ? 'Giá bán (KHR) *' : 'Selling Price (KHR) *'}
+                                      {isKm ? 'តម្លៃលក់ (KHR) *' : 'Selling Price (KHR) *'}
                                     </label>
                                     <input
                                       type="number"
@@ -2314,7 +2319,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   {/* Optional Variant Barcode + Scan */}
                                   <div className="sm:col-span-3">
                                     <label className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1">
-                                      {isVi ? 'Mã vạch cỡ (tùy chọn)' : 'Barcode (optional)'}
+                                      {isKm ? 'បាកូដ (ស្រេចចិត្ត)' : 'Barcode (optional)'}
                                     </label>
                                     <div className="flex items-center gap-1">
                                       <input
@@ -2324,7 +2329,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                         onChange={(e) =>
                                           updateVariant(vIdx, { barcode: e.target.value })
                                         }
-                                        placeholder={isVi ? 'Mã vạch' : 'Optional code'}
+                                        placeholder={isKm ? 'បាកូដ' : 'Optional code'}
                                         className="w-full min-w-0 h-11 px-2.5 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                                       />
                                       <button
@@ -2333,7 +2338,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                           setScannerTarget({ kind: 'variant', index: vIdx })
                                         }
                                         className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg shrink-0"
-                                        title={isVi ? 'Quét mã vạch' : 'Scan barcode'}
+                                        title={isKm ? 'ស្កេនបាកូដ' : 'Scan barcode'}
                                       >
                                         <ScanBarcode className="w-4 h-4" />
                                       </button>
@@ -2344,7 +2349,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   <div className="sm:col-span-3 flex items-end justify-between gap-2 sm:pt-5">
                                     <div className="min-w-0">
                                       <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                                        {isVi ? 'Biên lãi gộp' : 'Gross Margin'}
+                                        {isKm ? 'អត្រាចំណេញដុល' : 'Gross Margin'}
                                       </span>
                                       {vHasRecipe ? (
                                         <div className="flex items-baseline gap-1.5 flex-wrap">
@@ -2363,7 +2368,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                         </div>
                                       ) : (
                                         <span className="text-xs text-stone-400 dark:text-[#94A39B]">
-                                          {isVi ? 'Gắn công thức ở Bước 3' : 'Set recipe in Step 3'}
+                                          {isKm ? 'កំណត់រូបមន្តនៅជំហាន ៣' : 'Set recipe in Step 3'}
                                         </span>
                                       )}
                                     </div>
@@ -2371,7 +2376,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                       type="button"
                                       onClick={() => removeVariant(vIdx)}
                                       className="w-11 h-11 inline-flex items-center justify-center text-stone-400 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg shrink-0 transition-colors"
-                                      aria-label={isVi ? 'Xóa kích cỡ' : 'Remove size variant'}
+                                      aria-label={isKm ? 'លុបទំហំ' : 'Remove size variant'}
                                     >
                                       <Trash2 className="w-4 h-4" />
                                     </button>
@@ -2388,16 +2393,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               className="h-11 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] bg-emerald-50/70 dark:bg-[#064E3B]/50 border border-emerald-200 dark:border-[#10B981]/40 hover:bg-emerald-100/70 dark:hover:bg-[#064E3B] rounded-lg transition-colors whitespace-nowrap"
                             >
                               <Plus className="w-4 h-4" />
-                              {isVi ? 'Thêm kích cỡ' : 'Add Size'}
+                              {isKm ? 'បន្ថែមទំហំ' : 'Add Size'}
                             </button>
 
                             {!variants.some((v) => v.name.toLowerCase() === 'large') && (
                               <button
                                 type="button"
-                                onClick={() => addVariant('Large', 'Lớn (L)', 4000)}
+                                onClick={() => addVariant('Large', 'ធំ (L)', 4000)}
                                 className="h-11 px-3 text-xs font-medium text-stone-600 dark:text-[#D5DFDA] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
                               >
-                                + {isVi ? 'Thêm nhanh cỡ Lớn (L)' : 'Quick Add Large'}
+                                + {isKm ? 'បន្ថែមទំហំ Large' : 'Quick Add Large'}
                               </button>
                             )}
                           </div>
@@ -2410,22 +2415,22 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   {productType === 'PACKAGED' && (
                     <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 space-y-4">
                       <legend className="sr-only">
-                        {isVi ? 'Đóng gói & Nhà cung cấp' : 'Packaging & Supplier'}
+                        {isKm ? 'ការវេចខ្ចប់ និងអ្នកផ្គត់ផ្គង់' : 'Packaging & Supplier'}
                       </legend>
                       <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-[#1F3028]">
                         <div className="flex items-center gap-1.5">
                           <Package className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
                           <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                            {isVi
-                              ? 'Nhà cung cấp & Mã vạch Thùng / Lốc'
+                            {isKm
+                              ? 'អ្នកផ្គត់ផ្គង់ និងបាកូដកេស / យួរ'
                               : 'Supplier & Case / Pack Barcodes'}
                           </h3>
                           <InfoHint
                             compact
-                            label={isVi ? 'Giải thích mã vạch thùng/lốc' : 'About case & pack barcodes'}
+                            label={isKm ? 'អំពីបាកូដកេស/យួរ' : 'About case & pack barcodes'}
                             text={
-                              isVi
-                                ? 'Gắn mã vạch lốc 6 hoặc thùng 24 để khi quét trên POS hoặc nhập kho, hệ thống tự động nhân đúng số đơn vị.'
+                              isKm
+                                ? 'ភ្ជាប់បាកូដយួរ ៦ ឬកេស ២៤ ដើម្បីឱ្យពេលស្កេនលើ POS ឬបញ្ចូលស្តុក គុណចំនួនឯកតាដោយស្វ័យប្រវត្តិ។'
                                 : 'Map 6-pack or 24-unit carton barcodes so scanning on POS or stock-in automatically multiplies quantity.'
                             }
                           />
@@ -2436,7 +2441,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] hover:bg-emerald-50 dark:hover:bg-[#064E3B]/50 rounded-lg transition-colors whitespace-nowrap"
                         >
                           <Plus className="w-4 h-4" />
-                          {isVi ? 'Thêm mã thùng/lốc' : 'Add Pack / Case'}
+                          {isKm ? 'បន្ថែមបាកូដកេស' : 'Add Pack / Case'}
                         </button>
                       </div>
 
@@ -2454,8 +2459,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           value={supplier}
                           onChange={(e) => setSupplier(e.target.value)}
                           placeholder={
-                            isVi
-                              ? 'VD: Đại lý nước giải khát Phnom Penh (tùy chọn)'
+                            isKm
+                              ? 'ឧ. ដេប៉ូចែកចាយភេសជ្ជៈភ្នំពេញ (ស្រេចចិត្ត)'
                               : 'e.g. Beverage Distributor (optional)'
                           }
                           className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
@@ -2464,8 +2469,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
                       {packagingBarcodes.length === 0 ? (
                         <p className="text-xs text-stone-500 dark:text-[#94A39B]">
-                          {isVi
-                            ? 'Chưa có mã vạch thùng/lốc. Bấm "Thêm mã thùng/lốc" nếu bạn nhập hoặc bán theo lốc/thùng.'
+                          {isKm
+                            ? 'មិនទាន់មានបាកូដកេស/យួរទេ។ ចុច "បន្ថែមបាកូដកេស" ប្រសិនបើអ្នកទិញ ឬលក់ជាកេស។'
                             : 'No pack or carton barcodes added yet. Click "Add Pack / Case" if you buy or sell multi-unit cases.'}
                         </p>
                       ) : (
@@ -2477,7 +2482,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             >
                               <input
                                 type="text"
-                                placeholder={isVi ? 'Mã vạch thùng/lốc' : 'Pack barcode'}
+                                placeholder={isKm ? 'បាកូដកេស/យួរ' : 'Pack barcode'}
                                 value={pb.barcode}
                                 onChange={(e) =>
                                   updatePackagingBarcode(idx, { barcode: e.target.value })
@@ -2486,7 +2491,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               />
                               <input
                                 type="text"
-                                placeholder={isVi ? 'Tên gói (VD: Thùng 24)' : 'Label (e.g. Case 24)'}
+                                placeholder={isKm ? 'ឈ្មោះកញ្ចប់ (ឧ. កេស ២៤)' : 'Label (e.g. Case 24)'}
                                 value={pb.label}
                                 onChange={(e) =>
                                   updatePackagingBarcode(idx, { label: e.target.value })
@@ -2503,14 +2508,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   })
                                 }
                                 className="col-span-3 sm:col-span-2 h-11 px-2.5 text-xs font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                                title={isVi ? 'Số đơn vị / gói' : 'Units per pack'}
+                                title={isKm ? 'ចំនួនក្នុង ១ កេស' : 'Units per pack'}
                               />
                               <div className="col-span-3 sm:col-span-2 flex items-center justify-end gap-1">
                                 <button
                                   type="button"
                                   onClick={() => setScannerTarget({ kind: 'pack', index: idx })}
                                   className="w-11 h-11 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] rounded-lg"
-                                  title={isVi ? 'Quét mã thùng' : 'Scan pack barcode'}
+                                  title={isKm ? 'ស្កេនបាកូដកេស' : 'Scan pack barcode'}
                                 >
                                   <ScanBarcode className="w-4 h-4" />
                                 </button>
@@ -2546,15 +2551,15 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           <div className="flex items-center gap-1.5">
                             <Utensils className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
                             <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                              {isVi ? 'Tóm tắt giá vốn & biên lãi' : 'Recipe Cost & Gross Margin'}
+                              {isKm ? 'ថ្លៃដើមរូបមន្ត និងប្រាក់ចំណេញដុល' : 'Recipe Cost & Gross Margin'}
                               {activeVariant ? ` · ${activeVariant.name}` : ''}
                             </h3>
                             <InfoHint
                               compact
-                              label={isVi ? 'Giải thích trừ kho theo công thức' : 'About recipe stock deduction'}
+                              label={isKm ? 'អំពីការកាត់ស្តុកតាមរូបមន្ត' : 'About recipe stock deduction'}
                               text={
-                                isVi
-                                  ? 'Với món Pha chế theo ly, mỗi lần bán trên POS sẽ tự động trừ nguyên liệu thô theo đúng định lượng công thức bạn gắn bên dưới.'
+                                isKm
+                                  ? 'សម្រាប់ភេសជ្ជៈធ្វើតាមការកុម្ម៉ង់ រាល់ការលក់លើ POS នឹងកាត់ស្តុកវត្ថុធាតុដើមតាមបរិមាណខាងក្រោម និងកត់ត្រា COGS ដោយស្វ័យប្រវត្តិ។'
                                   : 'For Made-to-Order drinks, each POS sale automatically deducts the exact raw ingredient quantities below and records live COGS.'
                               }
                             />
@@ -2567,7 +2572,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                           <div>
                             <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                              {isVi ? 'Giá bán' : 'Selling Price'}
+                              {isKm ? 'តម្លៃលក់' : 'Selling Price'}
                             </span>
                             <span className="block font-mono-num text-base font-bold text-stone-900 dark:text-[#F1F5F3] mt-0.5">
                               {formatKhr(activeMtoPrice)}
@@ -2579,14 +2584,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
                           <div>
                             <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                              {isVi ? 'Giá vốn công thức' : 'Calculated Recipe Cost'}
+                              {isKm ? 'ថ្លៃដើមរូបមន្ត' : 'Calculated Recipe Cost'}
                             </span>
                             <span className="block font-mono-num text-base font-bold text-stone-900 dark:text-[#F1F5F3] mt-0.5">
                               {formatKhr(activeMtoCost)}
                             </span>
                             <span className="block text-[11px] text-stone-400 dark:text-[#94A39B]">
                               {activeMtoRecipe.length}{' '}
-                              {isVi ? 'nguyên liệu' : activeMtoRecipe.length === 1 ? 'ingredient' : 'ingredients'}
+                              {isKm ? 'វត្ថុធាតុដើម' : activeMtoRecipe.length === 1 ? 'ingredient' : 'ingredients'}
                             </span>
                           </div>
 
@@ -2610,7 +2615,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
                           <div>
                             <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                              {isVi ? 'Tỷ suất lãi gộp' : 'Gross Margin %'}
+                              {isKm ? 'អត្រាចំណេញដុល %' : 'Gross Margin %'}
                             </span>
                             <span
                               className={`block font-mono-num text-base font-bold mt-0.5 ${
@@ -2625,11 +2630,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             </span>
                             <span className="block text-[11px] text-stone-400 dark:text-[#94A39B]">
                               {activeMtoRecipe.length > 0
-                                ? isVi
-                                  ? 'Tính theo giá kho'
+                                ? isKm
+                                  ? 'គណនាតាមថ្លៃស្តុក'
                                   : 'Based on stock cost'
-                                : isVi
-                                  ? 'Chưa có công thức'
+                                : isKm
+                                  ? 'ភ្ជាប់រូបមន្តខាងក្រោម'
                                   : 'Link recipe below'}
                             </span>
                           </div>
@@ -2644,11 +2649,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           <div className="min-w-0">
                             <h4 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
                               {hasVariantsEnabled
-                                ? isVi
-                                  ? 'Định lượng nguyên liệu theo từng kích cỡ'
+                                ? isKm
+                                  ? 'រូបមន្តវត្ថុធាតុដើមតាមទំហំកែវ'
                                   : 'Ingredient Recipe per Size Variant'
-                                : isVi
-                                  ? 'Định lượng nguyên liệu cho 1 phần bán'
+                                : isKm
+                                  ? 'រូបមន្តវត្ថុធាតុដើមសម្រាប់ ១ កែវ'
                                   : 'Ingredient Recipe per Serving'}
                             </h4>
                           </div>
@@ -2664,8 +2669,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] bg-stone-100 dark:bg-[#18251F] hover:bg-stone-200/80 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
                                 >
                                   <Copy className="w-3.5 h-3.5" />
-                                  {isVi
-                                    ? `Chép từ ${variants[0].name}`
+                                  {isKm
+                                    ? `ចម្លងពី ${variants[0].name}`
                                     : `Copy from ${variants[0].name}`}
                                 </button>
                               )}
@@ -2714,13 +2719,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         {activeMtoRecipe.length === 0 ? (
                           <div className="rounded-xl border border-dashed border-stone-300 dark:border-[#24352C] bg-stone-50/70 dark:bg-[#0F1814] px-5 py-7 text-center space-y-3">
                             <p className="text-sm font-semibold text-stone-800 dark:text-[#F1F5F3]">
-                              {isVi
-                                ? 'Chưa có nguyên liệu nào được gắn vào công thức'
+                              {isKm
+                                ? 'មិនទាន់មានវត្ថុធាតុដើមភ្ជាប់នឹងរូបមន្តនេះទេ'
                                 : 'No ingredients linked to this recipe yet'}
                             </p>
                             <p className="text-xs text-stone-500 dark:text-[#94A39B] max-w-md mx-auto leading-relaxed">
-                              {isVi
-                                ? 'Gắn nguyên liệu thô (VD: cam tươi, đường, ly nhựa) giúp hệ thống tự động trừ tồn kho và tính lãi gộp chính xác sau mỗi đơn bán trên POS.'
+                              {isKm
+                                ? 'ការភ្ជាប់វត្ថុធាតុដើម (ដូចជា ផ្លែឈើស្រស់ ស្ករស កែវ) ជួយឱ្យប្រព័ន្ធកាត់ស្តុក និងគណនាប្រាក់ចំណេញដុលដោយស្វ័យប្រវត្តិលើរាល់ការលក់ POS។'
                                 : 'Linking raw ingredients (such as fresh fruit, syrup, or cups) enables automatic stock deduction and live gross margin tracking on every POS sale.'}
                             </p>
                             {ingredients.length > 0 ? (
@@ -2734,12 +2739,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 className="h-11 px-4 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
                               >
                                 <Plus className="w-4 h-4" />
-                                {isVi ? 'Thêm nguyên liệu đầu tiên' : 'Add First Ingredient'}
+                                {isKm ? 'បន្ថែមវត្ថុធាតុដើមដំបូង' : 'Add First Ingredient'}
                               </button>
                             ) : (
                               <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
-                                {isVi
-                                  ? 'Hãy thêm nguyên liệu thô trong mục Kho hàng trước, sau đó quay lại gắn công thức bất cứ lúc nào.'
+                                {isKm
+                                  ? 'សូមបន្ថែមវត្ថុធាតុដើមនៅក្នុងទំព័រស្តុកទំនិញជាមុនសិន រួចត្រឡប់មកភ្ជាប់នៅពេលណាក៏បាន។'
                                   : 'Add raw ingredients in Inventory first, then return here anytime to link them.'}
                               </p>
                             )}
@@ -2747,10 +2752,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         ) : (
                           <div className="space-y-2.5">
                             <div className="hidden sm:grid grid-cols-12 gap-2 px-1 text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
-                              <span className="col-span-5">{isVi ? 'Nguyên liệu' : 'Ingredient'}</span>
-                              <span className="col-span-2">{isVi ? 'Định lượng' : 'Qty / Cup'}</span>
-                              <span className="col-span-2">{isVi ? 'Đơn vị' : 'Unit'}</span>
-                              <span className="col-span-2 text-right">{isVi ? 'Chi phí' : 'Cost'}</span>
+                              <span className="col-span-5">{isKm ? 'វត្ថុធាតុដើម' : 'Ingredient'}</span>
+                              <span className="col-span-2">{isKm ? 'បរិមាណ/កែវ' : 'Qty / Cup'}</span>
+                              <span className="col-span-2">{isKm ? 'ឯកតា' : 'Unit'}</span>
+                              <span className="col-span-2 text-right">{isKm ? 'ថ្លៃដើម' : 'Cost'}</span>
                               <span className="col-span-1" />
                             </div>
                             {activeMtoRecipe.map((row, index) => {
@@ -2777,7 +2782,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   >
                                     {ingredients.map((ing) => (
                                       <option key={ing.id} value={ing.id}>
-                                        {isVi ? ing.nameVi || ing.name : ing.name} ({ing.unit})
+                                        {displayLocalName(ing.name, ing.nameVi)} ({ing.unit})
                                       </option>
                                     ))}
                                   </select>
@@ -2849,21 +2854,21 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           <div className="flex items-center gap-1.5">
                             <Package className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
                             <h3 className="font-display text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                              {isVi ? 'Giá vốn & Tồn kho trực tiếp' : 'Unit Cost & Stock Tracking'}
+                              {isKm ? 'ថ្លៃដើម និងការតាមដានស្តុក' : 'Unit Cost & Stock Tracking'}
                             </h3>
                             <InfoHint
                               compact
-                              label={isVi ? 'Giải thích trừ kho trực tiếp' : 'About direct stock deduction'}
+                              label={isKm ? 'អំពីការកាត់ស្តុកផ្ទាល់' : 'About direct stock deduction'}
                               text={
-                                isVi
-                                  ? 'Hàng đóng gói bán lẻ sẽ trừ trực tiếp số lượng tồn kho mỗi khi bán trên POS và cảnh báo khi xuống dưới mức tối thiểu.'
+                                isKm
+                                  ? 'ទំនិញវេចខ្ចប់ស្រាប់នឹងកាត់ស្តុកចំនួនឯកតាដោយផ្ទាល់លើរាល់ការលក់ POS ហើយជូនដំណឹងពេលស្តុកទាបជាងកម្រិតកំណត់។'
                                   : 'Retail Packaged goods deduct directly from stock quantity on every POS sale and trigger low-stock alerts below your threshold.'
                               }
                             />
                           </div>
                           <span className="font-mono-num text-xs font-semibold text-emerald-700 dark:text-[#34D399]">
                             {liveSellingPrice > 0
-                              ? `${liveMarginPct}% ${isVi ? 'biên lãi' : 'margin'} · ${formatKhr(liveProfit)}`
+                              ? `${liveMarginPct}% ${isKm ? 'ចំណេញ' : 'margin'} · ${formatKhr(liveProfit)}`
                               : formatKhr(liveUnitCost)}
                           </span>
                         </div>
@@ -2874,7 +2879,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               htmlFor="pf-cost"
                               className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                             >
-                              {isVi ? 'Giá vốn (KHR)' : 'Unit Cost (KHR)'}
+                              {isKm ? 'ថ្លៃដើម (KHR)' : 'Unit Cost (KHR)'}
                             </label>
                             <input
                               id="pf-cost"
@@ -2897,7 +2902,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               htmlFor="pf-stock"
                               className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                             >
-                              {isVi ? 'Số lượng tồn kho' : 'Current Stock Qty'}
+                              {isKm ? 'បរិមាណស្តុកបច្ចុប្បន្ន' : 'Current Stock Qty'}
                             </label>
                             <input
                               id="pf-stock"
@@ -2914,7 +2919,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               htmlFor="pf-reorder"
                               className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                             >
-                              {isVi ? 'Ngưỡng cảnh báo sắp hết' : 'Low-Stock Alert Threshold'}
+                              {isKm ? 'កម្រិតជូនដំណឹងស្តុកជិតអស់' : 'Low-Stock Alert Threshold'}
                             </label>
                             <input
                               id="pf-reorder"
@@ -2965,7 +2970,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               value={supplier}
                               onChange={(e) => setSupplier(e.target.value)}
                               placeholder={
-                                isVi ? 'Tên nhà cung cấp (tùy chọn)' : 'Optional supplier name'
+                                isKm ? 'ឈ្មោះអ្នកផ្គត់ផ្គង់ (ស្រេចចិត្ត)' : 'Optional supplier name'
                               }
                               className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                             />
@@ -2973,7 +2978,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
                           <div className="sm:col-span-5">
                             <span className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                              {isVi ? 'Quy cách thùng / lốc' : 'Case / Pack Size'}
+                              {isKm ? 'ទំហំកេស / យួរ' : 'Case / Pack Size'}
                             </span>
                             {packagingBarcodes.length > 0 ? (
                               <div className="h-11 px-3 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-2 text-xs">
@@ -2989,7 +2994,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   onClick={() => setCurrentStep(2)}
                                   className="text-[#0F5C43] dark:text-[#34D399] font-semibold hover:underline shrink-0"
                                 >
-                                  {isVi ? 'Sửa' : 'Edit'}
+                                  {isKm ? 'កែប្រែ' : 'Edit'}
                                 </button>
                               </div>
                             ) : (
@@ -3002,7 +3007,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 className="w-full h-11 px-3 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
                               >
                                 <Plus className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
-                                {isVi ? 'Thêm quy cách thùng/lốc' : 'Add Case / Pack Size'}
+                                {isKm ? 'បន្ថែមទំហំកេស' : 'Add Case / Pack Size'}
                               </button>
                             )}
                           </div>
@@ -3023,7 +3028,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="h-12 px-4 text-sm font-semibold text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-4 text-sm font-semibold text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                   >
                     {t.common.cancel}
                   </button>
@@ -3031,10 +3036,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   <button
                     type="button"
                     onClick={handleBackStep}
-                    className="h-12 px-4 inline-flex items-center gap-1.5 text-sm font-semibold text-stone-700 dark:text-[#D5DFDA] bg-stone-100/80 dark:bg-[#18251F] hover:bg-stone-200/70 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-4 inline-flex items-center gap-1.5 text-sm font-semibold text-stone-700 dark:text-[#D5DFDA] bg-stone-100/80 dark:bg-[#18251F] hover:bg-stone-200/70 dark:hover:bg-[#1F3028] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    {isVi ? 'Quay lại' : 'Back'}
+                    {isKm ? 'ត្រឡប់ក្រោយ' : 'Back'}
                   </button>
                 )}
               </div>
@@ -3042,7 +3047,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               {/* Center Quiet Progress Readout (desktop) */}
               <div className="hidden md:flex items-center gap-2 text-xs text-stone-500 dark:text-[#94A39B] whitespace-nowrap">
                 <span className="font-mono-num">
-                  {isVi ? `Bước ${currentStep} / 3` : `Step ${currentStep} of 3`}
+                  {isKm ? `ជំហាន ${currentStep} / 3` : `Step ${currentStep} of 3`}
                 </span>
                 {liveSellingPrice > 0 && (
                   <>
@@ -3061,9 +3066,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     type="button"
                     disabled={saving || barcodeConflicts.length > 0 || Boolean(duplicateGuard)}
                     onClick={() => void handleSaveProduct('close')}
-                    className="h-12 px-4 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-4 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                   >
-                    {saving ? (isVi ? 'Đang lưu...' : 'Saving...') : isVi ? 'Lưu ngay' : 'Save'}
+                    {saving ? (isKm ? 'កំពុងរក្សាទុក...' : 'Saving...') : isKm ? 'រក្សាទុក' : 'Save'}
                   </button>
                 )}
 
@@ -3072,9 +3077,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     type="button"
                     disabled={Boolean(duplicateGuard)}
                     onClick={handleNextStep}
-                    className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                   >
-                    <span>{isVi ? 'Tiếp: Giá bán' : 'Next: Pricing'}</span>
+                    <span>{isKm ? 'បន្ទាប់៖ តម្លៃលក់' : 'Next: Pricing'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 )}
@@ -3084,9 +3089,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     type="button"
                     disabled={Boolean(duplicateGuard)}
                     onClick={handleNextStep}
-                    className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                   >
-                    <span>{isVi ? 'Tiếp: Công thức & Kho' : 'Next: Recipe & Stock'}</span>
+                    <span>{isKm ? 'បន្ទាប់៖ រូបមន្ត និងស្តុក' : 'Next: Recipe & Stock'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 )}
@@ -3098,26 +3103,26 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         type="button"
                         disabled={saving || barcodeConflicts.length > 0 || Boolean(duplicateGuard)}
                         onClick={() => void handleSaveProduct('add_another')}
-                        className="h-12 px-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                        className="h-12 px-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                       >
                         <Plus className="w-4 h-4 shrink-0" />
-                        <span>{isVi ? 'Lưu & Thêm tiếp' : 'Save & Add Another'}</span>
+                        <span>{isKm ? 'រក្សាទុក និងបន្ថែមទៀត' : 'Save & Add Another'}</span>
                       </button>
                     )}
                     <button
                       type="button"
                       disabled={saving || barcodeConflicts.length > 0 || Boolean(duplicateGuard)}
                       onClick={() => void handleSaveProduct('close')}
-                      className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                      className="h-12 px-5 inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                     >
                       {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                       <span>
                         {isEditing
-                          ? isVi
-                            ? 'Lưu thay đổi'
+                          ? isKm
+                            ? 'រក្សាទុកការកែប្រែ'
                             : 'Save Product'
-                          : isVi
-                            ? 'Lưu sản phẩm'
+                          : isKm
+                            ? 'រក្សាទុក'
                             : 'Save Product'}
                       </span>
                     </button>
@@ -3143,7 +3148,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       {/* Camera Barcode Scanner Modal */}
       <BarcodeScannerModal
         open={scannerTarget !== null}
-        title={isVi ? 'Quét mã vạch sản phẩm' : 'Scan Product Barcode'}
+        title={isKm ? 'ស្កេនបាកូដផលិតផល' : 'Scan Product Barcode'}
         onDetected={handleBarcodeScanned}
         onClose={() => setScannerTarget(null)}
       />
@@ -3154,7 +3159,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         product={draftProductForLabels}
         initialCode={barcode.trim() || undefined}
         shopName={settings.name}
-        isVi={isVi}
+        isKm={isKm}
         onClose={() => setLabelModalOpen(false)}
       />
     </>

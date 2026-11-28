@@ -11,7 +11,7 @@ interface CategoryColorPickerDropdownProps {
   id?: string;
   value: CategoryColorKey;
   onChange: (color: CategoryColorKey) => void;
-  isVi: boolean;
+  isKm: boolean;
   disabled?: boolean;
   align?: 'left' | 'right';
 }
@@ -20,7 +20,7 @@ export const CategoryColorPickerDropdown: React.FC<CategoryColorPickerDropdownPr
   id,
   value,
   onChange,
-  isVi,
+  isKm,
   disabled = false,
   align = 'left',
 }) => {
@@ -70,7 +70,7 @@ export const CategoryColorPickerDropdown: React.FC<CategoryColorPickerDropdownPr
             aria-hidden="true"
           />
           <span className="truncate font-medium text-xs sm:text-sm">
-            {isVi ? selectedOption.labelVi : selectedOption.label}
+            {isKm ? selectedOption.labelKm : selectedOption.label}
           </span>
         </span>
         <ChevronDown
@@ -83,14 +83,14 @@ export const CategoryColorPickerDropdown: React.FC<CategoryColorPickerDropdownPr
       {open && (
         <div
           role="listbox"
-          aria-label={isVi ? 'Chọn màu danh mục' : 'Select category color'}
-          className={`absolute z-30 mt-1.5 w-60 max-w-[calc(100vw-2rem)] max-h-72 overflow-y-auto rounded-xl border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] shadow-lg p-1.5 space-y-1 ${
+          aria-label={isKm ? 'ជ្រើសរើសពណ៌ប្រភេទ' : 'Select category color'}
+          className={`animate-popover absolute z-30 mt-1.5 w-60 max-w-[calc(100vw-2rem)] max-h-72 overflow-y-auto rounded-xl border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#131D18] shadow-lg p-1.5 space-y-1 ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >
           {CATEGORY_COLOR_OPTIONS.map((opt) => {
             const isSelected = opt.key === value;
-            const optLabel = isVi ? opt.labelVi : opt.label;
+            const optLabel = isKm ? opt.labelKm : opt.label;
             return (
               <button
                 key={opt.key}

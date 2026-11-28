@@ -27,19 +27,19 @@ const ALL_CATEGORIES: ExpenseCategory[] = [
   'other',
 ];
 
-const BUSINESS_CATEGORY_PILLS: { id: ExpenseCategory; labelEn: string; labelVi: string }[] = [
-  { id: 'packaging', labelEn: 'Packaging', labelVi: 'Bao bì' },
-  { id: 'utilities', labelEn: 'Utilities', labelVi: 'Điện nước' },
-  { id: 'equipment', labelEn: 'Equipment', labelVi: 'Thiết bị' },
-  { id: 'rent', labelEn: 'Rent & Staff', labelVi: 'Mặt bằng & NV' },
-  { id: 'transport', labelEn: 'Transport', labelVi: 'Vận chuyển' },
-  { id: 'other', labelEn: 'Other', labelVi: 'Khác' },
+const BUSINESS_CATEGORY_PILLS: { id: ExpenseCategory; labelEn: string; labelKm: string }[] = [
+  { id: 'packaging', labelEn: 'Packaging', labelKm: 'សម្ភារៈវេចខ្ចប់' },
+  { id: 'utilities', labelEn: 'Utilities', labelKm: 'ទឹក និងភ្លើង' },
+  { id: 'equipment', labelEn: 'Equipment', labelKm: 'ឧបករណ៍' },
+  { id: 'rent', labelEn: 'Rent & Staff', labelKm: 'ឈ្នួលទីតាំង និងបុគ្គលិក' },
+  { id: 'transport', labelEn: 'Transport', labelKm: 'ដឹកជញ្ជូន' },
+  { id: 'other', labelEn: 'Other', labelKm: 'ផ្សេងៗ' },
 ];
 
-const HOUSEHOLD_CATEGORY_PILLS: { id: ExpenseCategory; labelEn: string; labelVi: string }[] = [
-  { id: 'household', labelEn: 'Household', labelVi: 'Gia đình' },
-  { id: 'travel', labelEn: 'Travel', labelVi: 'Đi lại' },
-  { id: 'other', labelEn: 'Other', labelVi: 'Khác' },
+const HOUSEHOLD_CATEGORY_PILLS: { id: ExpenseCategory; labelEn: string; labelKm: string }[] = [
+  { id: 'household', labelEn: 'Household', labelKm: 'គ្រួសារ' },
+  { id: 'travel', labelEn: 'Travel', labelKm: 'ធ្វើដំណើរ' },
+  { id: 'other', labelEn: 'Other', labelKm: 'ផ្សេងៗ' },
 ];
 
 interface QuickRepeatPreset {
@@ -63,7 +63,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   onAutoOpenHandled,
 }) => {
   const { settings, expenses, purchases, saveExpense, deleteExpense, t } = useStore();
-  const isVi = settings.language === 'vi';
+  const isKm = settings.language === 'km';
   const usdRate = settings.usdRate > 0 ? settings.usdRate : 4000;
 
   const [scopeFilter, setScopeFilter] = useState<'all' | ExpenseScope>('all');
@@ -342,9 +342,9 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 
       if (mode === 'add_another' && !editing) {
         showNoticeToast({
-          message: isVi ? `Đã lưu "${trimmedTitle}"` : `Saved "${trimmedTitle}"`,
+          message: isKm ? `បានរក្សាទុក "${trimmedTitle}"` : `Saved "${trimmedTitle}"`,
           detail: `${formatKhr(amountToSave)} · ${
-            isVi ? 'Sẵn sàng ghi chi phí tiếp theo' : 'Ready for next expense'
+            isKm ? 'រួចរាល់សម្រាប់ចំណាយបន្ទាប់' : 'Ready for next expense'
           }`,
         });
         // Reset per-entry fields while retaining smart defaults (scope, category, currency, paymentMethod, expenseDate)
@@ -380,7 +380,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     await deleteExpense(exp.id);
 
     showUndoToast({
-      message: isVi ? `Đã xóa "${exp.title}"` : `Deleted "${exp.title}"`,
+      message: isKm ? `បានលុប "${exp.title}"` : `Deleted "${exp.title}"`,
       detail: formatKhr(exp.amountKhr),
       onUndo: async () => {
         await saveExpense({
@@ -413,10 +413,10 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
             {t.expenses.title}
           </h1>
           <InfoHint
-            label={isVi ? 'Thông tin quản lý chi phí' : 'About Expenses'}
+            label={isKm ? 'អំពីការគ្រប់គ្រងចំណាយ' : 'About Expenses'}
             text={
-              isVi
-                ? `${t.expenses.subtitle} Ghi nhận chi phí vận hành (điện, thuê mặt bằng, vận chuyển, gia đình) tại đây; nhập hàng tồn kho ở mục Kho hàng để tránh tính trùng với giá vốn (COGS).`
+              isKm
+                ? `${t.expenses.subtitle} កត់ត្រាចំណាយប្រតិបត្តិការ (ឈ្នួល ទឹកភ្លើង ដឹកជញ្ជូន គ្រួសារ) នៅទីនេះ។ ចំណែកការទិញបញ្ចូលស្តុក សូមកត់ត្រានៅទំព័រស្តុកទំនិញ ដើម្បីកុំឱ្យរាប់ត្រួតលើថ្លៃដើម (COGS)។`
                 : `${t.expenses.subtitle} Record operating costs (rent, utilities, transport, household) here; log stock & ingredient restocks in Inventory so quantities update automatically without double-counting COGS.`
             }
           />
@@ -428,14 +428,14 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
         <div className="p-5">
           <div className="flex flex-wrap items-center gap-x-1">
             <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'Chi phí vận hành (P&L)' : 'Operating Expenses (P&L)'}
+              {isKm ? 'ចំណាយប្រតិបត្តិការ (P&L)' : 'Operating Expenses (P&L)'}
             </p>
             <InfoHint
               compact
-              label={isVi ? 'Chi phí vận hành (P&L)' : 'Operating Expenses (P&L)'}
+              label={isKm ? 'ចំណាយប្រតិបត្តិការ (P&L)' : 'Operating Expenses (P&L)'}
               text={
-                isVi
-                  ? 'Chi phí kinh doanh thường kỳ (thuê mặt bằng, điện nước, bao bì, vận chuyển) — được trừ trực tiếp vào Báo cáo Lãi/Lỗ.'
+                isKm
+                  ? 'ចំណាយប្រចាំថ្ងៃរបស់ហាង (ឈ្នួលទីតាំង ទឹកភ្លើង វេចខ្ចប់ ដឹកជញ្ជូន) ដែលដកចេញផ្ទាល់ក្នុងរបាយការណ៍ចំណេញ/ខាត។'
                   : 'Recurring shop overhead (rent, utilities, packaging, transport) deducted directly on the Accrual P&L.'
               }
             />
@@ -451,16 +451,16 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
         <div className="p-5">
           <div className="flex flex-wrap items-center gap-x-1">
             <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'Nhập kho (Chỉ tính dòng tiền)' : 'Inventory Purchases (Cash Flow Only)'}
+              {isKm ? 'ទិញបញ្ចូលស្តុក (សម្រាប់លំហូរសាច់ប្រាក់)' : 'Inventory Purchases (Cash Flow Only)'}
             </p>
             <InfoHint
               compact
               label={
-                isVi ? 'Nhập kho (Chỉ tính dòng tiền)' : 'Inventory Purchases (Cash Flow Only)'
+                isKm ? 'ទិញបញ្ចូលស្តុក (សម្រាប់លំហូរសាច់ប្រាក់)' : 'Inventory Purchases (Cash Flow Only)'
               }
               text={
-                isVi
-                  ? 'Tiền chi nhập Đóng gói bán lẻ và Nguyên liệu thô. Tính vào Dòng tiền chi ra nhưng KHÔNG cộng vào Chi phí vận hành để tránh tính trùng với giá vốn (COGS).'
+                isKm
+                  ? 'ប្រាក់ចំណាយទិញទំនិញវេចខ្ចប់ស្រាប់ និងវត្ថុធាតុដើម។ គិតក្នុងលំហូរសាច់ប្រាក់តែប៉ុណ្ណោះ ដើម្បីកុំឱ្យរាប់ត្រួតលើថ្លៃដើមទំនិញលក់ (COGS)។'
                   : 'Cash spent restocking Retail Packaged items and Raw Ingredients. Tracked in Cash Flow only so it never double-counts against COGS.'
               }
             />
@@ -482,8 +482,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
               compact
               label={t.expenses.householdTotal}
               text={
-                isVi
-                  ? 'Chi tiêu cá nhân / gia đình được tách riêng hoàn toàn khỏi lợi nhuận kinh doanh của quán.'
+                isKm
+                  ? 'ចំណាយផ្ទាល់ខ្លួន និងគ្រួសារ ត្រូវបានបំបែកដាច់ពីប្រាក់ចំណេញអាជីវកម្មហាង។'
                   : 'Personal and family spending tracked separately so it never distorts shop profitability.'
               }
             />
@@ -527,7 +527,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                   role="tab"
                   aria-selected={active}
                   onClick={() => setScopeFilter(tab.id)}
-                  className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+                  className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0 ${
                     active
                       ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                       : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -555,7 +555,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={isVi ? 'Tìm kiếm' : 'Search'}
+              placeholder={isKm ? 'ស្វែងរក...' : 'Search'}
               className="w-full h-11 pl-10 pr-9 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
             />
             {search && (
@@ -563,7 +563,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                 type="button"
                 onClick={() => setSearch('')}
                 className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] absolute right-1 top-1/2 -translate-y-1/2 rounded-md"
-                aria-label="Clear search"
+                aria-label={isKm ? 'សម្អាតការស្វែងរក' : 'Clear search'}
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -593,7 +593,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
             <button
               type="button"
               onClick={openNew}
-              className="inline-flex items-center justify-center h-11 px-4 text-xs sm:text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center h-11 px-4 text-xs sm:text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0"
             >
               {`+ ${t.expenses.addExpense}`}
             </button>
@@ -649,8 +649,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                             exp.vendor,
                             exp.note,
                             isInvPurchase
-                              ? isVi
-                                ? 'Nhập kho (chỉ tính dòng tiền)'
+                              ? isKm
+                                ? 'ទិញបញ្ចូលស្តុក (លំហូរសាច់ប្រាក់តែប៉ុណ្ណោះ)'
                                 : 'Inventory purchase (cash flow only)'
                               : '',
                           ]
@@ -675,8 +675,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                           {exp.scope === 'household'
                             ? t.expenses.scopeHousehold
                             : isInvPurchase
-                              ? isVi
-                                ? 'Nhập kho'
+                              ? isKm
+                                ? 'ទិញបញ្ចូលស្តុក'
                                 : 'Stock Purchase'
                               : t.expenses.scopeBusiness}
                         </span>
@@ -757,7 +757,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                 </h2>
                 {editing && (
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-500/40 shrink-0">
-                    {isVi ? 'Đang chỉnh sửa' : 'Editing'}
+                    {isKm ? 'កំពុងកែប្រែ' : 'Editing'}
                   </span>
                 )}
               </div>
@@ -768,7 +768,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                   <button
                     type="button"
                     onClick={() => handleScopeChange('business')}
-                    className={`h-9 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap ${
+                    className={`h-9 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ease-out active:scale-[0.97] whitespace-nowrap ${
                       scope === 'business'
                         ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                         : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -779,7 +779,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                   <button
                     type="button"
                     onClick={() => handleScopeChange('household')}
-                    className={`h-9 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap ${
+                    className={`h-9 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ease-out active:scale-[0.97] whitespace-nowrap ${
                       scope === 'household'
                         ? 'bg-white dark:bg-amber-500 text-stone-900 dark:text-stone-950 shadow-xs'
                         : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -812,14 +812,14 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                     <div className="flex items-center gap-2 min-w-0">
                       <Sparkles className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
                       <span className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-[#D5DFDA]">
-                        {isVi ? 'Lặp nhanh chi phí gần đây' : 'Quick Repeat Recent'}
+                        {isKm ? 'ចំណាយញឹកញាប់ថ្មីៗ' : 'Quick Repeat Recent'}
                       </span>
                       <InfoHint
                         compact
-                        label={isVi ? 'Lặp nhanh chi phí' : 'About Quick Repeat'}
+                        label={isKm ? 'អំពីចំណាយញឹកញាប់' : 'About Quick Repeat'}
                         text={
-                          isVi
-                            ? 'Chạm một lần để điền sẵn mô tả, danh mục và số tiền từ các khoản chi bạn đã ghi trước đó.'
+                          isKm
+                            ? 'ចុចមួយដងដើម្បីបំពេញការពិពណ៌នា ប្រភេទ និងចំនួនទឹកប្រាក់ពីចំណាយដែលអ្នកធ្លាប់កត់ត្រា។'
                             : 'Tap any past expense you recorded to pre-fill its description, category, and typical amount in one tap.'
                         }
                       />
@@ -831,7 +831,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                           key={preset.key}
                           type="button"
                           onClick={() => applyQuickRepeat(preset)}
-                          className="h-11 px-3.5 inline-flex items-center gap-2 rounded-full bg-white dark:bg-[#0F1814] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] dark:hover:border-[#10B981] text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
+                          className="h-11 px-3.5 inline-flex items-center gap-2 rounded-full bg-white dark:bg-[#0F1814] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] dark:hover:border-[#10B981] text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0"
                         >
                           <span>{`+ ${preset.title}`}</span>
                           {preset.amountKhr > 0 && (
@@ -856,8 +856,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                         compact
                         label={t.expenses.categoryLabel}
                         text={
-                          isVi
-                            ? 'Chọn nhóm chi phí vận hành (bao bì, điện nước, thiết bị, mặt bằng, vận chuyển). Nhập kho nguyên liệu nên ghi ở mục Kho hàng.'
+                          isKm
+                            ? 'ជ្រើសប្រភេទចំណាយប្រតិបត្តិការ (វេចខ្ចប់ ទឹកភ្លើង ឧបករណ៍ ឈ្នួលទីតាំង ដឹកជញ្ជូន)។ ការទិញបញ្ចូលវត្ថុធាតុដើម សូមកត់ត្រានៅទំព័រស្តុកទំនិញ។'
                             : 'Choose an operating expense category (packaging, utilities, equipment, rent, transport). Log ingredient restocks under Inventory.'
                         }
                       />
@@ -870,13 +870,13 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                             key={pill.id}
                             type="button"
                             onClick={() => setCategory(pill.id)}
-                            className={`h-11 px-3.5 rounded-full text-xs font-semibold border transition-colors whitespace-nowrap ${
+                            className={`h-11 px-3.5 rounded-full text-xs font-semibold border transition-all duration-150 active:scale-[0.97] whitespace-nowrap ${
                               active
                                 ? 'bg-[#0F5C43] text-white border-[#0F5C43] dark:bg-[#10B981] dark:text-[#042419] dark:border-[#10B981]'
                                 : 'bg-stone-50 dark:bg-[#0F1814] text-stone-700 dark:text-[#D5DFDA] border-stone-200 dark:border-[#24352C] hover:border-stone-300 dark:hover:border-[#344B3F]'
                             }`}
                           >
-                            {isVi ? pill.labelVi : pill.labelEn}
+                            {isKm ? pill.labelKm : pill.labelEn}
                           </button>
                         );
                       })}
@@ -898,7 +898,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         placeholder={
-                          isVi ? 'VD: Giao đá viên, Ly & ống hút...' : 'e.g. Ice Delivery, Cups & Straws...'
+                          isKm ? 'ឧ. ទឹកកក កែវ និងទុយោ...' : 'e.g. Ice Delivery, Cups & Straws...'
                         }
                         className="w-full h-11 px-3.5 text-sm bg-white dark:bg-[#0F1814] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]/70 border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                       />
@@ -908,7 +908,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <label className="text-xs font-semibold text-stone-700 dark:text-[#D5DFDA]">
-                          {isVi ? `Số tiền (${currency})` : `Amount (${currency})`}
+                          {isKm ? `ចំនួនទឹកប្រាក់ (${currency})` : `Amount (${currency})`}
                         </label>
                         {computedAmountKhr > 0 && (
                           <span className="font-mono-num text-[11px] text-stone-500 dark:text-[#94A39B]">
@@ -931,7 +931,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                         />
                         <div
                           role="group"
-                          aria-label={isVi ? 'Đơn vị tiền tệ' : 'Currency'}
+                          aria-label={isKm ? 'រូបិយប័ណ្ណ' : 'Currency'}
                           className="inline-flex items-center p-1 h-11 bg-stone-100 dark:bg-[#0F1814] border border-stone-200 dark:border-[#24352C] rounded-lg shrink-0"
                         >
                           {(['KHR', 'USD'] as const).map((curr) => (
@@ -965,7 +965,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                               key={pm}
                               type="button"
                               onClick={() => setPaymentMethod(pm)}
-                              className={`h-11 px-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
+                              className={`h-11 px-2 text-xs font-semibold rounded-lg border transition-all duration-150 active:scale-[0.97] whitespace-nowrap ${
                                 active
                                   ? 'bg-emerald-50 dark:bg-[#064E3B] border-[#0F5C43] dark:border-[#10B981] text-[#0F5C43] dark:text-[#D1FAE5]'
                                   : 'bg-white dark:bg-[#0F1814] border-stone-200 dark:border-[#24352C] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-50 dark:hover:bg-[#18251F]'
@@ -1001,7 +1001,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                         maxLength={100}
                         value={vendor}
                         onChange={(e) => setVendor(e.target.value)}
-                        placeholder={isVi ? 'Tên nhà cung cấp (tùy chọn)' : 'Vendor / shop (optional)'}
+                        placeholder={isKm ? 'អ្នកផ្គត់ផ្គង់ / ហាង (ជម្រើស)' : 'Vendor / shop (optional)'}
                         className="w-full h-11 px-3.5 text-sm bg-white dark:bg-[#0F1814] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]/70 border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                       />
                     </div>
@@ -1016,7 +1016,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                         maxLength={200}
                         value={note}
                         onChange={(e) => setNote(e.target.value)}
-                        placeholder={isVi ? 'Ghi chú nhanh (tùy chọn)' : 'Quick note (optional)'}
+                        placeholder={isKm ? 'កំណត់ចំណាំខ្លីៗ (ជម្រើស)' : 'Quick note (optional)'}
                         className="w-full h-11 px-3.5 text-sm bg-white dark:bg-[#0F1814] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]/70 border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                       />
                     </div>
@@ -1041,17 +1041,17 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                     type="button"
                     disabled={saving || !title.trim()}
                     onClick={() => void submitExpense('add_another')}
-                    className="h-12 px-4 inline-flex items-center justify-center text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-4 inline-flex items-center justify-center text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                   >
-                    {isVi ? '+ Lưu & Thêm tiếp' : '+ Save & Add Another'}
+                    {isKm ? '+ រក្សាទុក និងបន្ថែមទៀត' : '+ Save & Add Another'}
                   </button>
                 )}
                 <button
                   type="submit"
                   disabled={saving || !title.trim()}
-                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.97] disabled:opacity-50 whitespace-nowrap"
                 >
-                  {editing ? t.common.save : isVi ? '+ Lưu chi phí' : '+ Save Expense'}
+                  {editing ? t.common.save : isKm ? '+ រក្សាទុកចំណាយ' : '+ Save Expense'}
                 </button>
               </div>
             </form>
@@ -1063,7 +1063,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       {/* Bottom-Right Floating Action Button + Scroll-to-Top Pill */}
       <FloatingActionBar
         label={t.expenses.addExpense}
-        topLabel={isVi ? 'Lên đầu' : 'Top'}
+        topLabel={isKm ? 'ឡើងលើ' : 'Top'}
         onAction={openNew}
         hidden={formOpen}
       />

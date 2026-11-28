@@ -2,6 +2,7 @@ import React from 'react';
 import { Loader2, WifiOff } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useStore } from '../context/StoreContext';
+import { useLanguage } from '../context/LanguageContext';
 
 interface SyncStatusPillProps {
   onClick?: () => void;
@@ -10,30 +11,30 @@ interface SyncStatusPillProps {
 
 export const SyncStatusPill: React.FC<SyncStatusPillProps> = ({ onClick, compact = false }) => {
   const isOnline = useOnlineStatus();
-  const { settings, cloudSynced, syncing } = useStore();
-  const isVi = settings?.language === 'vi';
+  const { cloudSynced, syncing } = useStore();
+  const { isKm } = useLanguage();
 
   const statusConfig = !isOnline
     ? {
         tone: 'bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-500/40',
-        label: isVi ? 'Ngoại tuyến • Lưu trên máy' : 'Offline • Saved on Device',
+        label: isKm ? 'គ្មានអ៊ីនធឺណិត • រក្សាទុកក្នុងឧបករណ៍' : 'Offline • Saved on Device',
         kind: 'offline' as const,
       }
     : syncing
       ? {
           tone: 'bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-500/35',
-          label: isVi ? 'Đang đồng bộ...' : 'Syncing...',
+          label: isKm ? 'កំពុងធ្វើសមកាលកម្ម...' : 'Syncing...',
           kind: 'syncing' as const,
         }
       : cloudSynced
         ? {
             tone: 'bg-emerald-50/90 text-emerald-900 border-emerald-200 dark:bg-[#064E3B]/70 dark:text-[#A7F3D0] dark:border-[#10B981]/35',
-            label: isVi ? 'Đã lưu & Đồng bộ' : 'Saved & Synced',
+            label: isKm ? 'បានរក្សាទុក និងធ្វើសមកាលកម្ម' : 'Saved & Synced',
             kind: 'synced' as const,
           }
         : {
             tone: 'bg-emerald-50/80 text-emerald-900 border-emerald-200/90 dark:bg-[#064E3B]/50 dark:text-[#A7F3D0] dark:border-[#10B981]/30',
-            label: isVi ? 'Đã lưu trên máy' : 'Saved on Device',
+            label: isKm ? 'បានរក្សាទុកក្នុងឧបករណ៍' : 'Saved on Device',
             kind: 'local' as const,
           };
 
@@ -53,7 +54,7 @@ export const SyncStatusPill: React.FC<SyncStatusPillProps> = ({ onClick, compact
     </>
   );
 
-  const baseClass = `inline-flex items-center gap-2 rounded-full border font-semibold transition-colors max-w-full ${
+  const baseClass = `inline-flex items-center gap-2 rounded-full border font-semibold transition-all duration-150 active:scale-[0.97] max-w-full ${
     compact ? 'h-9 px-3 text-[11px]' : 'h-10 px-3.5 text-xs'
   } ${statusConfig.tone}`;
 
@@ -74,8 +75,7 @@ export const SyncStatusPill: React.FC<SyncStatusPillProps> = ({ onClick, compact
 
 export const OfflineBanner: React.FC = () => {
   const isOnline = useOnlineStatus();
-  const { settings } = useStore();
-  const isVi = settings?.language === 'vi';
+  const { isKm } = useLanguage();
 
   if (isOnline) return null;
 
@@ -86,11 +86,11 @@ export const OfflineBanner: React.FC = () => {
     >
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/80 border border-amber-300/80 dark:border-amber-500/40 font-semibold text-amber-900 dark:text-amber-100">
         <WifiOff className="w-3.5 h-3.5 text-amber-700 dark:text-amber-300 shrink-0" />
-        <span>{isVi ? 'Ngoại tuyến • Lưu trên máy' : 'Offline • Saved on Device'}</span>
+        <span>{isKm ? 'គ្មានអ៊ីនធឺណិត • រក្សាទុកក្នុងឧបករណ៍' : 'Offline • Saved on Device'}</span>
       </span>
       <span className="text-amber-800 dark:text-amber-200/90">
-        {isVi
-          ? 'Mọi đơn hàng đều được lưu an toàn và sẽ tự đồng bộ khi có mạng.'
+        {isKm
+          ? 'ការលក់ និងការកែប្រែទាំងអស់ត្រូវបានរក្សាទុកដោយសុវត្ថិភាព ហើយនឹងធ្វើសមកាលកម្មពេលភ្ជាប់អ៊ីនធឺណិតវិញ។'
           : 'All sales and updates are safely saved and will sync when you reconnect.'}
       </span>
     </div>

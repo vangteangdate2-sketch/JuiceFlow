@@ -38,7 +38,8 @@ import {
   signInWithGoogleForSync,
   signOutWorkspace,
 } from '../lib/firebase';
-import { getTranslations } from '../i18n/translations';
+import { useLanguage } from './LanguageContext';
+import type { TranslationSet } from '../i18n/translations';
 import type {
   AppLanguage,
   BarcodeFormat,
@@ -649,7 +650,7 @@ export interface StoreContextValue {
   setRememberMe: (value: boolean) => void;
   cashPresets: number[];
   setCashPresets: (presets: number[]) => void;
-  t: ReturnType<typeof getTranslations>;
+  t: TranslationSet;
   setLanguage: (lang: AppLanguage) => void;
   setActiveOperator: (name: string) => void;
   updateSettings: (patch: Partial<WorkspaceSettings>) => Promise<void>;
@@ -1126,7 +1127,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           currency: 'KHR',
           usdRate: clampNumber(cur.settings.usdRate, 1, 100000),
           posExchangeRate: clampNumber(cur.settings.posExchangeRate ?? 4000, 1, 100000),
-          language: cur.settings.language === 'vi' ? 'vi' : 'en',
+          language: 'en',
           familyMembers: familyList,
           lowStockDefault: clampNumber(cur.settings.lowStockDefault, 0, 1000000),
           allowNegativeStock: Boolean(cur.settings.allowNegativeStock),
@@ -1297,7 +1298,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 d.posExchangeRate !== undefined && Number(d.posExchangeRate) > 0
                   ? Math.round(Number(d.posExchangeRate))
                   : prev.posExchangeRate ?? 4000,
-              language: d.language === 'vi' ? 'vi' : 'en',
+              language: prev.language,
               familyMembers:
                 Array.isArray(d.familyMembers) && d.familyMembers.length > 0
                   ? (d.familyMembers as string[])
@@ -1658,17 +1659,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return memberUids.includes(user.uid) ? memberUids : [user.uid, ...memberUids].slice(0, 10);
   }, [user, memberUids]);
 
+  const { lang: activeLang, setLang: setAppLang, t } = useLanguage();
+
   const setLanguage = useCallback(
-    (lang: AppLanguage) => {
-      setSettings((prev) => ({ ...prev, language: lang }));
-      if (user && cloudWorkspaceId) {
-        updateDoc(doc(db, 'workspaces', cloudWorkspaceId), {
-          language: lang,
-          updatedAt: serverTimestamp(),
-        }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `workspaces/${cloudWorkspaceId}`));
-      }
+    (nextLang: AppLanguage) => {
+      setAppLang(nextLang);
+      setSettings((prev) => ({ ...prev, language: nextLang }));
     },
-    [user, cloudWorkspaceId]
+    [setAppLang]
   );
 
   const setActiveOperator = useCallback((name: string) => {
@@ -1682,6 +1680,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ...patch,
       };
       setSettings(next);
+      if (patch.language) {
+        setAppLang(patch.language);
+      }
       if (user && cloudWorkspaceId) {
         const wsPath = `workspaces/${cloudWorkspaceId}`;
         try {
@@ -1690,7 +1691,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             location: sanitizeString(next.location, 120),
             usdRate: clampNumber(next.usdRate, 1, 100000),
             posExchangeRate: clampNumber(next.posExchangeRate ?? 4000, 1, 100000),
-            language: next.language === 'vi' ? 'vi' : 'en',
+            language: 'en',
             familyMembers: next.familyMembers.slice(0, 10),
             lowStockDefault: clampNumber(next.lowStockDefault, 0, 1000000),
             allowNegativeStock: Boolean(next.allowNegativeStock),
@@ -4269,7 +4270,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 d.posExchangeRate !== undefined && Number(d.posExchangeRate) > 0
                   ? Math.round(Number(d.posExchangeRate))
                   : prev.posExchangeRate ?? 4000,
-              language: d.language === 'vi' ? 'vi' : 'en',
+              language: prev.language,
               familyMembers:
                 Array.isArray(d.familyMembers) && d.familyMembers.length > 0
                   ? (d.familyMembers as string[])
@@ -4460,10 +4461,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [user, cloudWorkspaceId]);
 
-  const t = useMemo(() => getTranslations(settings.language), [settings.language]);
+  const effectiveSettings = useMemo<WorkspaceSettings>(
+    () => ({ ...settings, language: activeLang }),
+    [settings, activeLang]
+  );
 
   const value: StoreContextValue = {
-    settings,
+    settings: effectiveSettings,
     categories,
     ingredients,
     products,

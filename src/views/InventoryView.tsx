@@ -137,7 +137,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     recordStockAdjustment,
     t,
   } = useStore();
-  const isVi = settings.language === 'vi';
+  const isKm = settings.language === 'km';
+  const getLocalizedName = (name: string, nameVi?: string) =>
+    isKm && nameVi && /[\u1780-\u17FF]/.test(nameVi) ? nameVi : name;
   const today = todayIso();
   const { showNoticeToast } = useUndoToast();
   const ingNameInputRef = useRef<HTMLInputElement | null>(null);
@@ -273,7 +275,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         return {
           kind: 'ingredient',
           ingredient: existingIng,
-          displayName: isVi ? existingIng.nameVi || existingIng.name : existingIng.name,
+          displayName: getLocalizedName(existingIng.name, existingIng.nameVi),
           reason: 'name',
         };
       }
@@ -285,7 +287,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         return {
           kind: 'product',
           product: existingProd,
-          displayName: isVi ? existingProd.nameVi || existingProd.name : existingProd.name,
+          displayName: getLocalizedName(existingProd.name, existingProd.nameVi),
           reason: 'name',
         };
       }
@@ -312,7 +314,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             return {
               kind: 'ingredient',
               ingredient: matchedIng,
-              displayName: isVi ? matchedIng.nameVi || matchedIng.name : matchedIng.name,
+              displayName: getLocalizedName(matchedIng.name, matchedIng.nameVi),
               reason: 'barcode',
               matchedCode: first.code,
             };
@@ -323,7 +325,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             return {
               kind: 'product',
               product: matchedProd,
-              displayName: isVi ? matchedProd.nameVi || matchedProd.name : matchedProd.name,
+              displayName: getLocalizedName(matchedProd.name, matchedProd.nameVi),
               reason: 'barcode',
               matchedCode: first.code,
             };
@@ -333,7 +335,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     }
 
     return null;
-  }, [ingModalOpen, ingName, ingBarcode, ingredients, products, barcodeRegistry, editingIng?.id, editingIng?.name, isVi]);
+  }, [ingModalOpen, ingName, ingBarcode, ingredients, products, barcodeRegistry, editingIng?.id, editingIng?.name, isKm]);
 
   // Stock-In / Quick Restock Purchase modal (supports Raw Ingredients & Retail Packaged + pack/carton multiplication)
   const [purchaseTarget, setPurchaseTarget] = useState<StockItemTarget | null>(null);
@@ -629,8 +631,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     setUpdatingCategoryKey(rowKey);
     try {
       const nextCat = getCategoryById(nextCategoryId, categories);
-      const nextCatName = getCategoryDisplayName(nextCat, isVi);
-      const itemLabel = isVi ? item.nameVi || item.name : item.name;
+      const nextCatName = getCategoryDisplayName(nextCat, isKm);
+      const itemLabel = getLocalizedName(item.name, item.nameVi);
 
       if (item.sourceIngredient) {
         const ing = item.sourceIngredient;
@@ -650,7 +652,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         if (!res.ok) {
           showNotice(
             'err',
-            res.error || (isVi ? 'Không thể đổi danh mục.' : 'Could not update category.')
+            res.error || (isKm ? 'មិនអាចប្តូរប្រភេទបានទេ។' : 'Could not update category.')
           );
           return;
         }
@@ -681,15 +683,18 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           variants: prod.variants,
         });
         if (!res.ok) {
-          showNotice('err', res.error || (isVi ? 'Không thể đổi danh mục.' : 'Could not update category.'));
+          showNotice(
+            'err',
+            res.error || (isKm ? 'មិនអាចប្តូរប្រភេទបានទេ។' : 'Could not update category.')
+          );
           return;
         }
       }
 
       triggerHighlightItem(item.id);
       showNoticeToast({
-        message: isVi
-          ? `Đã chuyển "${itemLabel}" sang ${nextCatName}`
+        message: isKm
+          ? `បានផ្លាស់ប្តូរ "${itemLabel}" ទៅ ${nextCatName}`
           : `Moved "${itemLabel}" to ${nextCatName}`,
       });
     } finally {
@@ -768,11 +773,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         openPurchaseModal(toTargetFromProduct(prod));
       } else {
         setActiveTab('ingredients');
-        const label = isVi ? prod.nameVi || prod.name : prod.name;
+        const label = getLocalizedName(prod.name, prod.nameVi);
         showNotice(
           'ok',
-          isVi
-            ? `"${label}" là món pha chế tại chỗ — hãy nhập kho các Nguyên liệu thô bên dưới.`
+          isKm
+            ? `"${label}" ជាទំនិញធ្វើតាមការកុម្ម៉ង់ — សូមបញ្ចូលស្តុកវត្ថុធាតុដើមខាងក្រោម។`
             : `"${label}" is Made-to-Order — restock its Raw Ingredients below.`
         );
       }
@@ -785,7 +790,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     const trimmed = newIngCategoryName.trim();
     if (!trimmed) {
       setNewIngCategoryError(
-        isVi ? 'Vui lòng nhập tên danh mục.' : 'Please enter a category name.'
+        isKm ? 'សូមបញ្ចូលឈ្មោះប្រភេទ។' : 'Please enter a category name.'
       );
       return;
     }
@@ -798,7 +803,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       });
       if (!res.ok || !res.category) {
         setNewIngCategoryError(
-          res.error || (isVi ? 'Không thể tạo danh mục.' : 'Could not create category.')
+          res.error || (isKm ? 'មិនអាចបង្កើតប្រភេទបានទេ។' : 'Could not create category.')
         );
         return;
       }
@@ -830,7 +835,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     if (!res.ok || !res.id) {
       setIngSaveError(
         res.error ||
-          (isVi ? 'Không thể lưu nguyên liệu (tên đã tồn tại).' : 'Could not save ingredient.')
+          (isKm ? 'មិនអាចរក្សាទុកវត្ថុធាតុដើមបានទេ (ឈ្មោះមានរួចហើយ)។' : 'Could not save ingredient.')
       );
       return;
     }
@@ -841,9 +846,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
     if (mode === 'add_another' && !editingIng) {
       showNoticeToast({
-        message: isVi ? `Đã thêm "${trimmedName}"` : `Saved "${trimmedName}"`,
-        detail: isVi
-          ? 'Sẵn sàng thêm nguyên liệu tiếp theo (đã giữ danh mục & đơn vị).'
+        message: isKm ? `បានរក្សាទុក "${trimmedName}"` : `Saved "${trimmedName}"`,
+        detail: isKm
+          ? 'រួចរាល់សម្រាប់វត្ថុធាតុដើមបន្ទាប់ (បានរក្សាប្រភេទ និងឯកតា)។'
           : 'Ready for next ingredient (category & unit kept).',
       });
       // Reset per-item fields while retaining smart defaults (category, unit, reorder level, supplier)
@@ -861,11 +866,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     showNotice(
       'ok',
       editingIng
-        ? isVi
-          ? `Đã cập nhật nguyên liệu "${trimmedName}".`
+        ? isKm
+          ? `បានកែប្រែវត្ថុធាតុដើម "${trimmedName}"។`
           : `Updated ingredient "${trimmedName}".`
-        : isVi
-          ? `Đã thêm nguyên liệu "${trimmedName}".`
+        : isKm
+          ? `បានបន្ថែមវត្ថុធាតុដើម "${trimmedName}"។`
           : `Added ingredient "${trimmedName}".`
     );
   };
@@ -921,8 +926,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     setPurchaseTarget(null);
     showNotice(
       'ok',
-      isVi
-        ? `Đã nhập kho +${formatQty(effectiveQty, purchaseTarget.unit)} ${purchaseTarget.nameVi || purchaseTarget.name}.`
+      isKm
+        ? `បានបញ្ចូលស្តុក +${formatQty(effectiveQty, purchaseTarget.unit)} ${getLocalizedName(purchaseTarget.name, purchaseTarget.nameVi)}។`
         : `Restocked +${formatQty(effectiveQty, purchaseTarget.unit)} ${purchaseTarget.name}.`
     );
   };
@@ -941,11 +946,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         note: adjustNote,
       });
       if (!res.ok) {
-        showNotice('err', res.error || 'Could not record stock count.');
+        showNotice('err', res.error || (isKm ? 'មិនអាចកត់ត្រាការរាប់ស្តុកបានទេ។' : 'Could not record stock count.'));
         return;
       }
       setAdjustModalTarget(null);
-      showNotice('ok', isVi ? 'Đã cập nhật kiểm kê thực tế.' : 'Physical stock count recorded.');
+      showNotice('ok', isKm ? 'បានកត់ត្រាការរាប់ស្តុកជាក់ស្តែង។' : 'Physical stock count recorded.');
       return;
     }
 
@@ -960,14 +965,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         note: adjustNote || 'Opening stock balance',
       });
       if (!res.ok) {
-        showNotice('err', res.error || 'Could not record opening stock.');
+        showNotice('err', res.error || (isKm ? 'មិនអាចកត់ត្រាស្តុកដើមគ្រាបានទេ។' : 'Could not record opening stock.'));
         return;
       }
       setAdjustModalTarget(null);
       showNotice(
         'ok',
-        isVi
-          ? `Đã ghi nhận tồn đầu kỳ cho ${adjustModalTarget.nameVi || adjustModalTarget.name}.`
+        isKm
+          ? `បានកត់ត្រាស្តុកដើមគ្រាសម្រាប់ ${getLocalizedName(adjustModalTarget.name, adjustModalTarget.nameVi)}។`
           : `Opening stock recorded (non-expense) for ${adjustModalTarget.name}.`
       );
       return;
@@ -984,14 +989,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         note: adjustNote,
       });
       if (!res.ok) {
-        showNotice('err', res.error || 'Could not log waste.');
+        showNotice('err', res.error || (isKm ? 'មិនអាចកត់ត្រាការខូចខាតបានទេ។' : 'Could not log waste.'));
         return;
       }
       setAdjustModalTarget(null);
       showNotice(
         'ok',
-        isVi
-          ? `Đã ghi nhận hao hụt -${formatQty(qty, adjustModalTarget.unit)}.`
+        isKm
+          ? `បានកត់ត្រាការខូចខាត -${formatQty(qty, adjustModalTarget.unit)}។`
           : `Logged write-off of -${formatQty(qty, adjustModalTarget.unit)}.`
       );
       return;
@@ -1008,11 +1013,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       note: adjustNote,
     });
     if (!res.ok) {
-      showNotice('err', res.error || 'Could not adjust stock.');
+      showNotice('err', res.error || (isKm ? 'មិនអាចកែសម្រួលស្តុកបានទេ។' : 'Could not adjust stock.'));
       return;
     }
     setAdjustModalTarget(null);
-    showNotice('ok', isVi ? 'Đã cập nhật điều chỉnh tồn kho.' : 'Stock adjustment recorded.');
+    showNotice('ok', isKm ? 'បានកត់ត្រាការកែសម្រួលស្តុក។' : 'Stock adjustment recorded.');
   };
 
   // Filtered stock items for active tier tab + status filter + search
@@ -1076,20 +1081,20 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const getTierMeta = (tier: StockClassification) => {
     if (tier === 'ingredient') {
       return {
-        label: isVi ? 'Nguyên liệu thô' : 'Raw Ingredients',
+        label: isKm ? 'វត្ថុធាតុដើម' : 'Raw Ingredients',
         badgeClass: getStockClassificationBadgeClass('ingredient'),
         icon: Wheat,
-        hintText: isVi
-          ? 'Đo theo trọng lượng/thể tích. Tự động trừ theo công thức khi bán món Pha chế tại chỗ trên POS.'
+        hintText: isKm
+          ? 'វាស់តាមទម្ងន់ ឬមាឌ។ កាត់ស្តុកដោយស្វ័យប្រវត្តិតាមរូបមន្ត ពេលលក់ទំនិញធ្វើតាមការកុម្ម៉ង់លើ POS។'
           : 'Measured by weight or volume. Automatically deducted via recipe on Made-to-Order POS sales.',
       };
     }
     return {
-      label: isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged',
+      label: isKm ? 'ទំនិញវេចខ្ចប់ស្រាប់' : 'Retail Packaged',
       badgeClass: getStockClassificationBadgeClass('packaged'),
       icon: Package,
-      hintText: isVi
-        ? 'Nước chai, lon, đồ ăn vặt quản lý theo đơn vị hoặc thùng. Trừ trực tiếp số lượng bán tại POS.'
+      hintText: isKm
+        ? 'ដប កំប៉ុង និងនំចំណី គ្រប់គ្រងតាមឯកតា ឬកេស។ កាត់ស្តុកដោយផ្ទាល់ពេលគិតប្រាក់លើ POS។'
         : 'Bottles, cans, and snacks tracked by unit or carton count. Deducted directly at POS checkout.',
     };
   };
@@ -1104,10 +1109,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               {t.inventory.title}
             </h1>
             <InfoHint
-              label={isVi ? 'Thông tin quản lý kho' : 'About Inventory Management'}
+              label={isKm ? 'អំពីការគ្រប់គ្រងស្តុក' : 'About Inventory Management'}
               text={
-                isVi
-                  ? 'Kiểm tra nhanh hàng sắp hết và quản lý đồng bộ 2 nhóm kho: Nguyên liệu thô và Đóng gói bán lẻ.'
+                isKm
+                  ? 'ត្រួតពិនិត្យស្តុកជិតអស់ និងបញ្ចូលស្តុកប្រចាំថ្ងៃសម្រាប់វត្ថុធាតុដើម និងទំនិញវេចខ្ចប់ស្រាប់។'
                   : 'Daily stock checks and restocking across Raw Ingredients and Retail Packaged goods.'
               }
             />
@@ -1123,7 +1128,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               ·
             </span>
             <span>
-              {isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}:{' '}
+              {isKm ? 'វត្ថុធាតុដើម' : 'Raw Ingredients'}:{' '}
               <span className="font-medium text-teal-700 dark:text-teal-400">
                 {formatKhr(valuation.ingVal)}
               </span>
@@ -1132,7 +1137,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               ·
             </span>
             <span>
-              {isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged'}:{' '}
+              {isKm ? 'ទំនិញវេចខ្ចប់ស្រាប់' : 'Retail Packaged'}:{' '}
               <span className="font-medium text-sky-700 dark:text-sky-400">
                 {formatKhr(valuation.packagedVal)}
               </span>
@@ -1143,14 +1148,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             {attentionItems.combined.length === 0 ? (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans font-medium bg-emerald-50/90 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/40">
                 <CheckCircle2 className="w-3 h-3 shrink-0" />
-                <span>{isVi ? 'Tồn kho ổn định' : 'All Stock Healthy'}</span>
+                <span>{isKm ? 'ស្តុកគ្រប់គ្រាន់ទាំងអស់' : 'All Stock Healthy'}</span>
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-sans font-medium bg-amber-50 text-amber-800 border border-amber-200/70 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700/40">
                 <AlertTriangle className="w-3 h-3 shrink-0" />
                 <span>
                   {attentionItems.combined.length}{' '}
-                  {isVi ? 'cần xử lý' : 'need attention'}
+                  {isKm ? 'ត្រូវពិនិត្យ' : 'need attention'}
                 </span>
               </span>
             )}
@@ -1163,20 +1168,20 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             role="tab"
             aria-selected={activeTab === 'movements'}
             onClick={() => setActiveTab(activeTab === 'movements' ? 'all' : 'movements')}
-            className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-sm font-medium rounded-lg border transition-all duration-150 ease-out whitespace-nowrap ${
+            className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-sm font-medium rounded-lg border transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap ${
               activeTab === 'movements'
                 ? 'bg-emerald-50/80 border-emerald-500/40 text-[#0F5C43] dark:bg-[#064E3B]/70 dark:border-[#10B981]/50 dark:text-[#6EE7B7]'
                 : 'text-stone-600 dark:text-[#A8B8B0] bg-transparent border-slate-200/80 dark:border-emerald-950/80 hover:bg-stone-100/80 dark:hover:bg-[#18251F] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
             }`}
           >
             <History className="w-4 h-4 shrink-0" />
-            <span>{isVi ? 'Lịch sử' : 'History'}</span>
+            <span>{isKm ? 'ប្រវត្តិស្តុក' : 'History'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => openNewIngredient()}
-            className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg shadow-2xs transition-all duration-150 ease-out active:scale-[0.98] whitespace-nowrap shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg shadow-2xs transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0"
           >
             <Plus className="w-4 h-4 shrink-0" />
             <span>{t.inventory.addIngredient}</span>
@@ -1210,7 +1215,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       {scannedInventoryMatch && (
         <div
           role="status"
-          className="bg-emerald-50 dark:bg-[#064E3B]/75 border border-emerald-200 dark:border-[#10B981]/45 text-emerald-950 dark:text-[#D1FAE5] rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          className="bg-emerald-50 dark:bg-[#064E3B]/75 border border-emerald-200 dark:border-[#10B981]/45 text-emerald-950 dark:text-[#D1FAE5] rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-drawer-in"
         >
           <div className="flex items-start gap-2.5 min-w-0">
             <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0 mt-0.5" />
@@ -1218,11 +1223,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               {scannedInventoryMatch.itemType === 'ingredient' && scannedInventoryMatch.ingredient ? (
                 <>
                   <p className="text-sm font-semibold truncate">
-                    {isVi ? 'Đã tìm thấy nguyên liệu' : 'Matched Raw Ingredient'}:{' '}
-                    {isVi
-                      ? scannedInventoryMatch.ingredient.nameVi ||
-                        scannedInventoryMatch.ingredient.name
-                      : scannedInventoryMatch.ingredient.name}
+                    {isKm ? 'បានរកឃើញវត្ថុធាតុដើម' : 'Matched Raw Ingredient'}:{' '}
+                    {getLocalizedName(
+                      scannedInventoryMatch.ingredient.name,
+                      scannedInventoryMatch.ingredient.nameVi
+                    )}
                   </p>
                   <p className="text-xs opacity-85 mt-0.5 flex flex-wrap items-center gap-x-1.5">
                     <span className="font-mono-num">
@@ -1231,7 +1236,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     </span>
                     <span aria-hidden="true">·</span>
                     <span className="font-mono-num">
-                      {isVi ? 'Tồn kho' : 'In stock'}:{' '}
+                      {isKm ? 'ក្នុងស្តុក' : 'In stock'}:{' '}
                       {formatQty(
                         scannedInventoryMatch.ingredient.stockQty,
                         scannedInventoryMatch.ingredient.unit
@@ -1242,10 +1247,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               ) : scannedInventoryMatch.product ? (
                 <>
                   <p className="text-sm font-semibold truncate">
-                    {isVi ? 'Đã tìm thấy' : 'Matched'}:{' '}
-                    {isVi
-                      ? scannedInventoryMatch.product.nameVi || scannedInventoryMatch.product.name
-                      : scannedInventoryMatch.product.name}
+                    {isKm ? 'បានរកឃើញ' : 'Matched'}:{' '}
+                    {getLocalizedName(
+                      scannedInventoryMatch.product.name,
+                      scannedInventoryMatch.product.nameVi
+                    )}
                   </p>
                   <p className="text-xs opacity-85 mt-0.5 flex flex-wrap items-center gap-x-1.5">
                     <span className="font-mono-num">
@@ -1255,13 +1261,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     <span aria-hidden="true">·</span>
                     {scannedInventoryMatch.product.productType === 'PREPARED_TO_ORDER' ? (
                       <span>
-                        {isVi
-                          ? 'Món pha chế theo đơn — quản lý tồn theo nguyên liệu thô'
+                        {isKm
+                          ? 'ធ្វើតាមការកុម្ម៉ង់ — តាមដានតាមវត្ថុធាតុដើម'
                           : 'Made-to-Order — tracked via raw ingredients'}
                       </span>
                     ) : (
                       <span className="font-mono-num">
-                        {isVi ? 'Tồn kho' : 'In stock'}:{' '}
+                        {isKm ? 'ក្នុងស្តុក' : 'In stock'}:{' '}
                         {formatQty(
                           scannedInventoryMatch.product.stockQty,
                           scannedInventoryMatch.product.unit || 'pcs'
@@ -1288,17 +1294,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                       barcodeScanned: scannedInventoryMatch.code,
                     });
                   }}
-                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                 >
-                  {isVi ? '+ Nhập kho' : '+ Restock'}
+                  {isKm ? '+ បញ្ចូលស្តុក' : '+ Restock'}
                 </button>
                 <button
                   type="button"
                   onClick={() => openEditIngredient(scannedInventoryMatch.ingredient!)}
-                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
+                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                 >
                   <Pencil className="w-3.5 h-3.5" />
-                  {isVi ? 'Sửa' : 'Edit'}
+                  {t.common.edit}
                 </button>
               </>
             ) : scannedInventoryMatch.product ? (
@@ -1320,18 +1326,18 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                           : undefined
                       );
                     }}
-                    className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                    className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                   >
-                    {isVi ? '+ Nhập kho' : '+ Restock'}
+                    {isKm ? '+ បញ្ចូលស្តុក' : '+ Restock'}
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => setEditingStockProduct(scannedInventoryMatch.product!)}
-                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
+                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                 >
                   <Pencil className="w-3.5 h-3.5" />
-                  {isVi ? 'Sửa' : 'Edit'}
+                  {t.common.edit}
                 </button>
               </>
             ) : null}
@@ -1343,7 +1349,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               }}
               className="h-9 px-2.5 inline-flex items-center justify-center text-xs font-semibold rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
             >
-              {isVi ? 'Xóa tìm' : 'Clear'}
+              {isKm ? 'សម្អាត' : 'Clear'}
             </button>
           </div>
         </div>
@@ -1353,13 +1359,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       {unknownStockBarcode && (
         <div
           role="status"
-          className="bg-white dark:bg-[#131D18] border border-stone-300 dark:border-[#24352C] rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          className="bg-white dark:bg-[#131D18] border border-stone-300 dark:border-[#24352C] rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-drawer-in"
         >
           <div className="flex items-start gap-2.5 min-w-0">
             <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                {isVi ? 'Mã vạch chưa có trong kho' : 'No inventory item matches'}:{' '}
+                {isKm ? 'មិនមានទំនិញក្នុងស្តុកត្រូវនឹងបាកូដ' : 'No inventory item matches'}:{' '}
                 <span className="font-mono-num text-[#0F5C43] dark:text-[#34D399]">
                   {unknownStockBarcode.code}
                 </span>{' '}
@@ -1369,11 +1375,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               </p>
               <p className="text-xs text-stone-600 dark:text-[#94A39B] mt-0.5 truncate">
                 {unknownStockBarcode.prefill
-                  ? isVi
-                    ? `Gợi ý từ Open Food Facts: ${unknownStockBarcode.prefill.name}${unknownStockBarcode.prefill.brand ? ` · ${unknownStockBarcode.prefill.brand}` : ''}`
+                  ? isKm
+                    ? `ណែនាំពី Open Food Facts៖ ${unknownStockBarcode.prefill.name}${unknownStockBarcode.prefill.brand ? ` · ${unknownStockBarcode.prefill.brand}` : ''}`
                     : `Prefill from Open Food Facts: ${unknownStockBarcode.prefill.name}${unknownStockBarcode.prefill.brand ? ` · ${unknownStockBarcode.prefill.brand}` : ''}`
-                  : isVi
-                    ? 'Không tìm thấy trên Open Food Facts — hãy liên kết mã này với sản phẩm hoặc nguyên liệu mới.'
+                  : isKm
+                    ? 'រកមិនឃើញក្នុងប្រព័ន្ធខាងក្រៅ — សូមភ្ជាប់បាកូដនេះទៅផលិតផល ឬវត្ថុធាតុដើមថ្មី។'
                     : 'Not found externally — link this barcode to a new product or raw ingredient.'}
               </p>
             </div>
@@ -1382,18 +1388,18 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <button
               type="button"
               onClick={() => setQuickRegisterOpen(true)}
-              className="h-11 inline-flex items-center justify-center px-3.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+              className="h-11 inline-flex items-center justify-center px-3.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
             >
-              {isVi ? '+ Đăng ký sản phẩm' : '+ Register Product'}
+              {isKm ? '+ ចុះឈ្មោះផលិតផល' : '+ Register Product'}
             </button>
             <button
               type="button"
               onClick={() =>
                 openNewIngredient(unknownStockBarcode.code, unknownStockBarcode.prefill?.name)
               }
-              className="h-11 inline-flex items-center justify-center px-3.5 text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] rounded-lg transition-colors whitespace-nowrap"
+              className="h-11 inline-flex items-center justify-center px-3.5 text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
             >
-              {isVi ? '+ Thêm nguyên liệu' : '+ Add Ingredient'}
+              {isKm ? '+ បន្ថែមវត្ថុធាតុដើម' : '+ Add Ingredient'}
             </button>
             <button
               type="button"
@@ -1413,14 +1419,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       {/* Compact Single-Line Needs Attention Quick-Filter Strip (only when urgent items exist) */}
       {attentionItems.combined.length > 0 && activeTab !== 'movements' && (
         <section
-          aria-label={isVi ? 'Cần xử lý hôm nay' : 'Needs Attention Today'}
+          aria-label={isKm ? 'ត្រូវពិនិត្យថ្ងៃនេះ' : 'Needs Attention Today'}
           className="needs-attention-container min-h-12 py-2 px-3.5 rounded-xl bg-amber-50/45 dark:bg-amber-950/15 border border-amber-200/60 dark:border-amber-800/35 flex flex-wrap items-center justify-between gap-2 transition-all duration-150 ease-out animate-drawer-in"
         >
           <div className="flex flex-wrap items-center gap-1.5 min-w-0">
             <div className="inline-flex items-center gap-1.5 pr-1 shrink-0">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
               <span className="text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] whitespace-nowrap">
-                {isVi ? 'Cần xử lý' : 'Needs Attention'}
+                {isKm ? 'ត្រូវពិនិត្យ' : 'Needs Attention'}
               </span>
             </div>
 
@@ -1428,13 +1434,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               type="button"
               onClick={() => handleSelectAttentionFilter('all_urgent')}
               aria-pressed={attentionFilter === 'all_urgent'}
-              className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-colors duration-150 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
+              className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap inline-flex items-center gap-1 ${
                 attentionFilter === 'all_urgent'
                   ? 'border-stone-900 bg-stone-900 text-white dark:border-[#10B981] dark:bg-[#10B981] dark:text-[#042419]'
                   : 'border-slate-200/80 dark:border-emerald-950/80 bg-white/90 dark:bg-[#131D18] text-stone-700 dark:text-[#D5DFDA] hover:bg-stone-100 dark:hover:bg-[#18251F]'
               }`}
             >
-              <span>{isVi ? 'Tất cả' : 'All Urgent'}</span>
+              <span>{isKm ? 'បន្ទាន់ទាំងអស់' : 'All Urgent'}</span>
               <span className="font-mono-num opacity-80">({attentionItems.combined.length})</span>
             </button>
 
@@ -1443,13 +1449,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 type="button"
                 onClick={() => handleSelectAttentionFilter('out')}
                 aria-pressed={attentionFilter === 'out'}
-                className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-colors duration-150 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
+                className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap inline-flex items-center gap-1 ${
                   attentionFilter === 'out'
                     ? 'border-red-600 bg-red-600 text-white dark:border-red-500 dark:bg-red-500 dark:text-white'
                     : 'border-red-200/70 dark:border-red-500/35 bg-red-50/80 dark:bg-red-950/35 text-red-700 dark:text-red-200 hover:bg-red-100/80 dark:hover:bg-red-950/60'
                 }`}
               >
-                <span>{isVi ? 'Hết hàng' : 'Out of Stock'}</span>
+                <span>{t.inventory.statusOut}</span>
                 <span className="font-mono-num opacity-80">({attentionItems.outOfStock.length})</span>
               </button>
             )}
@@ -1459,13 +1465,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 type="button"
                 onClick={() => handleSelectAttentionFilter('low')}
                 aria-pressed={attentionFilter === 'low'}
-                className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-colors duration-150 ease-out whitespace-nowrap inline-flex items-center gap-1 ${
+                className={`h-8 px-2.5 text-xs font-medium rounded-full border transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap inline-flex items-center gap-1 ${
                   attentionFilter === 'low'
                     ? 'border-amber-600 bg-amber-600 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-stone-950'
                     : 'border-amber-200/70 dark:border-amber-500/35 bg-amber-50/80 dark:bg-amber-950/35 text-amber-800 dark:text-amber-200 hover:bg-amber-100/80 dark:hover:bg-amber-950/60'
                 }`}
               >
-                <span>{isVi ? 'Sắp hết' : 'Low Stock'}</span>
+                <span>{t.inventory.statusLow}</span>
                 <span className="font-mono-num opacity-80">({attentionItems.lowStock.length})</span>
               </button>
             )}
@@ -1477,7 +1483,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               onClick={() => setAttentionFilter('none')}
               className="h-8 px-2.5 text-xs font-medium text-stone-600 hover:text-stone-900 dark:text-[#A8B8B0] dark:hover:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
             >
-              {isVi ? 'Hiện tất cả' : 'Show All'}
+              {isKm ? 'បង្ហាញទាំងអស់' : 'Show All'}
             </button>
           )}
         </section>
@@ -1497,7 +1503,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   setSearch(e.target.value);
                   if (scannedInventoryMatch) setScannedInventoryMatch(null);
                 }}
-                placeholder={isVi ? 'Tìm kiếm' : 'Search'}
+                placeholder={isKm ? 'ស្វែងរក...' : 'Search'}
                 className={`w-full h-11 pl-9 ${search ? 'pr-20' : 'pr-11'} text-sm bg-white/80 dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#6E8278] border border-slate-200/80 dark:border-emerald-950/80 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]/30 dark:focus-visible:ring-[#10B981]/40 focus-visible:border-[#0F5C43] dark:focus-visible:border-[#10B981] transition-all duration-150`}
               />
               <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
@@ -1519,8 +1525,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   type="button"
                   disabled={scanLookingUp}
                   onClick={() => setScannerOpen(true)}
-                  title={isVi ? 'Quét mã vạch (EAN-13 / UPC-A)' : 'Scan Barcode (EAN-13 / UPC-A)'}
-                  aria-label={isVi ? 'Quét mã vạch' : 'Scan Barcode'}
+                  title={isKm ? 'ស្កេនបាកូដ (EAN-13 / UPC-A)' : 'Scan Barcode (EAN-13 / UPC-A)'}
+                  aria-label={isKm ? 'ស្កេនបាកូដ' : 'Scan Barcode'}
                   className="w-9 h-9 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:bg-emerald-50/70 dark:hover:bg-[#064E3B]/50 rounded-md transition-colors"
                 >
                   {scanLookingUp ? (
@@ -1539,14 +1545,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   onClick={toggleFilters}
                   aria-expanded={filtersOpen}
                   aria-controls="inventory-stock-filters"
-                  className={`inline-flex items-center gap-1.5 h-11 px-3 text-xs sm:text-sm font-medium rounded-lg border transition-all duration-150 whitespace-nowrap shrink-0 ${
+                  className={`inline-flex items-center gap-1.5 h-11 px-3 text-xs sm:text-sm font-medium rounded-lg border transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0 ${
                     filtersOpen || drawerFilterCount > 0
                       ? 'bg-stone-100/90 dark:bg-[#18251F] border-slate-300/90 dark:border-emerald-800/60 text-stone-900 dark:text-[#F1F5F3]'
                       : 'bg-transparent border-slate-200/80 dark:border-emerald-950/80 text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100/70 dark:hover:bg-[#18251F]'
                   }`}
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
-                  <span>{isVi ? 'Bộ lọc' : 'Filters'}</span>
+                  <span>{isKm ? 'តម្រង' : 'Filters'}</span>
                   {drawerFilterCount > 0 && (
                     <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-mono-num font-semibold bg-[#0F5C43]/12 text-[#0F5C43] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
                       {drawerFilterCount}
@@ -1572,7 +1578,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     }}
                     className="inline-flex items-center justify-center h-11 px-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
                   >
-                    {isVi ? 'Đặt lại' : 'Reset'}
+                    {isKm ? 'កំណត់ឡើងវិញ' : 'Reset'}
                   </button>
                 )}
               </>
@@ -1585,16 +1591,16 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   }
                   className="h-11 px-3 text-xs sm:text-sm border border-slate-200/80 dark:border-emerald-950/80 rounded-lg bg-white/80 dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3]"
                 >
-                  <option value="ALL">{isVi ? 'Mọi nhóm kho' : 'All Tiers'}</option>
-                  <option value="ingredient">{isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}</option>
-                  <option value="packaged">{isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged'}</option>
+                  <option value="ALL">{isKm ? 'គ្រប់ក្រុមស្តុក' : 'All Tiers'}</option>
+                  <option value="ingredient">{isKm ? 'វត្ថុធាតុដើម' : 'Raw Ingredients'}</option>
+                  <option value="packaged">{isKm ? 'ទំនិញវេចខ្ចប់ស្រាប់' : 'Retail Packaged'}</option>
                 </select>
                 <select
                   value={movementTypeFilter}
                   onChange={(e) => setMovementTypeFilter(e.target.value as 'ALL' | MovementType)}
                   className="h-11 px-3 text-xs sm:text-sm border border-slate-200/80 dark:border-emerald-950/80 rounded-lg bg-white/80 dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3]"
                 >
-                  <option value="ALL">{isVi ? 'Mọi biến động' : 'All Types'}</option>
+                  <option value="ALL">{isKm ? 'គ្រប់ប្រភេទ' : 'All Types'}</option>
                   {(Object.keys(t.movementTypes) as MovementType[]).map((mt) => (
                     <option key={mt} value={mt}>
                       {t.movementTypes[mt]}
@@ -1611,7 +1617,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     }}
                     className="inline-flex items-center justify-center h-11 px-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
                   >
-                    {isVi ? 'Đặt lại' : 'Reset'}
+                    {isKm ? 'កំណត់ឡើងវិញ' : 'Reset'}
                   </button>
                 )}
               </>
@@ -1623,28 +1629,28 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <div className="min-w-0 max-w-full overflow-x-auto">
               <div
                 role="tablist"
-                aria-label={isVi ? 'Phân nhóm kho hàng' : 'Inventory tiers'}
+                aria-label={isKm ? 'ក្រុមស្តុកទំនិញ' : 'Inventory tiers'}
                 className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-xl"
               >
                 {(
                   [
                     {
                       id: 'all',
-                      label: isVi ? 'Tất cả' : 'All',
+                      label: t.common.all,
                       count: allUnifiedItems.length,
                       icon: null,
                       iconClass: '',
                     },
                     {
                       id: 'ingredients',
-                      label: isVi ? 'Nguyên liệu thô' : 'Raw Ingredients',
+                      label: isKm ? 'វត្ថុធាតុដើម' : 'Raw Ingredients',
                       count: ingredients.length,
                       icon: Wheat,
                       iconClass: 'text-teal-600 dark:text-teal-400',
                     },
                     {
                       id: 'packaged',
-                      label: isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged',
+                      label: isKm ? 'ទំនិញវេចខ្ចប់ស្រាប់' : 'Retail Packaged',
                       count: packagedProducts.length,
                       icon: Package,
                       iconClass: 'text-sky-600 dark:text-sky-400',
@@ -1660,7 +1666,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                       role="tab"
                       aria-selected={active}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out whitespace-nowrap shrink-0 ${
+                      className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0 ${
                         active
                           ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] font-semibold shadow-2xs'
                           : 'text-stone-500 dark:text-[#94A39B] font-medium hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -1685,7 +1691,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             id="inventory-stock-filters"
             className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
               filtersOpen
-                ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-slate-200/60 dark:border-emerald-950/50'
+                ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-slate-200/60 dark:border-emerald-950/50 animate-drawer-in'
                 : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
             }`}
           >
@@ -1698,7 +1704,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     setCategoryFilter(id);
                     if (id !== 'all') setAttentionFilter('none');
                   }}
-                  isVi={isVi}
+                  isKm={isKm}
                   allLabel={t.common.all}
                 />
 
@@ -1710,9 +1716,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     {(
                       [
                         ['all', t.common.all],
-                        ['healthy', isVi ? 'Ổn định' : 'Healthy'],
-                        ['low', isVi ? 'Sắp hết' : 'Low Stock'],
-                        ['out', isVi ? 'Hết hàng' : 'Out of Stock'],
+                        ['healthy', t.inventory.statusHealthy],
+                        ['low', t.inventory.statusLow],
+                        ['out', t.inventory.statusOut],
                       ] as const
                     ).map(([st, label]) => (
                       <button
@@ -1723,7 +1729,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                           setAttentionFilter('none');
                         }}
                         aria-pressed={statusFilter === st && attentionFilter === 'none'}
-                        className={`h-10 px-3.5 text-xs font-medium rounded-full transition-colors duration-150 ease-out whitespace-nowrap shrink-0 border ${
+                        className={`h-10 px-3.5 text-xs font-medium rounded-full transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0 border ${
                           statusFilter === st && attentionFilter === 'none'
                             ? 'bg-[#E6F2ED] text-[#0D5C3E] border-[#0D5C3E]/30 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/45 font-semibold'
                             : 'bg-stone-100 text-stone-700 border-transparent hover:bg-stone-200 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
@@ -1749,19 +1755,19 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             {filteredStockItems.length === 0 ? (
               <div className="p-12 text-center space-y-2">
                 <p className="text-sm font-semibold text-stone-700 dark:text-[#D5DFDA]">
-                  {isVi ? 'Không tìm thấy mặt hàng phù hợp' : 'No matching inventory items'}
+                  {isKm ? 'មិនមានទំនិញក្នុងស្តុកត្រូវគ្នាទេ' : 'No matching inventory items'}
                 </p>
                 <p className="text-xs text-stone-500 dark:text-[#94A39B]">
                   {search ||
                   statusFilter !== 'all' ||
                   categoryFilter !== 'all' ||
                   attentionFilter !== 'none'
-                    ? isVi
-                      ? 'Hãy thử xóa từ khóa tìm kiếm hoặc đổi bộ lọc danh mục / trạng thái.'
+                    ? isKm
+                      ? 'សូមសាកល្បងសម្អាតពាក្យស្វែងរក ឬប្តូរតម្រងប្រភេទ និងស្ថានភាព។'
                       : 'Try clearing your search or changing the category or status filter.'
                     : activeTab === 'packaged'
-                      ? isVi
-                        ? 'Thêm sản phẩm Đóng gói bán lẻ ở mục Sản phẩm để theo dõi tồn kho tại đây.'
+                      ? isKm
+                        ? 'បន្ថែមផលិតផលទំនិញវេចខ្ចប់ស្រាប់ក្នុងទំព័រផលិតផល ដើម្បីតាមដានស្តុកនៅទីនេះ។'
                         : 'Add a Retail Packaged product under Products to track its unit stock here.'
                       : t.inventory.emptyStock}
                 </p>
@@ -1773,9 +1779,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   aria-hidden="true"
                   className="hidden lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(112px,0.8fr)_minmax(0,1.15fr)_196px] items-center gap-3 px-4 sm:px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-[#94A39B] bg-stone-50/75 dark:bg-[#18251F]/80 border-b border-stone-200 dark:border-[#24352C]"
                 >
-                  <div>{isVi ? 'Mặt hàng' : 'Item'}</div>
-                  <div>{isVi ? 'Giá vốn & Giá trị' : 'Cost & Value'}</div>
-                  <div>{isVi ? 'Tình trạng tồn kho' : 'Stock Health'}</div>
+                  <div>{isKm ? 'ទំនិញ' : 'Item'}</div>
+                  <div>{isKm ? 'ថ្លៃដើម និងតម្លៃ' : 'Cost & Value'}</div>
+                  <div>{isKm ? 'ស្ថានភាពស្តុក' : 'Stock Health'}</div>
                   <div className="text-right">{t.common.actions}</div>
                 </div>
 
@@ -1853,11 +1859,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                               aria-expanded={isExpanded}
                               aria-label={
                                 isExpanded
-                                  ? isVi
-                                    ? 'Thu gọn chi tiết'
+                                  ? isKm
+                                    ? 'បង្រួមព័ត៌មានលម្អិត'
                                     : 'Collapse details'
-                                  : isVi
-                                    ? 'Xem chi tiết'
+                                  : isKm
+                                    ? 'ពង្រីកព័ត៌មានលម្អិត'
                                     : 'Expand details'
                               }
                               className="w-8 h-8 -ml-1 inline-flex items-center justify-center rounded-lg text-stone-400 dark:text-[#94A39B] hover:text-stone-700 dark:hover:text-[#F1F5F3] hover:bg-stone-200/60 dark:hover:bg-[#1F3028] transition-colors shrink-0"
@@ -1871,7 +1877,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
                             <div className="min-w-0 flex-1">
                               <h3 className="text-sm sm:text-[15px] font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
-                                {isVi ? item.nameVi || item.name : item.name}
+                                {getLocalizedName(item.name, item.nameVi)}
                               </h3>
                               <div className="mt-1 flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#94A39B] min-w-0">
                                 <span
@@ -1887,7 +1893,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                                   ·
                                 </span>
                                 <span className="truncate">
-                                  {getCategoryDisplayName(catItem, isVi)}
+                                  {getCategoryDisplayName(catItem, isKm)}
                                 </span>
                               </div>
                             </div>
@@ -1903,7 +1909,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                                     : 'font-semibold text-stone-800 dark:text-[#F1F5F3]'
                                 }`}
                               >
-                                {isVi ? 'Vốn:' : 'Avg:'} {formatKhr(item.unitCostKhr)}
+                                {isKm ? 'ថ្លៃដើម៖' : 'Avg:'} {formatKhr(item.unitCostKhr)}
                               </span>
                               {isZeroCost && (
                                 <button
@@ -1912,12 +1918,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:underline whitespace-nowrap"
                                 >
                                   <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
-                                  <span>{isVi ? 'Đặt giá vốn' : 'Set Cost'}</span>
+                                  <span>{isKm ? 'កំណត់ថ្លៃដើម' : 'Set Cost'}</span>
                                 </button>
                               )}
                             </div>
                             <p className="font-mono-num text-[11px] text-stone-400 dark:text-[#94A39B] lg:mt-0.5 whitespace-nowrap">
-                              {isVi ? 'Giá trị:' : 'Val:'} {formatKhr(stockValueKhr)}
+                              {isKm ? 'តម្លៃសរុប៖' : 'Val:'} {formatKhr(stockValueKhr)}
                             </p>
                           </div>
 
@@ -1929,7 +1935,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                                   {formatQty(item.stockQty, item.unit)}
                                 </span>
                                 <span className="font-mono-num text-[11px] text-stone-400 dark:text-[#94A39B] whitespace-nowrap truncate">
-                                  / {isVi ? 'tối thiểu' : 'min'}{' '}
+                                  / {isKm ? 'កម្រិតអប្បបរមា' : 'min'}{' '}
                                   {formatQty(item.reorderLevel, item.unit)}
                                 </span>
                               </div>
@@ -1960,17 +1966,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                             <button
                               type="button"
                               onClick={() => openQuickRestockForItem(item)}
-                              className="flex-1 lg:flex-none h-10 px-3 inline-flex items-center justify-center text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] rounded-lg transition-colors whitespace-nowrap"
+                              className="flex-1 lg:flex-none h-10 px-3 inline-flex items-center justify-center text-xs font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/80 dark:hover:bg-[#065F46] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                             >
-                              {isVi ? '+ Nhập thêm' : '+ Restock'}
+                              {isKm ? '+ បញ្ចូលស្តុក' : '+ Restock'}
                             </button>
 
                             <button
                               type="button"
                               onClick={() => openAdjustWasteModal(item)}
-                              title={isVi ? 'Điều chỉnh / Hủy hàng' : 'Adjust / Waste'}
-                              aria-label={isVi ? 'Điều chỉnh / Hủy hàng' : 'Adjust / Waste'}
-                              className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-colors shrink-0"
+                              title={isKm ? 'កែសម្រួល / ខូចខាត' : 'Adjust / Waste'}
+                              aria-label={isKm ? 'កែសម្រួល / ខូចខាត' : 'Adjust / Waste'}
+                              className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-all active:scale-[0.97] shrink-0"
                             >
                               <SlidersHorizontal className="w-4 h-4" />
                             </button>
@@ -1980,7 +1986,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                               onClick={() => openEditItem(item)}
                               title={t.common.edit}
                               aria-label={t.common.edit}
-                              className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-colors shrink-0"
+                              className="w-10 h-10 inline-flex items-center justify-center rounded-lg text-stone-600 dark:text-[#D5DFDA] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-all active:scale-[0.97] shrink-0"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
@@ -1993,7 +1999,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 items-start lg:items-center text-xs">
                               <div className="min-w-0">
                                 <p className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
-                                  {isVi ? 'Mã SKU / Mã vạch' : 'SKU / Barcode'}
+                                  {isKm ? 'លេខកូដ SKU / បាកូដ' : 'SKU / Barcode'}
                                 </p>
                                 <p className="mt-0.5 font-mono-num text-stone-800 dark:text-[#F1F5F3] break-all">
                                   {item.barcode || '—'}
@@ -2011,7 +2017,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
                               <div className="min-w-0">
                                 <p className="text-[11px] font-medium text-stone-500 dark:text-[#94A39B]">
-                                  {isVi ? 'Quy cách / Đơn vị' : 'Pack / Unit'}
+                                  {isKm ? 'កញ្ចប់ / ឯកតា' : 'Pack / Unit'}
                                 </p>
                                 <p className="mt-0.5 text-stone-800 dark:text-[#F1F5F3] break-words">
                                   {packUnitDetail}
@@ -2023,7 +2029,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                                   htmlFor={`inline-cat-${rowKey}`}
                                   className="block text-[11px] font-medium text-stone-500 dark:text-[#94A39B] mb-1"
                                 >
-                                  {isVi ? 'Danh mục' : 'Category'}
+                                  {isKm ? 'ប្រភេទ' : 'Category'}
                                 </label>
                                 <select
                                   id={`inline-cat-${rowKey}`}
@@ -2036,7 +2042,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                                 >
                                   {selectableCategories.map((cat) => (
                                     <option key={cat.id} value={cat.id}>
-                                      {getCategoryDisplayName(cat, isVi)}
+                                      {getCategoryDisplayName(cat, isKm)}
                                     </option>
                                   ))}
                                 </select>
@@ -2068,7 +2074,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
                     <th className="py-3 px-5 font-medium">{t.common.date}</th>
                     <th className="py-3 px-4 font-medium">
-                      {isVi ? 'Mặt hàng / Nhóm' : 'Item / Tier'}
+                      {isKm ? 'ទំនិញ / ក្រុម' : 'Item / Tier'}
                     </th>
                     <th className="py-3 px-4 font-medium">
                       <span className="inline-flex items-center gap-1">
@@ -2079,8 +2085,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                           align="left"
                           label={t.inventory.movementType}
                           text={
-                            isVi
-                              ? 'Phân loại nguyên nhân biến động kho: nhập mua, đầu kỳ, bán POS, kiểm kê hoặc hao hụt.'
+                            isKm
+                              ? 'មូលហេតុនៃការផ្លាស់ប្តូរស្តុក៖ ការទិញចូល ស្តុកដើមគ្រា ការលក់ POS ការរាប់ស្តុក ឬខូចខាត។'
                               : 'Audit reason for each stock change: purchase, opening stock, POS sale, count, or spoilage.'
                           }
                         />
@@ -2195,21 +2201,21 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold text-amber-950 dark:text-amber-200">
-                        {isVi
-                          ? `"${ingDuplicateGuard.displayName}" đã tồn tại`
+                        {isKm
+                          ? `"${ingDuplicateGuard.displayName}" មានរួចហើយ`
                           : `"${ingDuplicateGuard.displayName}" already exists`}
                       </p>
                       <p className="mt-0.5 text-[11px] text-amber-800 dark:text-amber-300/90 leading-relaxed">
                         {ingDuplicateGuard.reason === 'barcode'
-                          ? isVi
-                            ? `Mã vạch ${ingDuplicateGuard.matchedCode} đã được gắn cho mục này trong danh bạ mã vạch. Hãy chỉnh sửa hoặc nhập thêm kho thay vì tạo trùng.`
+                          ? isKm
+                            ? `បាកូដ ${ingDuplicateGuard.matchedCode} ត្រូវបានចុះបញ្ជីសម្រាប់ទំនិញនេះរួចហើយ។ សូមកែប្រែ ឬបញ្ចូលស្តុកបន្ថែម ជំនួសឱ្យការបង្កើតស្ទួន។`
                             : `Barcode ${ingDuplicateGuard.matchedCode} is already registered to this item in barcodeRegistry. Edit or restock it instead of creating a duplicate.`
                           : ingDuplicateGuard.kind === 'ingredient'
-                            ? isVi
-                              ? `Đang có trong Nguyên liệu thô (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)}). Không thể tạo bản trùng để tránh tách tồn kho.`
+                            ? isKm
+                              ? `មានក្នុងវត្ថុធាតុដើម (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)})។ ការបង្កើតស្ទួនត្រូវបានទប់ស្កាត់ ដើម្បីរក្សាស្តុកឱ្យរួមគ្នា។`
                               : `Found in Raw Ingredients (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)}). Duplicates are blocked so stock stays unified.`
-                            : isVi
-                              ? `Đang có trong Danh mục sản phẩm (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')}). Không thể tạo bản trùng.`
+                            : isKm
+                              ? `មានក្នុងបញ្ជីផលិតផល (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')})។ ការបង្កើតស្ទួនត្រូវបានទប់ស្កាត់។`
                               : `Found in Product Catalog (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')}). Duplicates are blocked so stock stays unified.`}
                       </p>
                     </div>
@@ -2225,10 +2231,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                           setEditingStockProduct(ingDuplicateGuard.product);
                         }
                       }}
-                      className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-950 dark:text-amber-100 bg-white dark:bg-[#18251F] border border-amber-300 dark:border-amber-600/60 hover:bg-amber-100/80 dark:hover:bg-amber-900/40 rounded-lg transition-colors"
+                      className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-950 dark:text-amber-100 bg-white dark:bg-[#18251F] border border-amber-300 dark:border-amber-600/60 hover:bg-amber-100/80 dark:hover:bg-amber-900/40 rounded-lg transition-all active:scale-[0.97]"
                     >
                       <Pencil className="w-3.5 h-3.5" />
-                      {isVi ? 'Sửa mục hiện có' : 'Edit Existing Item'}
+                      {isKm ? 'កែប្រែទំនិញមានស្រាប់' : 'Edit Existing Item'}
                     </button>
                     <button
                       type="button"
@@ -2240,10 +2246,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                           openPurchaseModal(toTargetFromProduct(ingDuplicateGuard.product));
                         }
                       }}
-                      className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors"
+                      className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97]"
                     >
                       <PackagePlus className="w-3.5 h-3.5" />
-                      {isVi ? 'Nhập thêm tồn kho' : 'Restock Existing'}
+                      {isKm ? 'បញ្ចូលស្តុកមានស្រាប់' : 'Restock Existing'}
                     </button>
                   </div>
                 </div>
@@ -2275,7 +2281,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   htmlFor="ing-category-select"
                   className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                 >
-                  {isVi ? 'Danh mục kho' : 'Category'}
+                  {isKm ? 'ប្រភេទស្តុក' : 'Category'}
                 </label>
                 <select
                   id="ing-category-select"
@@ -2295,16 +2301,16 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 >
                   {inventoryCategories.map((cat) => (
                     <option key={cat.id} value={cat.id}>
-                      {getCategoryDisplayName(cat, isVi)}
+                      {getCategoryDisplayName(cat, isKm)}
                     </option>
                   ))}
                   <option value={NEW_CATEGORY_OPTION_VALUE}>
-                    {isVi ? '+ Tạo danh mục mới...' : '+ New Category...'}
+                    {isKm ? '+ បង្កើតប្រភេទថ្មី...' : '+ New Category...'}
                   </option>
                 </select>
 
                 {addingIngCategory && (
-                  <div className="mt-2 p-3 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2">
+                  <div className="mt-2 p-3 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2 animate-drawer-in">
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
@@ -2321,7 +2327,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                           }
                         }}
                         placeholder={
-                          isVi ? 'VD: Trái cây tươi, Ly & Ống hút...' : 'e.g. Fresh Produce, Syrups...'
+                          isKm ? 'ឧ. ផ្លែឈើស្រស់, ស៊ីរ៉ូ, កែវ...' : 'e.g. Fresh Produce, Syrups...'
                         }
                         className="flex-1 min-w-0 h-11 px-3 text-sm bg-white dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                         autoFocus
@@ -2330,9 +2336,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         type="button"
                         disabled={creatingIngCategory}
                         onClick={() => void handleCreateInlineIngCategory()}
-                        className="h-11 px-3.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
+                        className="h-11 px-3.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                       >
-                        {isVi ? 'Thêm' : 'Add'}
+                        {isKm ? 'បន្ថែម' : 'Add'}
                       </button>
                       <button
                         type="button"
@@ -2426,7 +2432,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               </div>
               <div>
                 <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                  {isVi ? 'Mã vạch (tùy chọn — EAN-13 / UPC-A)' : 'Barcode (optional — EAN-13 / UPC-A)'}
+                  {isKm ? 'បាកូដ (ស្រេចចិត្ត — EAN-13 / UPC-A)' : 'Barcode (optional — EAN-13 / UPC-A)'}
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -2437,16 +2443,16 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                       setIngBarcode(e.target.value);
                       setIngSaveError(null);
                     }}
-                    placeholder={isVi ? 'Quét hoặc nhập mã vạch...' : 'Scan or enter barcode...'}
+                    placeholder={isKm ? 'ស្កេន ឬវាយបាកូដ...' : 'Scan or enter barcode...'}
                     className="flex-1 min-w-0 h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                   />
                   <button
                     type="button"
                     onClick={() => setIngBarcodeScannerOpen(true)}
-                    className="h-11 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap shrink-0"
+                    className="h-11 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-300 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap shrink-0"
                   >
                     <ScanBarcode className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" />
-                    {isVi ? 'Quét' : 'Scan'}
+                    {isKm ? 'ស្កេន' : 'Scan'}
                   </button>
                 </div>
               </div>
@@ -2463,15 +2469,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     type="button"
                     disabled={!ingName.trim() || Boolean(ingDuplicateGuard)}
                     onClick={() => void submitIngredient('add_another')}
-                    className="h-12 px-4 inline-flex items-center justify-center text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap"
+                    className="h-12 px-4 inline-flex items-center justify-center text-sm font-semibold text-[#0F5C43] dark:text-[#6EE7B7] bg-emerald-50/80 dark:bg-[#064E3B] border border-emerald-200 dark:border-[#10B981]/50 hover:bg-emerald-100/70 dark:hover:bg-[#065F46] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                   >
-                    {isVi ? '+ Lưu & Thêm tiếp' : '+ Save & Add Another'}
+                    {isKm ? '+ រក្សាទុក និងបន្ថែមទៀត' : '+ Save & Add Another'}
                   </button>
                 )}
                 <button
                   type="submit"
                   disabled={!ingName.trim() || Boolean(ingDuplicateGuard)}
-                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap"
+                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 disabled:cursor-not-allowed rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                 >
                   {t.common.save}
                 </button>
@@ -2498,25 +2504,25 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-1">
                   <h2 className="font-display text-lg font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
-                    {isVi ? 'Nhập kho nhanh' : 'Quick Restock'}:{' '}
-                    {isVi ? purchaseTarget.nameVi || purchaseTarget.name : purchaseTarget.name}
+                    {isKm ? 'បញ្ចូលស្តុករហ័ស' : 'Quick Restock'}:{' '}
+                    {getLocalizedName(purchaseTarget.name, purchaseTarget.nameVi)}
                   </h2>
                   <InfoHint
                     compact
-                    label={isVi ? 'Giải thích nhập kho mua hàng' : 'About Stock-In Purchase'}
+                    label={isKm ? 'អំពីការទិញបញ្ចូលស្តុក' : 'About Stock-In Purchase'}
                     text={
-                      isVi
-                        ? 'Ghi nhận vào Sổ Mua Hàng (Dòng tiền chi ra) và cập nhật giá vốn bình quân — không tính trùng vào chi phí vận hành P&L.'
+                      isKm
+                        ? 'កត់ត្រាជាការទិញស្តុក (លំហូរសាច់ប្រាក់ចេញ និងបង្កើនទ្រព្យសកម្មស្តុក) — មិនរាប់ជាន់ជាមួយថ្លៃដើមទំនិញលក់ក្នុងរបាយការណ៍ P&L ឡើយ។'
                         : 'Recorded as an Inventory Purchase (Cash Flow outflow & Stock Asset increase) — never double-counted with COGS in Accrual P&L.'
                     }
                   />
                 </div>
                 <p className="font-mono-num text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
-                  {isVi ? 'Hiện còn:' : 'Current:'}{' '}
+                  {isKm ? 'ស្តុកបច្ចុប្បន្ន៖' : 'Current:'}{' '}
                   <strong className="text-stone-800 dark:text-[#F1F5F3]">
                     {formatQty(purchaseTarget.stockQty, purchaseTarget.unit)}
                   </strong>{' '}
-                  · {isVi ? 'Ngưỡng:' : 'Min:'}{' '}
+                  · {isKm ? 'កម្រិតអប្បបរមា៖' : 'Min:'}{' '}
                   {formatQty(purchaseTarget.reorderLevel, purchaseTarget.unit)}
                 </p>
               </div>
@@ -2539,8 +2545,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     onChange={(e) => setPurchaseUsePacks(e.target.checked)}
                     className="w-5 h-5 accent-[#0F5C43] dark:accent-[#10B981] rounded"
                   />
-                  {isVi
-                    ? 'Nhập theo Thùng / Lốc (tự nhân số lượng lẻ)'
+                  {isKm
+                    ? 'បញ្ចូលតាមកេស / កញ្ចប់ (គុណចំនួនរាយដោយស្វ័យប្រវត្តិ)'
                     : 'Enter by Cartons / Packs (auto-multiply into base units)'}
                 </label>
               )}
@@ -2549,7 +2555,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 <div className="grid grid-cols-3 gap-2.5 items-end">
                   <div>
                     <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                      {isVi ? 'Số thùng' : 'Packs / Cases'}
+                      {isKm ? 'ចំនួនកេស' : 'Packs / Cases'}
                     </label>
                     <input
                       type="number"
@@ -2562,7 +2568,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                      {isVi ? 'SL / thùng' : 'Units / Pack'}
+                      {isKm ? 'ឯកតា / កេស' : 'Units / Pack'}
                     </label>
                     <input
                       type="number"
@@ -2575,7 +2581,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   </div>
                   <div className="h-11 px-2 bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg flex flex-col items-center justify-center text-center">
                     <span className="block text-[10px] leading-tight text-stone-500 dark:text-[#94A39B]">
-                      {isVi ? 'Tổng cộng' : 'Total Added'}
+                      {isKm ? 'បន្ថែមសរុប' : 'Total Added'}
                     </span>
                     <span className="font-mono-num text-sm leading-tight font-bold text-[#0F5C43] dark:text-[#34D399]">
                       {(Number(purchasePackCount) || 0) * (Number(purchaseUnitsPerPack) || 0)}{' '}
@@ -2682,9 +2688,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
+                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97]"
                 >
-                  {isVi ? 'Xác nhận nhập kho' : 'Confirm Restock'}
+                  {isKm ? 'បញ្ជាក់ការបញ្ចូលស្តុក' : 'Confirm Restock'}
                 </button>
               </div>
             </form>
@@ -2708,11 +2714,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             <div className="px-6 py-4 border-b border-stone-200 dark:border-[#24352C] flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
-                  {isVi ? 'Điều chỉnh & Hao hụt' : 'Adjust / Waste'}:{' '}
-                  {isVi ? adjustModalTarget.nameVi || adjustModalTarget.name : adjustModalTarget.name}
+                  {isKm ? 'កែសម្រួល / ខូចខាត' : 'Adjust / Waste'}:{' '}
+                  {getLocalizedName(adjustModalTarget.name, adjustModalTarget.nameVi)}
                 </h2>
                 <p className="font-mono-num text-xs text-stone-500 dark:text-[#94A39B] mt-0.5">
-                  {isVi ? 'Tồn hệ thống:' : 'System stock:'}{' '}
+                  {isKm ? 'ស្តុកក្នុងប្រព័ន្ធ៖' : 'System stock:'}{' '}
                   <strong className="text-stone-900 dark:text-[#F1F5F3]">
                     {formatQty(adjustModalTarget.stockQty, adjustModalTarget.unit)}
                   </strong>
@@ -2733,17 +2739,17 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-stone-100 dark:bg-[#0F1814] rounded-lg border border-stone-200 dark:border-[#24352C]">
                 {(
                   [
-                    { id: 'waste', label: isVi ? 'Hao hụt' : 'Waste' },
-                    { id: 'count', label: isVi ? 'Kiểm kê' : 'Count' },
-                    { id: 'adjust', label: isVi ? 'Cộng / Trừ' : 'Adjust' },
-                    { id: 'opening', label: isVi ? 'Đầu kỳ' : 'Opening' },
+                    { id: 'waste', label: isKm ? 'ខូចខាត' : 'Waste' },
+                    { id: 'count', label: isKm ? 'រាប់ស្តុក' : 'Count' },
+                    { id: 'adjust', label: isKm ? 'កែសម្រួល' : 'Adjust' },
+                    { id: 'opening', label: isKm ? 'ដើមគ្រា' : 'Opening' },
                   ] as const
                 ).map((mode) => (
                   <button
                     key={mode.id}
                     type="button"
                     onClick={() => setAdjustModalMode(mode.id)}
-                    className={`h-10 px-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+                    className={`h-10 px-2 text-xs font-semibold rounded-md transition-all active:scale-[0.97] whitespace-nowrap ${
                       adjustModalMode === mode.id
                         ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                         : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -2763,25 +2769,25 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         key={k}
                         type="button"
                         onClick={() => setWasteKind(k)}
-                        className={`h-11 px-3 text-xs font-semibold rounded-lg border transition-colors ${
+                        className={`h-11 px-3 text-xs font-semibold rounded-lg border transition-all active:scale-[0.97] ${
                           wasteKind === k
                             ? 'border-amber-600 bg-amber-50 text-amber-900 dark:border-amber-500/60 dark:bg-amber-950/50 dark:text-amber-200'
                             : 'border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] text-stone-600 dark:text-[#D5DFDA]'
                         }`}
                       >
                         {k === 'expired'
-                          ? isVi
-                            ? 'Hết hạn / Hỏng'
+                          ? isKm
+                            ? 'ផុតកំណត់ / ខូច'
                             : 'Expired / Spoiled'
-                          : isVi
-                            ? 'Hư hỏng / Đổ vỡ'
+                          : isKm
+                            ? 'ខូចខាត / កំពប់'
                             : 'Damaged / Spilled'}
                       </button>
                     ))}
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                      {isVi ? 'Số lượng hủy' : 'Write-off Quantity'} ({adjustModalTarget.unit})
+                      {isKm ? 'បរិមាណកាត់ចោល' : 'Write-off Quantity'} ({adjustModalTarget.unit})
                     </label>
                     <input
                       type="number"
@@ -2803,7 +2809,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
                     <span className="inline-flex items-center gap-1">
                       <ClipboardCheck className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
-                      {isVi ? 'Số lượng đếm được thực tế' : 'Actual Counted Quantity'} (
+                      {isKm ? 'បរិមាណរាប់បានជាក់ស្តែង' : 'Actual Counted Quantity'} (
                       {adjustModalTarget.unit})
                     </span>
                   </label>
@@ -2843,15 +2849,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   <div className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-[#94A39B]">
                     <Sparkles className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
                     <span>
-                      {isVi
-                        ? 'Tồn đầu kỳ chỉ tăng giá trị kho, không tính vào chi phí.'
+                      {isKm
+                        ? 'បន្ថែមតែតម្លៃស្តុកដើមគ្រាប៉ុណ្ណោះ — មិនកត់ត្រាជាចំណាយទេ។'
                         : 'Adds initial balance valuation only — never logged as an expense.'}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                        {isVi ? 'Số lượng thêm' : 'Opening Qty'} ({adjustModalTarget.unit})
+                        {isKm ? 'បរិមាណដើមគ្រា' : 'Opening Qty'} ({adjustModalTarget.unit})
                       </label>
                       <input
                         type="number"
@@ -2865,7 +2871,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                        {isVi ? 'Đơn giá vốn (KHR)' : 'Unit Cost (KHR)'}
+                        {isKm ? 'ថ្លៃដើមឯកតា (KHR)' : 'Unit Cost (KHR)'}
                       </label>
                       <input
                         type="number"
@@ -2891,12 +2897,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   onChange={(e) => setAdjustNote(e.target.value)}
                   placeholder={
                     adjustModalMode === 'waste'
-                      ? isVi
-                        ? 'VD: Hết hạn cuối ngày'
+                      ? isKm
+                        ? 'ឧ. ខូចគុណភាពចុងថ្ងៃ'
                         : 'e.g. End-of-day spoilage'
                       : adjustModalMode === 'count'
-                        ? isVi
-                          ? 'VD: Kiểm kê cuối tuần'
+                        ? isKm
+                          ? 'ឧ. ពិនិត្យធ្នើរប្រចាំថ្ងៃ'
                           : 'e.g. Daily shelf check'
                         : ''
                   }
@@ -2914,7 +2920,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors"
+                  className="h-12 px-5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97]"
                 >
                   {t.common.save}
                 </button>
@@ -2928,10 +2934,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       {/* Camera Barcode Scanner for Inventory Search & Stock-In */}
       <BarcodeScannerModal
         open={scannerOpen}
-        title={isVi ? 'Quét mã vạch kho hàng' : 'Scan Barcode'}
+        title={isKm ? 'ស្កេនបាកូដស្តុកទំនិញ' : 'Scan Barcode'}
         subtitle={
-          isVi
-            ? 'Đưa camera vào mã EAN-13 / UPC-A hoặc mã thùng để tự động tìm kiếm trong kho.'
+          isKm
+            ? 'តម្រង់កាមេរ៉ាទៅលើបាកូដ EAN-13, UPC-A ឬកេស ដើម្បីស្វែងរកក្នុងស្តុកដោយស្វ័យប្រវត្តិ។'
             : 'Point camera at an EAN-13, UPC-A, or carton barcode to automatically search inventory.'
         }
         onDetected={(code) => {
@@ -2957,11 +2963,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         onSave={saveProduct}
         onSaved={(newProd) => {
           setUnknownStockBarcode(null);
-          const displayName = isVi ? newProd.nameVi || newProd.name : newProd.name;
+          const displayName = getLocalizedName(newProd.name, newProd.nameVi);
           showNotice(
             'ok',
-            isVi
-              ? `Đã đăng ký "${displayName}" — sẵn sàng nhập kho & bán POS.`
+            isKm
+              ? `បានចុះឈ្មោះ "${displayName}" — រួចរាល់សម្រាប់បញ្ចូលស្តុក និងលក់ POS។`
               : `Registered "${displayName}" — ready for Stock-In & POS.`
           );
           if (newProd.productType === 'PACKAGED') {
@@ -3008,10 +3014,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         onSave={saveProduct}
         onSaved={(savedProd) => {
           triggerHighlightItem(savedProd.id);
-          const displayName = isVi ? savedProd.nameVi || savedProd.name : savedProd.name;
+          const displayName = getLocalizedName(savedProd.name, savedProd.nameVi);
           showNotice(
             'ok',
-            isVi ? `Đã cập nhật "${displayName}".` : `Updated "${displayName}".`
+            isKm ? `បានកែប្រែ "${displayName}"។` : `Updated "${displayName}".`
           );
         }}
         onEditExisting={(prod) => setEditingStockProduct(prod)}
@@ -3037,10 +3043,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       {/* Camera Barcode Scanner for Ingredient Modal Barcode Field */}
       <BarcodeScannerModal
         open={ingBarcodeScannerOpen}
-        title={isVi ? 'Quét mã vạch nguyên liệu' : 'Scan Ingredient Barcode'}
+        title={isKm ? 'ស្កេនបាកូដវត្ថុធាតុដើម' : 'Scan Ingredient Barcode'}
         subtitle={
-          isVi
-            ? 'Đưa camera vào mã EAN-13 hoặc UPC-A trên bao bì nguyên liệu để liên kết.'
+          isKm
+            ? 'តម្រង់កាមេរ៉ាទៅលើបាកូដ EAN-13 ឬ UPC-A លើកញ្ចប់វត្ថុធាតុដើម ដើម្បីភ្ជាប់។'
             : 'Point camera at an EAN-13 or UPC-A barcode on the ingredient package to link it.'
         }
         onDetected={(code) => {
@@ -3053,7 +3059,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       {/* Bottom-Right Floating Action Button + Scroll-to-Top Pill */}
       <FloatingActionBar
         label={t.inventory.addIngredient}
-        topLabel={isVi ? 'Lên đầu' : 'Top'}
+        topLabel={isKm ? 'ឡើងលើ' : 'Top'}
         onAction={() => openNewIngredient()}
         hidden={
           ingModalOpen ||

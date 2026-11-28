@@ -95,7 +95,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     lookupBarcode,
     t,
   } = useStore();
-  const isVi = settings.language === 'vi';
+  const isKm = settings.language === 'km';
+  const getLocalizedName = (name: string, nameVi?: string) =>
+    isKm && nameVi && /[\u1780-\u17FF]/.test(nameVi) ? nameVi : name;
 
   const productCategories = useMemo(
     () => getCategoriesForScope(categories, 'product'),
@@ -204,11 +206,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
 
   const handleMenuDeleteProduct = async (product: Product) => {
     closeRowActionMenu();
-    const displayName = isVi ? product.nameVi || product.name : product.name;
+    const displayName = getLocalizedName(product.name, product.nameVi);
     await deleteProduct(product.id);
     showUndoToast({
-      message: isVi ? `Đã xóa "${displayName}"` : `Deleted "${displayName}"`,
-      detail: isVi ? 'Sản phẩm đã xóa khỏi danh mục' : 'Removed from product catalog',
+      message: isKm ? `បានលុប "${displayName}"` : `Deleted "${displayName}"`,
+      detail: isKm ? 'បានដកចេញពីបញ្ជីផលិតផល' : 'Removed from product catalog',
       onUndo: async () => {
         await saveProduct(product);
         triggerHighlightProduct(product.id);
@@ -489,10 +491,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       } else if (succeededIds.size > 0) {
         const catLabel = getCategoryDisplayName(
           getCategoryById(bulkCategory, categories),
-          isVi
+          isKm
         );
-        const msg = isVi
-          ? `Đã chuyển ${succeededIds.size} sản phẩm sang danh mục "${catLabel}".`
+        const msg = isKm
+          ? `បានប្តូរប្រភេទទៅ "${catLabel}" សម្រាប់ផលិតផល ${succeededIds.size} មុខ។`
           : `Changed category to "${catLabel}" for ${succeededIds.size} ${
               succeededIds.size === 1 ? 'product' : 'products'
             }.`;
@@ -503,8 +505,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       const msg =
         err instanceof Error
           ? err.message
-          : isVi
-            ? 'Không thể đổi danh mục hàng loạt.'
+          : isKm
+            ? 'មិនអាចប្តូរប្រភេទជាក្រុមបានទេ។'
             : 'Could not reassign categories.';
       setActionError(msg);
       setBulkFeedback({ kind: 'error', text: msg });
@@ -536,8 +538,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       });
       setConfirmBulkDelete(false);
 
-      const msg = isVi
-        ? `Đã xóa ${deletedIds.size} sản phẩm khỏi danh mục.`
+      const msg = isKm
+        ? `បានលុបផលិតផល ${deletedIds.size} មុខចេញពីបញ្ជី។`
         : `Deleted ${deletedIds.size} ${deletedIds.size === 1 ? 'product' : 'products'} from the catalog.`;
       setScanNotice(msg);
       setBulkFeedback({ kind: 'ok', text: msg });
@@ -552,8 +554,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       const msg =
         err instanceof Error
           ? err.message
-          : isVi
-            ? 'Không thể xóa hàng loạt sản phẩm.'
+          : isKm
+            ? 'មិនអាចលុបផលិតផលដែលបានជ្រើសរើសបានទេ។'
             : 'Could not delete selected products.';
       setActionError(msg);
       setBulkFeedback({ kind: 'error', text: msg });
@@ -594,7 +596,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
     setActionError(null);
     setTogglingActiveIds((prev) => ({ ...prev, [product.id]: true }));
     const nextActive = !product.active;
-    const displayName = isVi ? product.nameVi || product.name : product.name;
+    const displayName = getLocalizedName(product.name, product.nameVi);
     try {
       const res = await saveProduct({
         ...product,
@@ -605,11 +607,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       } else {
         showUndoToast({
           message: nextActive
-            ? isVi
-              ? `Đã hiện "${displayName}" trên POS`
+            ? isKm
+              ? `បានបង្ហាញ "${displayName}" លើ POS`
               : `Shown "${displayName}" on POS`
-            : isVi
-              ? `Đã ẩn "${displayName}" khỏi POS`
+            : isKm
+              ? `បានលាក់ "${displayName}" ពី POS`
               : `Hidden "${displayName}" from POS`,
           onUndo: async () => {
             await saveProduct({
@@ -623,8 +625,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       setActionError(
         err instanceof Error
           ? err.message
-          : isVi
-            ? 'Không thể cập nhật trạng thái POS.'
+          : isKm
+            ? 'មិនអាចធ្វើបច្ចុប្បន្នភាពស្ថានភាព POS បានទេ។'
             : 'Could not update POS visibility.'
       );
     } finally {
@@ -665,8 +667,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       setActionError(
         err instanceof Error
           ? err.message
-          : isVi
-            ? 'Không thể tải ảnh lên. Vui lòng thử ảnh khác.'
+          : isKm
+            ? 'មិនអាចបង្ហោះរូបភាពបានទេ។ សូមសាកល្បងរូបភាពផ្សេងទៀត។'
             : 'Failed to upload photo. Please try a different image.'
       );
     } finally {
@@ -756,25 +758,25 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               {t.products.title}
             </h1>
             <InfoHint
-              label={isVi ? 'Thông tin quản lý sản phẩm' : 'About Products'}
+              label={isKm ? 'អំពីការគ្រប់គ្រងផលិតផល' : 'About Products'}
               text={
-                isVi
-                  ? 'Quản lý sản phẩm đóng gói, pha chế theo đơn (nhiều kích cỡ S/M/L) và hàng pha sẵn trữ lạnh.'
-                  : 'Manage packaged goods, made-to-order drinks with size variants, and prepared-stock items.'
+                isKm
+                  ? 'គ្រប់គ្រងភេសជ្ជៈធ្វើតាមការកុម្ម៉ង់ (មានទំហំ S/M/L និងរូបមន្ត) និងទំនិញវេចខ្ចប់ស្រាប់ដែលលក់រាយ។'
+                  : 'Manage made-to-order drinks with size variants and packaged retail goods.'
               }
             />
           </div>
           <p className="mt-1 text-xs sm:text-sm text-stone-500 dark:text-[#94A39B] font-mono-num flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span>
               {typeCounts.ALL}{' '}
-              {isVi ? 'sản phẩm' : typeCounts.ALL === 1 ? 'item' : 'items'}
+              {isKm ? 'មុខទំនិញ' : typeCounts.ALL === 1 ? 'item' : 'items'}
             </span>
             <span className="text-stone-300 dark:text-[#2F463A]" aria-hidden="true">
               ·
             </span>
             <span>
               {typeCounts.activeOnPos}{' '}
-              {isVi ? 'đang bán tại POS' : 'active on POS'}
+              {isKm ? 'កំពុងលក់លើ POS' : 'active on POS'}
             </span>
           </p>
         </div>
@@ -784,7 +786,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             type="button"
             onClick={toggleSelectMode}
             aria-pressed={selectMode}
-            className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-sm font-medium rounded-lg border transition-all duration-150 ease-out whitespace-nowrap ${
+            className={`inline-flex items-center justify-center gap-1.5 h-11 px-3.5 text-sm font-medium rounded-lg border transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap ${
               selectMode
                 ? 'bg-emerald-50/80 border-emerald-500/40 text-[#0F5C43] dark:bg-[#064E3B]/70 dark:border-[#10B981]/50 dark:text-[#6EE7B7]'
                 : 'text-stone-600 dark:text-[#A8B8B0] bg-transparent border-slate-200/80 dark:border-emerald-950/80 hover:bg-stone-100/80 dark:hover:bg-[#18251F] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -793,11 +795,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             <CheckSquare className="w-4 h-4 shrink-0" />
             <span>
               {selectMode
-                ? isVi
-                  ? 'Xong'
+                ? isKm
+                  ? 'រួចរាល់'
                   : 'Done'
-                : isVi
-                  ? 'Chọn'
+                : isKm
+                  ? 'ជ្រើសរើស'
                   : 'Select'}
             </span>
           </button>
@@ -805,10 +807,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           <button
             type="button"
             onClick={openNew}
-            className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg shadow-2xs transition-all duration-150 ease-out active:scale-[0.98] whitespace-nowrap shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg shadow-2xs transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0"
           >
             <Plus className="w-4 h-4 shrink-0" />
-            <span>{isVi ? 'Thêm sản phẩm' : 'Add Product'}</span>
+            <span>{isKm ? 'បន្ថែមផលិតផល' : 'Add Product'}</span>
           </button>
         </div>
       </div>
@@ -816,7 +818,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       {scannedMatch && (
         <div
           role="status"
-          className={`px-4 py-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+          className={`px-4 py-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-drawer-in ${
             scannedMatch.product || scannedMatch.ingredient
               ? 'bg-emerald-50 dark:bg-[#064E3B]/75 border-emerald-200 dark:border-[#10B981]/45 text-emerald-950 dark:text-[#D1FAE5]'
               : 'bg-amber-50 dark:bg-amber-950/35 border-amber-200 dark:border-amber-600/50 text-amber-950 dark:text-amber-100'
@@ -834,10 +836,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               {scannedMatch.product ? (
                 <>
                   <p className="text-sm font-semibold truncate">
-                    {isVi ? 'Đã tìm thấy' : 'Matched'}:{' '}
-                    {isVi
-                      ? scannedMatch.product.nameVi || scannedMatch.product.name
-                      : scannedMatch.product.name}
+                    {isKm ? 'បានរកឃើញ' : 'Matched'}:{' '}
+                    {getLocalizedName(scannedMatch.product.name, scannedMatch.product.nameVi)}
                   </p>
                   <p className="text-xs opacity-85 font-mono-num mt-0.5">
                     {formatBarcodeTypeLabel(scannedMatch.format)} · {scannedMatch.code}
@@ -846,10 +846,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               ) : scannedMatch.ingredient ? (
                 <>
                   <p className="text-sm font-semibold truncate">
-                    {isVi ? 'Đã tìm thấy nguyên liệu trong kho' : 'Matched Raw Ingredient'}:{' '}
-                    {isVi
-                      ? scannedMatch.ingredient.nameVi || scannedMatch.ingredient.name
-                      : scannedMatch.ingredient.name}
+                    {isKm ? 'បានរកឃើញវត្ថុធាតុដើម' : 'Matched Raw Ingredient'}:{' '}
+                    {getLocalizedName(scannedMatch.ingredient.name, scannedMatch.ingredient.nameVi)}
                   </p>
                   <p className="text-xs opacity-85 font-mono-num mt-0.5 flex flex-wrap items-center gap-x-1.5">
                     <span>
@@ -857,7 +855,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     </span>
                     <span aria-hidden="true">·</span>
                     <span>
-                      {isVi ? 'Tồn kho' : 'In stock'}:{' '}
+                      {isKm ? 'ក្នុងស្តុក' : 'In stock'}:{' '}
                       {formatQty(scannedMatch.ingredient.stockQty, scannedMatch.ingredient.unit)}
                     </span>
                   </p>
@@ -865,7 +863,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               ) : (
                 <>
                   <p className="text-sm font-semibold">
-                    {isVi ? 'Không tìm thấy sản phẩm cho mã' : 'No catalog item matches'}{' '}
+                    {isKm ? 'រកមិនឃើញផលិតផលសម្រាប់កូដ' : 'No catalog item matches'}{' '}
                     <span className="font-mono-num">{scannedMatch.code}</span>{' '}
                     <span className="text-xs font-normal opacity-80">
                       ({formatBarcodeTypeLabel(scannedMatch.format)})
@@ -873,11 +871,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   </p>
                   <p className="text-xs opacity-85 mt-0.5 truncate">
                     {scannedMatch.prefill
-                      ? isVi
-                        ? `Gợi ý từ Open Food Facts: ${scannedMatch.prefill.name}${scannedMatch.prefill.brand ? ` · ${scannedMatch.prefill.brand}` : ''}`
+                      ? isKm
+                        ? `រកឃើញពីប្រព័ន្ធខាងក្រៅ៖ ${scannedMatch.prefill.name}${scannedMatch.prefill.brand ? ` · ${scannedMatch.prefill.brand}` : ''}`
                         : `Found externally: ${scannedMatch.prefill.name}${scannedMatch.prefill.brand ? ` · ${scannedMatch.prefill.brand}` : ''}`
-                      : isVi
-                        ? 'Bạn có thể đăng ký nhanh sản phẩm mới với mã vạch này.'
+                      : isKm
+                        ? 'ចុះឈ្មោះផលិតផលថ្មីជាមួយបាកូដនេះ ដើម្បីបន្ថែមទៅក្នុងបញ្ជី។'
                         : 'Register a new product with this barcode to add it to your catalog.'}
                   </p>
                 </>
@@ -890,18 +888,18 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => openEdit(scannedMatch.product!)}
-                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
-                  {isVi ? 'Sửa sản phẩm' : 'Edit Product'}
+                  {isKm ? 'កែប្រែផលិតផល' : 'Edit Product'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setLabelProduct(scannedMatch.product!)}
-                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
+                  className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                 >
                   <QrCode className="w-3.5 h-3.5" />
-                  {isVi ? 'In nhãn' : 'Label'}
+                  {isKm ? 'ស្លាកបាកូដ' : 'Label'}
                 </button>
               </>
             ) : scannedMatch.ingredient ? (
@@ -910,20 +908,20 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onRestockExistingIngredient(scannedMatch.ingredient!)}
-                    className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                    className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                   >
                     <PackagePlus className="w-3.5 h-3.5" />
-                    {isVi ? '+ Nhập kho' : '+ Restock'}
+                    {isKm ? '+ បញ្ចូលស្តុក' : '+ Restock'}
                   </button>
                 )}
                 {onEditExistingIngredient && (
                   <button
                     type="button"
                     onClick={() => onEditExistingIngredient(scannedMatch.ingredient!)}
-                    className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap"
+                    className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-900 dark:text-[#D1FAE5] bg-white/90 dark:bg-[#131D18] border border-emerald-300 dark:border-[#10B981]/40 hover:bg-white dark:hover:bg-[#18251F] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
-                    {isVi ? 'Mở trong Kho' : 'Edit in Inventory'}
+                    {isKm ? 'កែប្រែក្នុងស្តុក' : 'Edit in Inventory'}
                   </button>
                 )}
               </>
@@ -931,9 +929,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               <button
                 type="button"
                 onClick={openRegisterFromScan}
-                className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                className="h-9 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
               >
-                {isVi ? '+ Đăng ký sản phẩm' : '+ Register Product'}
+                {isKm ? '+ ចុះឈ្មោះផលិតផល' : '+ Register Product'}
               </button>
             )}
             <button
@@ -942,9 +940,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 setScannedMatch(null);
                 setSearch('');
               }}
-              className="h-9 px-2.5 inline-flex items-center justify-center text-xs font-semibold rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
+              className="h-9 px-2.5 inline-flex items-center justify-center text-xs font-semibold rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-all active:scale-[0.97] whitespace-nowrap"
             >
-              {isVi ? 'Xóa tìm' : 'Clear'}
+              {isKm ? 'សម្អាត' : 'Clear'}
             </button>
           </div>
         </div>
@@ -998,7 +996,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   setSearch(e.target.value);
                   if (scannedMatch) setScannedMatch(null);
                 }}
-                placeholder={isVi ? 'Tìm kiếm' : 'Search'}
+                placeholder={isKm ? 'ស្វែងរក...' : 'Search'}
                 className={`w-full h-11 pl-9 ${search ? 'pr-20' : 'pr-11'} text-sm bg-white/80 dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#6E8278] border border-slate-200/80 dark:border-emerald-950/80 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]/30 dark:focus-visible:ring-[#10B981]/40 focus-visible:border-[#0F5C43] dark:focus-visible:border-[#10B981] transition-all duration-150`}
               />
               <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
@@ -1010,7 +1008,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       setScannedMatch(null);
                     }}
                     className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] rounded-md transition-colors"
-                    aria-label="Clear search"
+                    aria-label={isKm ? 'សម្អាតការស្វែងរក' : 'Clear search'}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1019,9 +1017,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   type="button"
                   disabled={scanLookingUp}
                   onClick={() => setScanLookupOpen(true)}
-                  title={isVi ? 'Quét mã vạch (EAN-13 / UPC-A)' : 'Scan Barcode (EAN-13 / UPC-A)'}
-                  aria-label={isVi ? 'Quét mã vạch' : 'Scan Barcode'}
-                  className="w-9 h-9 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:bg-emerald-50/70 dark:hover:bg-[#064E3B]/50 rounded-md transition-colors"
+                  title={isKm ? 'ស្កេនបាកូដ (EAN-13 / UPC-A)' : 'Scan Barcode (EAN-13 / UPC-A)'}
+                  aria-label={isKm ? 'ស្កេនបាកូដ' : 'Scan Barcode'}
+                  className="w-9 h-9 inline-flex items-center justify-center text-stone-500 dark:text-[#94A39B] hover:text-[#0F5C43] dark:hover:text-[#34D399] hover:bg-emerald-50/70 dark:hover:bg-[#064E3B]/50 rounded-md transition-colors active:scale-[0.95]"
                 >
                   {scanLookingUp ? (
                     <Loader2 className="w-4 h-4 animate-spin text-[#0F5C43] dark:text-[#34D399]" />
@@ -1037,14 +1035,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               onClick={toggleFilters}
               aria-expanded={filtersOpen}
               aria-controls="products-catalog-filters"
-              className={`inline-flex items-center gap-1.5 h-11 px-3 text-xs sm:text-sm font-medium rounded-lg border transition-all duration-150 whitespace-nowrap shrink-0 ${
+              className={`inline-flex items-center gap-1.5 h-11 px-3 text-xs sm:text-sm font-medium rounded-lg border transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0 ${
                 filtersOpen || drawerFilterCount > 0
                   ? 'bg-stone-100/90 dark:bg-[#18251F] border-slate-300/90 dark:border-emerald-800/60 text-stone-900 dark:text-[#F1F5F3]'
                   : 'bg-transparent border-slate-200/80 dark:border-emerald-950/80 text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100/70 dark:hover:bg-[#18251F]'
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
-              <span>{isVi ? 'Bộ lọc' : 'Filters'}</span>
+              <span>{isKm ? 'តម្រង' : 'Filters'}</span>
               {drawerFilterCount > 0 && (
                 <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-mono-num font-semibold bg-[#0F5C43]/12 text-[#0F5C43] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
                   {drawerFilterCount}
@@ -1067,9 +1065,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   setSearch('');
                   setScannedMatch(null);
                 }}
-                className="inline-flex items-center justify-center h-11 px-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] transition-colors whitespace-nowrap shrink-0"
+                className="inline-flex items-center justify-center h-11 px-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] transition-colors active:scale-[0.97] whitespace-nowrap shrink-0"
               >
-                {isVi ? 'Đặt lại' : 'Reset'}
+                {isKm ? 'កំណត់ឡើងវិញ' : 'Reset'}
               </button>
             )}
           </div>
@@ -1079,14 +1077,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             <div className="min-w-0 max-w-full overflow-x-auto">
               <div
                 role="tablist"
-                aria-label={isVi ? 'Phân loại sản phẩm' : 'Product types'}
+                aria-label={isKm ? 'ប្រភេទផលិតផល' : 'Product types'}
                 className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-xl"
               >
                 {(
                   [
                     {
                       id: 'ALL',
-                      label: isVi ? 'Tất cả' : 'All',
+                      label: isKm ? 'ទាំងអស់' : 'All',
                       count: typeCounts.ALL,
                       icon: null,
                       iconClass: '',
@@ -1116,7 +1114,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       role="tab"
                       aria-selected={active}
                       onClick={() => setTypeFilter(tab.id)}
-                      className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out whitespace-nowrap shrink-0 ${
+                      className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0 ${
                         active
                           ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] font-semibold shadow-2xs'
                           : 'text-stone-500 dark:text-[#94A39B] font-medium hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -1136,16 +1134,16 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             {/* Compact Grid / Table Icon Switcher */}
             <div
               role="group"
-              aria-label={isVi ? 'Chế độ hiển thị danh mục' : 'Catalog layout view'}
+              aria-label={isKm ? 'របៀបបង្ហាញបញ្ជី' : 'Catalog layout view'}
               className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-lg shrink-0"
             >
               <button
                 type="button"
                 onClick={() => handleSetViewMode('grid')}
                 aria-pressed={viewMode === 'grid'}
-                aria-label={isVi ? 'Xem dạng lưới' : 'Grid view'}
-                title={isVi ? 'Xem dạng lưới' : 'Grid view'}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md transition-all duration-150 ease-out ${
+                aria-label={isKm ? 'ទម្រង់ក្រឡាចត្រង្គ' : 'Grid view'}
+                title={isKm ? 'ទម្រង់ក្រឡាចត្រង្គ' : 'Grid view'}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md transition-all duration-150 ease-out active:scale-[0.95] ${
                   viewMode === 'grid'
                     ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] shadow-2xs'
                     : 'text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -1157,9 +1155,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 type="button"
                 onClick={() => handleSetViewMode('table')}
                 aria-pressed={viewMode === 'table'}
-                aria-label={isVi ? 'Xem dạng bảng' : 'Table view'}
-                title={isVi ? 'Xem dạng bảng' : 'Table view'}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md transition-all duration-150 ease-out ${
+                aria-label={isKm ? 'ទម្រង់តារាង' : 'Table view'}
+                title={isKm ? 'ទម្រង់តារាង' : 'Table view'}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md transition-all duration-150 ease-out active:scale-[0.95] ${
                   viewMode === 'table'
                     ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] shadow-2xs'
                     : 'text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -1185,7 +1183,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
               categories={productCategories}
               selectedCategoryId={categoryFilter}
               onSelect={setCategoryFilter}
-              isVi={isVi}
+              isKm={isKm}
               allLabel={t.common.all}
             />
           </div>
@@ -1216,11 +1214,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         onClick={toggleSelectAllFiltered}
                         aria-label={
                           allFilteredSelected
-                            ? isVi
-                              ? 'Bỏ chọn tất cả'
+                            ? isKm
+                              ? 'ដកការជ្រើសរើសទាំងអស់'
                               : 'Deselect all products'
-                            : isVi
-                              ? 'Chọn tất cả'
+                            : isKm
+                              ? 'ជ្រើសរើសទាំងអស់'
                               : 'Select all products'
                         }
                         className="w-10 h-10 inline-flex items-center justify-center rounded-lg hover:bg-stone-200/70 dark:hover:bg-[#1F3028] transition-colors"
@@ -1242,16 +1240,16 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     </th>
                   )}
                   <th className="px-2.5 py-3 pl-3.5 font-medium">
-                    {isVi ? 'Sản phẩm / SKU' : 'Product / SKU'}
+                    {isKm ? 'ផលិតផល / SKU' : 'Product / SKU'}
                   </th>
                   <th className="px-2.5 py-3 font-medium whitespace-nowrap">
-                    {isVi ? 'Loại · Danh mục' : 'Type · Category'}
+                    {isKm ? 'ប្រភេទ · ក្រុម' : 'Type · Category'}
                   </th>
                   <th className="px-2.5 py-3 font-medium whitespace-nowrap">
-                    {isVi ? 'POS · Kho / Công thức' : 'Status · Stock'}
+                    {isKm ? 'ស្ថានភាព · ស្តុក' : 'Status · Stock'}
                   </th>
                   <th className="px-2.5 py-3 font-medium text-right whitespace-nowrap">
-                    {isVi ? 'Giá & Biên lãi' : 'Price & Margin'}
+                    {isKm ? 'តម្លៃ និងប្រាក់ចំណេញ' : 'Price & Margin'}
                   </th>
                   <th className="w-14 px-2.5 py-3 pr-3.5 font-medium text-right whitespace-nowrap">
                     <span className="sr-only">{t.common.actions}</span>
@@ -1265,7 +1263,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   const basePrice = firstVariant ? firstVariant.priceKhr : product.priceKhr;
                   const profit = basePrice - cogs;
                   const margin = basePrice > 0 ? Math.round((profit / basePrice) * 100) : 0;
-                  const displayName = isVi ? product.nameVi || product.name : product.name;
+                  const displayName = getLocalizedName(product.name, product.nameVi);
                   const isDirectStock = product.productType === 'PACKAGED';
                   const isLowStock = isDirectStock && product.stockQty <= product.reorderLevel;
                   const isUnlinkedRecipe =
@@ -1310,11 +1308,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                             aria-pressed={isSelected}
                             aria-label={
                               isSelected
-                                ? isVi
-                                  ? `Bỏ chọn ${displayName}`
+                                ? isKm
+                                  ? `ដកការជ្រើសរើស ${displayName}`
                                   : `Deselect ${displayName}`
-                                : isVi
-                                  ? `Chọn ${displayName}`
+                                : isKm
+                                  ? `ជ្រើសរើស ${displayName}`
                                   : `Select ${displayName}`
                             }
                             className="w-10 h-10 inline-flex items-center justify-center rounded-lg hover:bg-stone-200/60 dark:hover:bg-[#1F3028] transition-colors"
@@ -1347,8 +1345,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                                 type="button"
                                 disabled={isUploading}
                                 onClick={() => triggerInlinePhotoUpload(product)}
-                                title={isVi ? 'Thêm ảnh sản phẩm' : 'Add product photo'}
-                                aria-label={isVi ? 'Thêm ảnh sản phẩm' : 'Add product photo'}
+                                title={isKm ? 'បន្ថែមរូបភាពផលិតផល' : 'Add product photo'}
+                                aria-label={isKm ? 'បន្ថែមរូបភាពផលិតផល' : 'Add product photo'}
                                 className="absolute inset-0 bg-black/25 hover:bg-black/45 flex items-center justify-center text-white transition-colors"
                               >
                                 {isUploading ? (
@@ -1394,7 +1392,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                             ·
                           </span>
                           <span className="text-stone-500 dark:text-[#94A39B] truncate">
-                            {getCategoryDisplayName(catItem, isVi)}
+                            {getCategoryDisplayName(catItem, isKm)}
                           </span>
                         </div>
                       </td>
@@ -1407,7 +1405,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                             disabled={isToggling}
                             onClick={() => handleTogglePosVisibility(product)}
                             aria-pressed={product.active}
-                            className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold transition-colors ${
+                            className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold transition-all active:scale-[0.96] ${
                               product.active
                                 ? 'bg-[#10B981]/15 text-[#0F5C43] border border-[#10B981]/35 hover:bg-[#10B981]/25 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/40'
                                 : 'bg-stone-100 text-stone-600 border border-stone-200 hover:bg-stone-200/80 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C]'
@@ -1421,11 +1419,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                               <EyeOff className="w-3 h-3" />
                             )}
                             {product.active
-                              ? isVi
-                                ? 'Đang bán POS'
+                              ? isKm
+                                ? 'កំពុងលក់លើ POS'
                                 : 'POS Active'
-                              : isVi
-                                ? 'Đang ẩn'
+                              : isKm
+                                ? 'បានលាក់'
                                 : 'Hidden'}
                           </button>
 
@@ -1442,7 +1440,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                               >
                                 {formatQty(product.stockQty, product.unit)}{' '}
                                 <span className="font-sans font-normal text-stone-500 dark:text-[#94A39B]">
-                                  {isVi ? 'tồn kho' : 'in stock'}
+                                  {isKm ? 'ក្នុងស្តុក' : 'in stock'}
                                 </span>
                               </span>
                             ) : isUnlinkedRecipe ? (
@@ -1452,15 +1450,15 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                                 className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:underline"
                               >
                                 <Plus className="w-3 h-3 shrink-0" />
-                                {isVi ? 'Gắn nguyên liệu' : 'Link Ingredients'}
+                                {isKm ? 'ភ្ជាប់វត្ថុធាតុដើម' : 'Link Ingredients'}
                               </button>
                             ) : product.variants && product.variants.length > 0 ? (
                               <span className="text-stone-600 dark:text-[#94A39B] font-medium">
-                                {product.variants.length} {isVi ? 'kích cỡ' : 'sizes'}
+                                {product.variants.length} {isKm ? 'ទំហំ' : 'sizes'}
                               </span>
                             ) : (
                               <span className="text-stone-600 dark:text-[#94A39B] font-medium">
-                                {product.recipe.length} {isVi ? 'nguyên liệu' : 'ingredients'}
+                                {product.recipe.length} {isKm ? 'វត្ថុធាតុដើម' : 'ingredients'}
                               </span>
                             )}
                           </div>
@@ -1478,16 +1476,16 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           {isUnlinkedRecipe ? (
                             <span className="inline-flex items-center gap-1 font-sans font-semibold text-amber-700 dark:text-amber-300">
                               <AlertTriangle className="w-3 h-3 shrink-0" />
-                              {isVi ? 'Chưa gắn công thức' : 'No Recipe Linked'}
+                              {isKm ? 'មិនទាន់ភ្ជាប់រូបមន្ត' : 'No Recipe Linked'}
                             </span>
                           ) : isNegativeMargin ? (
                             <span className="font-semibold text-red-600 dark:text-[#F87171]">
-                              {isVi ? 'Vốn' : 'Cost'} {formatKhr(cogs)} · {margin}%
+                              {isKm ? 'ថ្លៃដើម' : 'Cost'} {formatKhr(cogs)} · {margin}%
                             </span>
                           ) : isZeroCost ? (
                             <>
                               <span className="font-semibold text-amber-700 dark:text-amber-300">
-                                {isVi ? 'Vốn' : 'Cost'} {formatKhr(0)}
+                                {isKm ? 'ថ្លៃដើម' : 'Cost'} {formatKhr(0)}
                               </span>
                               <span className="text-stone-300 dark:text-[#344E41]" aria-hidden="true">
                                 ·
@@ -1497,7 +1495,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           ) : (
                             <>
                               <span className="text-stone-500 dark:text-[#94A39B]">
-                                {isVi ? 'Vốn' : 'Cost'} {formatKhr(cogs)}
+                                {isKm ? 'ថ្លៃដើម' : 'Cost'} {formatKhr(cogs)}
                               </span>
                               <span className="text-stone-300 dark:text-[#344E41]" aria-hidden="true">
                                 ·
@@ -1518,8 +1516,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           aria-haspopup="menu"
                           aria-expanded={isMenuOpen}
                           aria-label={
-                            isVi
-                              ? `Thao tác cho ${displayName}`
+                            isKm
+                              ? `សកម្មភាពសម្រាប់ ${displayName}`
                               : `Actions for ${displayName}`
                           }
                           onClick={(e) => {
@@ -1551,7 +1549,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             const basePrice = firstVariant ? firstVariant.priceKhr : product.priceKhr;
             const profit = basePrice - cogs;
             const margin = basePrice > 0 ? Math.round((profit / basePrice) * 100) : 0;
-            const displayName = isVi ? product.nameVi || product.name : product.name;
+            const displayName = getLocalizedName(product.name, product.nameVi);
             const isDirectStock = product.productType === 'PACKAGED';
             const isLowStock = isDirectStock && product.stockQty <= product.reorderLevel;
             const isUnlinkedRecipe =
@@ -1603,11 +1601,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       aria-pressed={isSelected}
                       aria-label={
                         isSelected
-                          ? isVi
-                            ? `Bỏ chọn ${displayName}`
+                          ? isKm
+                            ? `ដកការជ្រើសរើស ${displayName}`
                             : `Deselect ${displayName}`
-                          : isVi
-                            ? `Chọn ${displayName}`
+                          : isKm
+                            ? `ជ្រើសរើស ${displayName}`
                             : `Select ${displayName}`
                       }
                       className="absolute top-1.5 left-1.5 z-10 w-10 h-10 inline-flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
@@ -1632,14 +1630,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     aria-pressed={product.active}
                     title={
                       product.active
-                        ? isVi
-                          ? 'Bấm để ẩn khỏi màn hình bán hàng POS'
+                        ? isKm
+                          ? 'ចុចដើម្បីលាក់ពីអេក្រង់លក់ POS'
                           : 'Click to hide from POS screen'
-                        : isVi
-                          ? 'Bấm để hiện lại trên màn hình POS'
+                        : isKm
+                          ? 'ចុចដើម្បីបង្ហាញលើអេក្រង់ POS'
                           : 'Click to activate on POS screen'
                     }
-                    className={`absolute top-2.5 right-2.5 z-10 inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold shadow-sm backdrop-blur-xs transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                    className={`absolute top-2.5 right-2.5 z-10 inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold shadow-sm backdrop-blur-xs transition-all active:scale-[0.96] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
                       product.active
                         ? 'bg-[#10B981] text-white dark:text-[#042419] hover:bg-[#059669]'
                         : 'bg-stone-800/85 text-stone-100 hover:bg-stone-900 dark:bg-slate-900/90 dark:text-slate-200 dark:hover:bg-slate-800'
@@ -1654,11 +1652,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     )}
                     <span>
                       {product.active
-                        ? isVi
-                          ? 'Đang bán POS'
+                        ? isKm
+                          ? 'កំពុងលក់លើ POS'
                           : 'POS Active'
-                        : isVi
-                          ? 'Đang ẩn'
+                        : isKm
+                          ? 'បានលាក់'
                           : 'Hidden'}
                     </span>
                   </button>
@@ -1670,7 +1668,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         type="button"
                         disabled={isUploading}
                         onClick={() => triggerInlinePhotoUpload(product)}
-                        className="pointer-events-auto inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold bg-white/92 dark:bg-[#131D18]/92 text-stone-700 dark:text-[#F1F5F3] border border-stone-200/90 dark:border-[#24352C] shadow-xs hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] opacity-95 sm:opacity-85 sm:group-hover:opacity-100 transition-all cursor-pointer"
+                        className="pointer-events-auto inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold bg-white/92 dark:bg-[#131D18]/92 text-stone-700 dark:text-[#F1F5F3] border border-stone-200/90 dark:border-[#24352C] shadow-xs hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] opacity-95 sm:opacity-85 sm:group-hover:opacity-100 transition-all active:scale-[0.97] cursor-pointer"
                       >
                         {isUploading ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0F5C43] dark:text-[#34D399]" />
@@ -1679,11 +1677,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         )}
                         <span>
                           {isUploading
-                            ? isVi
-                              ? 'Đang tải...'
+                            ? isKm
+                              ? 'កំពុងបង្ហោះ...'
                               : 'Uploading...'
-                            : isVi
-                              ? '+ Thêm ảnh'
+                            : isKm
+                              ? '+ បន្ថែមរូបភាព'
                               : '+ Add Photo'}
                         </span>
                       </button>
@@ -1717,7 +1715,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       <span className="text-stone-300 dark:text-[#344E41] shrink-0" aria-hidden="true">
                         ·
                       </span>
-                      <span className="truncate">{getCategoryDisplayName(catItem, isVi)}</span>
+                      <span className="truncate">{getCategoryDisplayName(catItem, isKm)}</span>
                     </div>
                   </div>
 
@@ -1725,7 +1723,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   <div className="pt-3 border-t border-stone-100 dark:border-[#1F3028] grid grid-cols-[auto_1fr] gap-3 items-end">
                     <div>
                       <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
-                        {isVi ? 'Giá bán' : 'Price'}
+                        {isKm ? 'តម្លៃលក់' : 'Price'}
                       </span>
                       <span className="font-mono-num text-base font-bold text-[#0F5C43] dark:text-[#34D399] whitespace-nowrap">
                         {product.variants && product.variants.length > 1
@@ -1737,11 +1735,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     <div className="text-right min-w-0">
                       <span className="block text-[11px] text-stone-500 dark:text-[#94A39B]">
                         {isDirectStock
-                          ? isVi
-                            ? 'Tồn kho'
+                          ? isKm
+                            ? 'ស្តុក'
                             : 'Stock'
-                          : isVi
-                            ? 'Biên lãi / Công thức'
+                          : isKm
+                            ? 'ប្រាក់ចំណេញ / ទំហំ'
                             : 'Margin / Sizes'}
                       </span>
                       {isDirectStock ? (
@@ -1756,7 +1754,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                         >
                           {formatQty(product.stockQty, product.unit)}{' '}
                           <span className="font-sans font-normal text-stone-500 dark:text-[#94A39B]">
-                            {isVi ? 'tồn kho' : 'in stock'}
+                            {isKm ? 'ក្នុងស្តុក' : 'in stock'}
                           </span>
                         </span>
                       ) : isUnlinkedRecipe ? (
@@ -1766,7 +1764,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:underline truncate"
                         >
                           <AlertTriangle className="w-3 h-3 shrink-0" />
-                          <span>{isVi ? 'Chưa gắn công thức' : 'No recipe linked'}</span>
+                          <span>{isKm ? 'មិនទាន់ភ្ជាប់រូបមន្ត' : 'No recipe linked'}</span>
                         </button>
                       ) : (
                         <span
@@ -1778,12 +1776,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                                 : 'text-emerald-700 dark:text-[#34D399]'
                           }`}
                         >
-                          {margin}% {isVi ? 'lãi' : 'margin'}
+                          {margin}% {isKm ? 'ចំណេញ' : 'margin'}
                           <span className="font-sans font-normal text-stone-500 dark:text-[#94A39B]">
                             {' · '}
                             {product.variants && product.variants.length > 0
-                              ? `${product.variants.length} ${isVi ? 'cỡ' : 'sizes'}`
-                              : `${product.recipe.length} ${isVi ? 'nguyên liệu' : 'ingr.'}`}
+                              ? `${product.variants.length} ${isKm ? 'ទំហំ' : 'sizes'}`
+                              : `${product.recipe.length} ${isKm ? 'មុខ' : 'ingr.'}`}
                           </span>
                         </span>
                       )}
@@ -1799,14 +1797,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       className="w-full h-8 flex items-center justify-between gap-2 text-xs font-medium text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] transition-colors"
                     >
                       <span className="inline-flex items-center gap-1.5 min-w-0 truncate">
-                        <span>{isVi ? 'Chi tiết' : 'Details'}</span>
+                        <span>{isKm ? 'ព័ត៌មានលម្អិត' : 'Details'}</span>
                         {!isExpanded && (
                           <span className="font-mono-num text-[11px] text-stone-400 dark:text-[#94A39B]/80 truncate">
                             {isUnlinkedRecipe
                               ? ''
                               : isZeroCost
-                                ? `· ${isVi ? 'Vốn' : 'Cost'} ${formatKhr(0)}`
-                                : `· ${isVi ? 'Vốn' : 'Cost'} ${formatKhr(cogs)}`}
+                                ? `· ${isKm ? 'ថ្លៃដើម' : 'Cost'} ${formatKhr(0)}`
+                                : `· ${isKm ? 'ថ្លៃដើម' : 'Cost'} ${formatKhr(cogs)}`}
                           </span>
                         )}
                       </span>
@@ -1824,8 +1822,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-stone-500 dark:text-[#94A39B]">
                               {product.productType === 'PACKAGED'
-                                ? isVi
-                                  ? 'Giá vốn nhập'
+                                ? isKm
+                                  ? 'ថ្លៃដើមមួយឯកតា'
                                   : 'Unit Cost'
                                 : t.products.recipeCost}
                             </span>
@@ -1846,7 +1844,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                             </span>
                             {isUnlinkedRecipe ? (
                               <span className="font-semibold text-amber-700 dark:text-amber-300">
-                                {isVi ? 'Chưa gắn công thức' : 'No Recipe Linked'}
+                                {isKm ? 'មិនទាន់ភ្ជាប់រូបមន្ត' : 'No Recipe Linked'}
                               </span>
                             ) : (
                               <span
@@ -1863,7 +1861,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
 
                           <div className="flex items-start justify-between gap-2">
                             <span className="text-stone-500 dark:text-[#94A39B] shrink-0">
-                              SKU / Barcode
+                              {isKm ? 'កូដ SKU / បាកូដ' : 'SKU / Barcode'}
                             </span>
                             <span className="font-mono-num text-right text-stone-800 dark:text-[#D5DFDA] break-all">
                               {product.barcode || '—'}
@@ -1873,7 +1871,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           {product.brand && (
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-stone-500 dark:text-[#94A39B]">
-                                {isVi ? 'Thương hiệu' : 'Brand'}
+                                {isKm ? 'ម៉ាក' : 'Brand'}
                               </span>
                               <span className="font-medium text-stone-800 dark:text-[#D5DFDA] truncate">
                                 {product.brand}
@@ -1899,7 +1897,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                           product.packagingBarcodes.length > 0 && (
                             <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] space-y-1">
                               <p className="font-medium text-stone-500 dark:text-[#94A39B]">
-                                {isVi ? 'Mã đóng gói / Thùng' : 'Pack / Case Barcodes'}
+                                {isKm ? 'បាកូដកញ្ចប់ / កេស' : 'Pack / Case Barcodes'}
                               </p>
                               {product.packagingBarcodes.map((pb, idx) => (
                                 <div
@@ -1924,7 +1922,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                             <div className="pt-2 border-t border-stone-100 dark:border-[#1F3028] space-y-1.5">
                               <p className="font-medium text-stone-500 dark:text-[#94A39B] flex items-center gap-1">
                                 <Layers className="w-3.5 h-3.5" />
-                                {isVi ? 'Kích cỡ & Giá bán' : 'Size Variants'} (
+                                {isKm ? 'ទំហំ និងតម្លៃ' : 'Size Variants'} (
                                 {product.variants.length})
                               </p>
                               <ul className="space-y-1">
@@ -1938,7 +1936,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                                       className="flex justify-between gap-2 text-stone-700 dark:text-[#D5DFDA]"
                                     >
                                       <span className="font-medium">
-                                        {isVi ? v.nameVi || v.name : v.name}
+                                        {getLocalizedName(v.name, v.nameVi)}
                                       </span>
                                       <span className="font-mono-num">
                                         {formatKhr(v.priceKhr)}{' '}
@@ -1954,10 +1952,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => openEdit(product, 'recipe')}
-                                  className="mt-1.5 w-full h-9 px-3 inline-flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950/45 dark:hover:bg-amber-950/75 dark:text-amber-200 dark:border-amber-500/40 transition-colors"
+                                  className="mt-1.5 w-full h-9 px-3 inline-flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950/45 dark:hover:bg-amber-950/75 dark:text-amber-200 dark:border-amber-500/40 transition-all active:scale-[0.97]"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
-                                  {isVi ? 'Gắn nguyên liệu' : 'Link Ingredients'}
+                                  {isKm ? 'ភ្ជាប់វត្ថុធាតុដើម' : 'Link Ingredients'}
                                 </button>
                               )}
                             </div>
@@ -1975,10 +1973,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => openEdit(product, 'recipe')}
-                                    className="w-full h-9 px-3 inline-flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950/45 dark:hover:bg-amber-950/75 dark:text-amber-200 dark:border-amber-500/40 transition-colors"
+                                    className="w-full h-9 px-3 inline-flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950/45 dark:hover:bg-amber-950/75 dark:text-amber-200 dark:border-amber-500/40 transition-all active:scale-[0.97]"
                                   >
                                     <Plus className="w-3.5 h-3.5" />
-                                    {isVi ? 'Gắn nguyên liệu' : 'Link Ingredients'}
+                                    {isKm ? 'ភ្ជាប់វត្ថុធាតុដើម' : 'Link Ingredients'}
                                   </button>
                                 ) : (
                                   <p className="text-stone-400 dark:text-[#94A39B]/70">
@@ -1996,7 +1994,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                                         className="flex justify-between gap-2"
                                       >
                                         <span className="truncate">
-                                          {isVi ? ing.nameVi || ing.name : ing.name}
+                                          {getLocalizedName(ing.name, ing.nameVi)}
                                         </span>
                                         <span className="font-mono-num text-stone-500 dark:text-[#94A39B] whitespace-nowrap shrink-0">
                                           {formatQty(row.quantity, row.unit || ing.unit)}
@@ -2018,7 +2016,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   {confirmDeleteId === product.id ? (
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-medium text-red-700 dark:text-[#F87171] truncate">
-                        {isVi ? 'Xóa sản phẩm này?' : 'Delete this product?'}
+                        {isKm ? 'លុបផលិតផលនេះ?' : 'Delete this product?'}
                       </span>
                       <div className="inline-flex items-center gap-1.5 shrink-0">
                         <button
@@ -2027,7 +2025,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                             await deleteProduct(product.id);
                             setConfirmDeleteId(null);
                           }}
-                          className="h-9 px-3 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors whitespace-nowrap"
+                          className="h-9 px-3 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-red-600 text-white hover:bg-red-700 transition-all active:scale-[0.97] whitespace-nowrap"
                         >
                           <Check className="w-3.5 h-3.5 shrink-0" />
                           <span>{t.common.delete}</span>
@@ -2047,7 +2045,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       <button
                         type="button"
                         onClick={() => openEdit(product)}
-                        className="h-9 px-2.5 text-xs font-medium inline-flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors whitespace-nowrap"
+                        className="h-9 px-2.5 text-xs font-medium inline-flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-all active:scale-[0.97] whitespace-nowrap"
                       >
                         <Edit2 className="w-3.5 h-3.5 shrink-0" />
                         <span>{t.common.edit}</span>
@@ -2056,16 +2054,16 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setLabelProduct(product)}
-                        className="h-9 px-2.5 text-xs font-medium inline-flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-colors whitespace-nowrap"
+                        className="h-9 px-2.5 text-xs font-medium inline-flex items-center justify-center gap-1.5 rounded-lg bg-white dark:bg-[#18251F] text-stone-700 dark:text-[#D5DFDA] border border-stone-200 dark:border-[#24352C] hover:border-[#0F5C43] hover:text-[#0F5C43] dark:hover:border-[#10B981] dark:hover:text-[#34D399] transition-all active:scale-[0.97] whitespace-nowrap"
                       >
                         <QrCode className="w-3.5 h-3.5 shrink-0" />
-                        <span>{isVi ? 'Nhãn' : 'Label'}</span>
+                        <span>{isKm ? 'ស្លាកបាកូដ' : 'Label'}</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteId(product.id)}
-                        className="h-9 px-2.5 text-xs font-medium inline-flex items-center justify-center gap-1.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-[#F87171] border border-red-200/80 dark:border-red-500/30 hover:bg-red-100 dark:hover:bg-red-950/70 transition-colors whitespace-nowrap"
+                        className="h-9 px-2.5 text-xs font-medium inline-flex items-center justify-center gap-1.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-[#F87171] border border-red-200/80 dark:border-red-500/30 hover:bg-red-100 dark:hover:bg-red-950/70 transition-all active:scale-[0.97] whitespace-nowrap"
                       >
                         <Trash2 className="w-3.5 h-3.5 shrink-0" />
                         <span>{t.common.delete}</span>
@@ -2083,8 +2081,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       {selectMode && (
         <div
           role="region"
-          aria-label={isVi ? 'Thao tác hàng loạt' : 'Bulk selection actions'}
-          className="sticky bottom-4 z-30 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border-2 border-[#0F5C43]/40 dark:border-[#10B981]/50 rounded-xl px-4 py-3 shadow-lg space-y-2.5"
+          aria-label={isKm ? 'សកម្មភាពជាក្រុម' : 'Bulk selection actions'}
+          className="sticky bottom-4 z-30 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border-2 border-[#0F5C43]/40 dark:border-[#10B981]/50 rounded-xl px-4 py-3 shadow-lg space-y-2.5 animate-sheet-up"
         >
           {bulkFeedback && (
             <div
@@ -2114,7 +2112,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 type="button"
                 disabled={filteredProducts.length === 0 || bulkProcessing}
                 onClick={toggleSelectAllFiltered}
-                className="inline-flex items-center gap-2 h-11 min-h-[44px] px-3 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] hover:bg-stone-200 dark:hover:bg-[#1F3028] border border-stone-200 dark:border-[#24352C] rounded-lg transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 h-11 min-h-[44px] px-3 text-xs font-semibold text-stone-800 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] hover:bg-stone-200 dark:hover:bg-[#1F3028] border border-stone-200 dark:border-[#24352C] rounded-lg transition-all active:scale-[0.97] disabled:opacity-50"
               >
                 <span
                   className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
@@ -2130,16 +2128,16 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   ) : null}
                 </span>
                 {allFilteredSelected
-                  ? isVi
-                    ? 'Bỏ chọn tất cả'
+                  ? isKm
+                    ? 'ដកការជ្រើសរើសទាំងអស់'
                     : 'Deselect All'
-                  : isVi
-                    ? `Chọn tất cả (${filteredProducts.length})`
+                  : isKm
+                    ? `ជ្រើសរើសទាំងអស់ (${filteredProducts.length})`
                     : `Select All (${filteredProducts.length})`}
               </button>
 
               <span className="text-xs font-semibold text-[#0F5C43] dark:text-[#34D399] font-mono-num">
-                {selectedCount} {isVi ? 'đã chọn' : 'selected'}
+                {selectedCount} {isKm ? 'បានជ្រើសរើស' : 'selected'}
               </span>
 
               {selectedCount > 0 && (
@@ -2153,7 +2151,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   }}
                   className="h-10 px-2.5 text-xs font-medium text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] rounded-lg transition-colors"
                 >
-                  {isVi ? 'Bỏ chọn' : 'Clear'}
+                  {isKm ? 'សម្អាត' : 'Clear'}
                 </button>
               )}
             </div>
@@ -2165,12 +2163,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   value={bulkCategory}
                   disabled={bulkProcessing}
                   onChange={(e) => setBulkCategory(e.target.value)}
-                  aria-label={isVi ? 'Danh mục đích' : 'Target category'}
+                  aria-label={isKm ? 'ប្រភេទគោលដៅ' : 'Target category'}
                   className="h-11 min-h-[44px] px-3 text-xs font-medium bg-white dark:bg-[#18251F] text-stone-800 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                 >
                   {productCategories.map((cat) => (
                     <option key={cat.id} value={cat.id}>
-                      {getCategoryDisplayName(cat, isVi)}
+                      {getCategoryDisplayName(cat, isKm)}
                     </option>
                   ))}
                 </select>
@@ -2178,14 +2176,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   type="button"
                   disabled={selectedCount === 0 || bulkProcessing}
                   onClick={handleBulkReassignCategory}
-                  className="inline-flex items-center gap-1.5 h-11 min-h-[44px] px-4 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 h-11 min-h-[44px] px-4 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                 >
                   {bulkAction === 'category' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <FolderInput className="w-3.5 h-3.5" />
                   )}
-                  {isVi ? 'Đổi danh mục' : 'Change Category'}
+                  {isKm ? 'ប្តូរប្រភេទ' : 'Change Category'}
                 </button>
               </div>
 
@@ -2200,14 +2198,14 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     type="button"
                     disabled={bulkProcessing}
                     onClick={handleBulkDelete}
-                    className="inline-flex items-center gap-1.5 h-11 min-h-[44px] px-4 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
+                    className="inline-flex items-center gap-1.5 h-11 min-h-[44px] px-4 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                   >
                     {bulkAction === 'delete' ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <Trash2 className="w-3.5 h-3.5" />
                     )}
-                    {isVi ? `Xác nhận xóa (${selectedCount})` : `Confirm Delete (${selectedCount})`}
+                    {isKm ? `បញ្ជាក់ការលុប (${selectedCount})` : `Confirm Delete (${selectedCount})`}
                   </button>
                   <button
                     type="button"
@@ -2223,13 +2221,13 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   type="button"
                   disabled={selectedCount === 0 || bulkProcessing}
                   onClick={() => setConfirmBulkDelete(true)}
-                  className="inline-flex items-center gap-1.5 h-11 min-h-[44px] px-4 text-xs font-semibold text-red-700 dark:text-[#F87171] bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/70 border border-red-200 dark:border-red-500/40 disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 h-11 min-h-[44px] px-4 text-xs font-semibold text-red-700 dark:text-[#F87171] bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/70 border border-red-200 dark:border-red-500/40 disabled:opacity-45 rounded-lg transition-all active:scale-[0.97] whitespace-nowrap"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  {isVi
+                  {isKm
                     ? selectedCount > 0
-                      ? `Xóa đã chọn (${selectedCount})`
-                      : 'Xóa đã chọn'
+                      ? `លុបដែលបានជ្រើស (${selectedCount})`
+                      : 'លុបដែលបានជ្រើស'
                     : selectedCount > 0
                       ? `Delete Selected (${selectedCount})`
                       : 'Delete Selected'}
@@ -2288,10 +2286,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       {/* Camera Barcode Scan & Lookup Modal */}
       <BarcodeScannerModal
         open={scanLookupOpen}
-        title={isVi ? 'Quét mã vạch sản phẩm' : 'Scan Barcode'}
+        title={isKm ? 'ស្កេនបាកូដផលិតផល' : 'Scan Barcode'}
         subtitle={
-          isVi
-            ? 'Đưa camera vào mã EAN-13 / UPC-A để tự động tìm kiếm trong danh mục sản phẩm.'
+          isKm
+            ? 'តម្រង់កាមេរ៉ាទៅបាកូដ EAN-13 ឬ UPC-A ដើម្បីស្វែងរកក្នុងបញ្ជីផលិតផលដោយស្វ័យប្រវត្តិ។'
             : 'Point camera at an EAN-13 or UPC-A barcode to automatically search your product catalog.'
         }
         onDetected={handleScanLookup}
@@ -2303,7 +2301,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
         open={Boolean(labelProduct)}
         product={labelProduct}
         shopName={settings.name}
-        isVi={isVi}
+        isKm={isKm}
         onClose={() => setLabelProduct(null)}
       />
 
@@ -2314,8 +2312,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
           key={activeMenuProduct.id}
           role="menu"
           aria-label={
-            isVi
-              ? `Thao tác cho ${activeMenuProduct.nameVi || activeMenuProduct.name}`
+            isKm
+              ? `សកម្មភាពសម្រាប់ ${getLocalizedName(activeMenuProduct.name, activeMenuProduct.nameVi)}`
               : `Actions for ${activeMenuProduct.name}`
           }
           style={{
@@ -2352,7 +2350,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             className="w-full h-11 px-3.5 inline-flex items-center gap-2.5 rounded-lg text-sm font-medium text-stone-700 dark:text-[#E2ECE7] hover:bg-stone-100 dark:hover:bg-[#1F3028] hover:text-stone-950 dark:hover:text-white transition-colors"
           >
             <QrCode className="w-4 h-4 text-stone-500 dark:text-[#94A39B] shrink-0" />
-            <span>{isVi ? 'Nhãn' : 'Label'}</span>
+            <span>{isKm ? 'ស្លាកបាកូដ' : 'Label'}</span>
           </button>
 
           <div
@@ -2374,8 +2372,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
 
       {/* Floating Add Product FAB + Scroll-to-Top Pill */}
       <FloatingActionBar
-        label={isVi ? 'Thêm sản phẩm' : 'Add Product'}
-        topLabel={isVi ? 'Lên đầu' : 'Top'}
+        label={isKm ? 'បន្ថែមផលិតផល' : 'Add Product'}
+        topLabel={isKm ? 'ឡើងលើ' : 'Top'}
         onAction={openNew}
         hidden={modalOpen || scanLookupOpen || Boolean(labelProduct) || selectMode}
       />

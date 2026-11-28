@@ -10,7 +10,7 @@ interface CategoryFilterPillsProps {
   categories: CategoryItem[];
   selectedCategoryId: string; // 'all' or a CategoryItem.id
   onSelect: (categoryId: string) => void;
-  isVi: boolean;
+  isKm: boolean;
   allLabel?: string;
   rowLabel?: string;
   labelWidthClass?: string;
@@ -20,13 +20,13 @@ export const CategoryFilterPills: React.FC<CategoryFilterPillsProps> = ({
   categories,
   selectedCategoryId,
   onSelect,
-  isVi,
+  isKm,
   allLabel,
   rowLabel,
   labelWidthClass = 'w-16',
 }) => {
-  const resolvedAllLabel = allLabel || (isVi ? 'Tất cả' : 'All');
-  const resolvedRowLabel = rowLabel || (isVi ? 'Danh mục' : 'Category');
+  const resolvedAllLabel = allLabel || (isKm ? 'ទាំងអស់' : 'All');
+  const resolvedRowLabel = rowLabel || (isKm ? 'ប្រភេទ' : 'Category');
 
   return (
     <div className="flex items-center gap-2.5 min-w-0">
@@ -40,7 +40,7 @@ export const CategoryFilterPills: React.FC<CategoryFilterPillsProps> = ({
           type="button"
           onClick={() => onSelect('all')}
           aria-pressed={selectedCategoryId === 'all'}
-          className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors duration-200 ease-out whitespace-nowrap shrink-0 border ${getCategoryFilterPillClass(
+          className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0 border ${getCategoryFilterPillClass(
             'ALL',
             selectedCategoryId === 'all'
           )}`}
@@ -55,7 +55,7 @@ export const CategoryFilterPills: React.FC<CategoryFilterPillsProps> = ({
               type="button"
               onClick={() => onSelect(cat.id)}
               aria-pressed={active}
-              className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-colors duration-200 ease-out whitespace-nowrap shrink-0 border ${getCategoryFilterPillClass(
+              className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0 border ${getCategoryFilterPillClass(
                 cat,
                 active
               )}`}
@@ -64,7 +64,7 @@ export const CategoryFilterPills: React.FC<CategoryFilterPillsProps> = ({
                 className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(cat)}`}
                 aria-hidden="true"
               />
-              <span>{getCategoryDisplayName(cat, isVi)}</span>
+              <span>{getCategoryDisplayName(cat, isKm)}</span>
             </button>
           );
         })}

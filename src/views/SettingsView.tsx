@@ -157,7 +157,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     mergeDuplicateItems,
   } = useStore();
 
-  const isVi = settings.language === 'vi';
+  const isKm = settings.language === 'km';
   const familyMembers =
     Array.isArray(settings.familyMembers) && settings.familyMembers.length > 0
       ? settings.familyMembers
@@ -290,8 +290,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           type: 'err',
           text:
             res.error ||
-            (isVi
-              ? 'Không thể gộp các mục trùng lặp lúc này.'
+            (isKm
+              ? 'មិនអាចបញ្ចូលទិន្នន័យស្ទួនបានទេនៅពេលនេះ។'
               : 'Could not merge duplicate items right now.'),
         });
         return;
@@ -300,17 +300,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       if (totalRemoved === 0) {
         setMergeFeedback({
           type: 'ok',
-          text: isVi
-            ? 'Không tìm thấy mục trùng lặp nào — Danh mục và Kho hàng đã sạch.'
+          text: isKm
+            ? 'មិនមានទិន្នន័យស្ទួនទេ — បញ្ជីផលិតផល និងស្តុកទំនិញស្អាតល្អហើយ។'
             : 'No duplicate items found — your catalog and inventory are already clean.',
         });
       } else {
         setMergeFeedback({
           type: 'ok',
-          text: isVi
-            ? `Đã gộp ${totalRemoved} bản ghi trùng lặp (${res.mergedProductGroups} nhóm sản phẩm, ${res.mergedIngredientGroups} nhóm nguyên liệu${
-                res.updatedRecipes > 0 ? `, cập nhật ${res.updatedRecipes} công thức` : ''
-              }). Lịch sử bán hàng và Báo cáo tài chính vẫn được giữ nguyên.`
+          text: isKm
+            ? `បានបញ្ចូលទិន្នន័យស្ទួនចំនួន ${totalRemoved} (${res.mergedProductGroups} ក្រុមផលិតផល, ${res.mergedIngredientGroups} ក្រុមវត្ថុធាតុដើម${
+                res.updatedRecipes > 0 ? `, បានធ្វើបច្ចុប្បន្នភាពរូបមន្ត ${res.updatedRecipes}` : ''
+              })។ ប្រវត្តិលក់ និងរបាយការណ៍ហិរញ្ញវត្ថុត្រូវបានរក្សាទុក ១០០%។`
             : `Merged ${totalRemoved} duplicate ${
                 totalRemoved === 1 ? 'record' : 'records'
               } (${res.mergedProductGroups} product ${
@@ -453,7 +453,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     if (!res.ok) {
       setPresetFeedback({
         type: 'err',
-        text: isVi ? 'Nhập số tiền KHR hợp lệ và chưa trùng lặp.' : res.error || 'Invalid preset amount.',
+        text: isKm ? 'សូមបញ្ចូលចំនួនទឹកប្រាក់ KHR ត្រឹមត្រូវ និងមិនស្ទួន។' : res.error || 'Invalid preset amount.',
       });
       return;
     }
@@ -461,7 +461,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setNewPresetInput('');
     setPresetFeedback({
       type: 'ok',
-      text: isVi ? 'Đã thêm mức tiền nhanh.' : 'Quick-cash preset added.',
+      text: isKm ? 'បានបន្ថែមប៊ូតុងសាច់ប្រាក់រហ័ស។' : 'Quick-cash preset added.',
     });
     window.setTimeout(() => setPresetFeedback(null), 2200);
   };
@@ -477,7 +477,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     if (!res.ok) {
       setPresetFeedback({
         type: 'err',
-        text: isVi ? 'Số tiền KHR không hợp lệ hoặc đã tồn tại.' : res.error || 'Invalid preset amount.',
+        text: isKm ? 'ចំនួនទឹកប្រាក់ KHR មិនត្រឹមត្រូវ ឬមានរួចហើយ។' : res.error || 'Invalid preset amount.',
       });
       return;
     }
@@ -486,7 +486,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setEditPresetInput('');
     setPresetFeedback({
       type: 'ok',
-      text: isVi ? 'Đã cập nhật mức tiền nhanh.' : 'Quick-cash preset updated.',
+      text: isKm ? 'បានកែប្រែប៊ូតុងសាច់ប្រាក់រហ័ស។' : 'Quick-cash preset updated.',
     });
     window.setTimeout(() => setPresetFeedback(null), 2200);
   };
@@ -506,7 +506,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setEditPresetInput('');
     setPresetFeedback({
       type: 'ok',
-      text: isVi ? 'Đã khôi phục mức tiền mặc định.' : 'Default presets restored.',
+      text: isKm ? 'បានស្តារកម្រិតសាច់ប្រាក់លំនាំដើមឡើងវិញ។' : 'Default presets restored.',
     });
     window.setTimeout(() => setPresetFeedback(null), 2200);
   };
@@ -719,7 +719,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         color: newCategoryColor,
       });
       if (!res.ok) {
-        showCategoryFeedback('err', res.error || (isVi ? 'Không thể thêm danh mục.' : 'Could not add category.'));
+        showCategoryFeedback('err', res.error || (isKm ? 'មិនអាចបន្ថែមប្រភេទបានទេ។' : 'Could not add category.'));
         return;
       }
       setNewCategoryName('');
@@ -728,8 +728,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       }
       showCategoryFeedback(
         'ok',
-        isVi
-          ? `Đã thêm danh mục "${res.category?.name}"`
+        isKm
+          ? `បានបន្ថែមប្រភេទ "${res.category?.name}"`
           : `Added category "${res.category?.name}"`
       );
     } finally {
@@ -747,13 +747,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         color: editCatColor,
       });
       if (!res.ok) {
-        showCategoryFeedback('err', res.error || (isVi ? 'Không thể cập nhật danh mục.' : 'Could not update category.'));
+        showCategoryFeedback('err', res.error || (isKm ? 'មិនអាចកែប្រែប្រភេទបានទេ។' : 'Could not update category.'));
         return;
       }
       setEditingCatId(null);
       showCategoryFeedback(
         'ok',
-        isVi ? 'Đã cập nhật danh mục và đồng bộ toàn ứng dụng.' : 'Category updated and synced across all views.'
+        isKm ? 'បានធ្វើបច្ចុប្បន្នភាពប្រភេទ និងធ្វើសមកាលកម្មទូទាំងកម្មវិធី។' : 'Category updated and synced across all views.'
       );
     } finally {
       setCatBusy(false);
@@ -767,14 +767,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       const targetId = reassignTargetId === catId ? UNCATEGORIZED_ID : reassignTargetId;
       const res = await deleteCategory(catId, targetId);
       if (!res.ok) {
-        showCategoryFeedback('err', res.error || (isVi ? 'Không thể xóa danh mục.' : 'Could not delete category.'));
+        showCategoryFeedback('err', res.error || (isKm ? 'មិនអាចលុបប្រភេទបានទេ។' : 'Could not delete category.'));
         return;
       }
       setDeletingCatId(null);
       setReassignTargetId(UNCATEGORIZED_ID);
       showCategoryFeedback(
         'ok',
-        isVi ? 'Đã xóa danh mục và chuyển các mục liên quan an toàn.' : 'Category deleted and linked items safely reassigned.'
+        isKm ? 'បានលុបប្រភេទ និងផ្ទេរទំនិញពាក់ព័ន្ធដោយសុវត្ថិភាព។' : 'Category deleted and linked items safely reassigned.'
       );
     } finally {
       setCatBusy(false);
@@ -782,29 +782,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const formatScopeLabel = (scope: CategoryScope) => {
-    if (scope === 'product') return isVi ? 'Sản phẩm & POS' : 'Products & POS';
-    if (scope === 'inventory') return isVi ? 'Kho nguyên liệu' : 'Inventory';
-    return isVi ? 'Cả hai' : 'Both';
+    if (scope === 'product') return isKm ? 'ផលិតផល និង POS' : 'Products & POS';
+    if (scope === 'inventory') return isKm ? 'ស្តុកទំនិញ' : 'Inventory';
+    return isKm ? 'ទាំងពីរ' : 'Both';
   };
 
   const quickJumpTabs: { id: SettingsSectionId; label: string }[] = [
-    { id: 'language', label: isVi ? 'Ngôn ngữ' : 'Language' },
-    { id: 'business', label: isVi ? 'Cửa hàng & Tiền tệ' : 'Business & Currency' },
-    { id: 'categories', label: isVi ? 'Danh mục' : 'Categories' },
-    { id: 'family', label: isVi ? 'Gia đình' : 'Family Access' },
-    { id: 'cloud-sync', label: isVi ? 'Đám mây & Sao lưu' : 'Cloud & Backup' },
-    { id: 'security', label: isVi ? 'Bảo mật' : 'Security' },
+    { id: 'language', label: isKm ? 'ភាសា' : 'Language' },
+    { id: 'business', label: isKm ? 'ហាង និងរូបិយប័ណ្ណ' : 'Business & Currency' },
+    { id: 'categories', label: isKm ? 'ប្រភេទទំនិញ' : 'Categories' },
+    { id: 'family', label: isKm ? 'សមាជិកគ្រួសារ' : 'Family Access' },
+    { id: 'cloud-sync', label: isKm ? 'Cloud និងបម្រុងទុក' : 'Cloud & Backup' },
+    { id: 'security', label: isKm ? 'សុវត្ថិភាព' : 'Security' },
   ];
 
   // Subtle status summaries shown in collapsed card headers
-  const languageSummary = settings.language === 'vi' ? 'Tiếng Việt' : 'English';
+  const languageSummary = isKm ? 'ខ្មែរ (ភាសាខ្មែរ)' : 'English';
   const formattedPosRate = (settings.posExchangeRate ?? 4000).toLocaleString('en-US');
   const businessSummary = `KHR • ${formattedPosRate} ៛`;
-  const categoriesSummary = isVi
-    ? `${categories.length} danh mục`
+  const categoriesSummary = isKm
+    ? `${categories.length} ប្រភេទ`
     : `${categories.length} ${categories.length === 1 ? 'Category' : 'Categories'}`;
-  const familySummary = isVi
-    ? `${familyMembers.length} thành viên`
+  const familySummary = isKm
+    ? `${familyMembers.length} នាក់`
     : `${familyMembers.length} ${familyMembers.length === 1 ? 'Member' : 'Members'}`;
   const cloudSummary = syncing
     ? t.common.syncing
@@ -812,15 +812,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ? t.common.onlineSynced
       : t.common.localMode;
   const securitySummary = security.enabled
-    ? isVi
-      ? 'Đã bật khóa'
+    ? isKm
+      ? 'បានបើកចាក់សោ'
       : 'Lock Enabled'
-    : isVi
-      ? 'Chưa bật'
+    : isKm
+      ? 'បិទ'
       : 'Off';
 
-  const hideLabel = isVi ? 'Ẩn' : 'Hide';
-  const showLabel = isVi ? 'Hiện' : 'Show';
+  const hideLabel = isKm ? 'លាក់' : 'Hide';
+  const showLabel = isKm ? 'បង្ហាញ' : 'Show';
 
   const renderSectionToggleButton = (id: SettingsSectionId) => {
     const isOpen = openSections[id];
@@ -856,7 +856,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <InfoTrigger
               hintId="pageSubtitle"
               active={isHintVisible('pageSubtitle')}
-              label={isVi ? 'Thông tin trang cài đặt' : 'About Business Settings'}
+              label={isKm ? 'អំពីការកំណត់អាជីវកម្ម' : 'About Business Settings'}
               onToggle={toggleSingleHint}
             />
           </div>
@@ -872,7 +872,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <button
             type="button"
             onClick={handleToggleAllSections}
-            className="h-11 min-h-[44px] px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
+            className="h-11 min-h-[44px] px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-700 dark:text-[#F1F5F3] bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] hover:bg-stone-50 dark:hover:bg-[#1F3028] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
           >
             {allExpanded ? (
               <ChevronsDownUp className="w-4 h-4 text-stone-500 dark:text-[#94A39B]" />
@@ -881,11 +881,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             )}
             <span>
               {allExpanded
-                ? isVi
-                  ? 'Thu gọn tất cả'
+                ? isKm
+                  ? 'បង្រួមទាំងអស់'
                   : 'Collapse All'
-                : isVi
-                  ? 'Mở rộng tất cả'
+                : isKm
+                  ? 'ពង្រីកទាំងអស់'
                   : 'Expand All'}
             </span>
           </button>
@@ -894,7 +894,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Sticky Horizontal Quick-Jump Bar */}
       <nav
-        aria-label={isVi ? 'Điều hướng nhanh cài đặt' : 'Settings quick navigation'}
+        aria-label={isKm ? 'ការរុករករហ័សការកំណត់' : 'Settings quick navigation'}
         className="sticky top-16 z-20 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-6 flex items-center gap-2 overflow-x-auto py-2.5 bg-[#F6F7F5]/95 dark:bg-[#0B110E]/90 backdrop-blur-md border-b border-stone-200 dark:border-[#24352C] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {quickJumpTabs.map((tab) => {
@@ -905,7 +905,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               type="button"
               onClick={() => handleQuickJump(tab.id)}
               aria-current={isActive ? 'location' : undefined}
-              className={`h-11 min-h-[44px] px-4 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
+              className={`h-11 min-h-[44px] px-4 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-all duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
                 isActive
                   ? 'bg-[#0D5C3E] text-white dark:bg-[#10B981] dark:text-[#042419]'
                   : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-100 hover:text-stone-950 dark:bg-[#18251F] dark:text-[#94A39B] dark:border-[#24352C] dark:hover:bg-[#1F3028] dark:hover:text-[#F1F5F3]'
@@ -948,7 +948,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <InfoTrigger
                   hintId="languageDesc"
                   active={isHintVisible('languageDesc')}
-                  label={isVi ? 'Thông tin ngôn ngữ' : 'Language info'}
+                  label={isKm ? 'ព័ត៌មានភាសា' : 'Language info'}
                   onToggle={toggleSingleHint}
                 />
               </div>
@@ -971,37 +971,43 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
 
           {openSections.language && (
-            <div className="mt-5 pt-5 border-t border-stone-100 dark:border-[#1F3028] space-y-5">
+            <div className="mt-5 pt-5 border-t border-stone-100 dark:border-[#1F3028] space-y-5 animate-drawer-in">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="text-sm text-stone-700 dark:text-[#D5DFDA] font-medium">
-                  {isVi ? 'Ngôn ngữ hiển thị hiện tại' : 'Current Interface Language'}:{' '}
+                  {isKm ? 'ភាសាបង្ហាញបច្ចុប្បន្ន' : 'Current Interface Language'}:{' '}
                   <span className="font-semibold text-[#0F5C43] dark:text-[#34D399]">
                     {languageSummary}
                   </span>
                 </div>
 
-                <div className="inline-flex items-center p-1 bg-stone-100 dark:bg-[#18251F] border border-stone-200/80 dark:border-[#24352C] rounded-lg self-start sm:self-auto shrink-0">
+                <div
+                  role="group"
+                  aria-label={isKm ? 'ជ្រើសរើសភាសា' : 'Choose language'}
+                  className="inline-flex items-center p-1 bg-stone-100 dark:bg-[#18251F] border border-stone-200/80 dark:border-[#24352C] rounded-lg self-start sm:self-auto shrink-0"
+                >
                   <button
                     type="button"
                     onClick={() => setLanguage('en')}
-                    className={`h-11 min-h-[44px] px-4 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
-                      settings.language === 'en'
+                    aria-pressed={!isKm}
+                    className={`h-11 min-h-[44px] px-4 text-xs font-semibold rounded-md transition-all duration-150 active:scale-[0.97] whitespace-nowrap ${
+                      !isKm
                         ? 'bg-[#0F5C43] text-white dark:bg-[#10B981] dark:text-[#042419]'
                         : 'text-stone-700 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
                     }`}
                   >
-                    English
+                    EN · English
                   </button>
                   <button
                     type="button"
-                    onClick={() => setLanguage('vi')}
-                    className={`h-11 min-h-[44px] px-4 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
-                      settings.language === 'vi'
+                    onClick={() => setLanguage('km')}
+                    aria-pressed={isKm}
+                    className={`h-11 min-h-[44px] px-4 text-xs font-semibold rounded-md transition-all duration-150 active:scale-[0.97] whitespace-nowrap ${
+                      isKm
                         ? 'bg-[#0F5C43] text-white dark:bg-[#10B981] dark:text-[#042419]'
                         : 'text-stone-700 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
                     }`}
                   >
-                    Tiếng Việt
+                    ខ្មែរ · ភាសាខ្មែរ
                   </button>
                 </div>
               </div>
@@ -1011,14 +1017,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-sm font-medium text-stone-900 dark:text-[#F1F5F3]">
-                      {isVi ? 'Hiện nút gợi ý ? trên toàn ứng dụng' : 'Show ? Hints Across App'}
+                      {isKm ? 'បង្ហាញប៊ូតុងជំនួយ ? ទូទាំងកម្មវិធី' : 'Show ? Hints Across App'}
                     </span>
                     <InfoTrigger
                       hintId="showQuestionHintsAcrossAppDesc"
                       active={isHintVisible('showQuestionHintsAcrossAppDesc')}
                       label={
-                        isVi
-                          ? 'Thông tin hiển thị nút gợi ý ?'
+                        isKm
+                          ? 'ព័ត៌មានអំពីប៊ូតុងជំនួយ ?'
                           : 'About showing ? hints across the app'
                       }
                       onToggle={toggleSingleHint}
@@ -1031,17 +1037,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     aria-checked={showQuestionHintsAcrossApp}
                     onClick={() => setHideHintsOutsideSettings(showQuestionHintsAcrossApp)}
                     aria-label={
-                      isVi ? 'Hiện nút gợi ý ? trên toàn ứng dụng' : 'Show ? Hints Across App'
+                      isKm ? 'បង្ហាញប៊ូតុងជំនួយ ? ទូទាំងកម្មវិធី' : 'Show ? Hints Across App'
                     }
                     className="h-11 min-h-[44px] px-2.5 inline-flex items-center gap-2.5 rounded-lg hover:bg-stone-50 dark:hover:bg-[#18251F] transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
                   >
                     <span className="text-xs font-semibold text-stone-600 dark:text-[#94A39B]">
                       {showQuestionHintsAcrossApp
-                        ? isVi
-                          ? 'Bật'
+                        ? isKm
+                          ? 'បើក'
                           : 'ON'
-                        : isVi
-                          ? 'Tắt'
+                        : isKm
+                          ? 'បិទ'
                           : 'OFF'}
                     </span>
                     <span
@@ -1063,8 +1069,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                 {isHintVisible('showQuestionHintsAcrossAppDesc') && (
                   <p className="text-xs text-stone-500 dark:text-[#94A39B] leading-relaxed">
-                    {isVi
-                      ? 'Khi tắt, các nút dấu hỏi ? sẽ được ẩn trên Tổng quan, Bán hàng, Sản phẩm, Kho hàng, Chi phí và Báo cáo — nhưng vẫn luôn hiển thị trong trang Cài đặt này.'
+                    {isKm
+                      ? 'ពេលបិទ ប៊ូតុងជំនួយ ? នឹងត្រូវលាក់នៅលើផ្ទាំងគ្រប់គ្រង ការលក់ ផលិតផល ស្តុកទំនិញ ចំណាយ និងរបាយការណ៍ ប៉ុន្តែនៅតែបង្ហាញក្នុងការកំណត់នេះ។'
                       : 'When OFF, ? help buttons are hidden on Dashboard, Sales, Products, Inventory, Expenses, and Reports, while remaining available here in Settings.'}
                   </p>
                 )}
@@ -1102,7 +1108,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <InfoTrigger
                   hintId="businessDesc"
                   active={isHintVisible('businessDesc')}
-                  label={isVi ? 'Thông tin cửa hàng và tiền tệ' : 'Business & currency info'}
+                  label={isKm ? 'ព័ត៌មានហាង និងរូបិយប័ណ្ណ' : 'Business & currency info'}
                   onToggle={toggleSingleHint}
                 />
               </div>
@@ -1120,8 +1126,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {isHintVisible('businessDesc') && (
             <p className="mt-2.5 text-sm text-stone-500 dark:text-[#94A39B] leading-relaxed">
-              {isVi
-                ? 'Cấu hình tên cửa hàng, tỷ giá quy đổi USD/KHR tại quầy thu ngân và ngưỡng cảnh báo tồn kho mặc định.'
+              {isKm
+                ? 'កំណត់ឈ្មោះហាង អត្រាប្តូរប្រាក់ USD/KHR នៅ POS កម្រិតជូនដំណឹងស្តុកទាប និងលក្ខខណ្ឌគិតប្រាក់។'
                 : 'Configure shop identity, POS USD-to-KHR exchange rates, default low-stock thresholds, and checkout rules.'}
             </p>
           )}
@@ -1218,12 +1224,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div className="flex items-center gap-1.5 min-w-0">
                     <Banknote className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
                     <span className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                      {isVi ? 'Mức tiền mặt nhanh tại POS (KHR)' : 'POS Quick-Cash Presets (KHR)'}
+                      {isKm ? 'ប៊ូតុងសាច់ប្រាក់រហ័សនៅ POS (KHR)' : 'POS Quick-Cash Presets (KHR)'}
                     </span>
                     <InfoTrigger
                       hintId="cashPresetsDesc"
                       active={isHintVisible('cashPresetsDesc')}
-                      label={isVi ? 'Thông tin mức tiền mặt nhanh' : 'Quick-cash presets info'}
+                      label={isKm ? 'ព័ត៌មានប៊ូតុងសាច់ប្រាក់រហ័ស' : 'Quick-cash presets info'}
                       onToggle={toggleSingleHint}
                     />
                   </div>
@@ -1234,15 +1240,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg transition-colors whitespace-nowrap"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
-                      {isVi ? 'Mặc định' : 'Reset Defaults'}
+                      {isKm ? 'កំណត់លំនាំដើម' : 'Reset Defaults'}
                     </button>
                   )}
                 </div>
 
                 {isHintVisible('cashPresetsDesc') && (
                   <p className="text-xs text-stone-500 dark:text-[#94A39B] leading-relaxed">
-                    {isVi
-                      ? 'Tùy chỉnh các nút tiền mặt KHR hiển thị trong hộp thoại thanh toán tiền mặt trên màn hình POS. Thay đổi được lưu tự động trên thiết bị này.'
+                    {isKm
+                      ? 'កែសម្រួលប៊ូតុងក្រដាសប្រាក់ KHR ដែលបង្ហាញក្នុងផ្ទាំងគិតប្រាក់សាច់ប្រាក់នៅ POS។ ការផ្លាស់ប្តូរត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិលើឧបករណ៍នេះ។'
                       : 'Customize the one-tap KHR bill buttons shown inside the POS Cash Payment modal. Changes save automatically on this device.'}
                   </p>
                 )}
@@ -1250,8 +1256,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 {/* Existing Preset Chips / Inline Editors */}
                 {cashPresets.length === 0 ? (
                   <p className="text-xs text-stone-500 dark:text-[#94A39B] py-2">
-                    {isVi
-                      ? 'Chưa có mức tiền nhanh nào. Thêm mức tiền bên dưới hoặc nhấn Mặc định.'
+                    {isKm
+                      ? 'មិនទាន់មានប៊ូតុងសាច់ប្រាក់រហ័សទេ។ សូមបន្ថែមខាងក្រោម ឬចុចកំណត់លំនាំដើម។'
                       : 'No quick-cash presets configured. Add an amount below or restore defaults.'}
                   </p>
                 ) : (
@@ -1281,7 +1287,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                   setEditPresetInput('');
                                 }
                               }}
-                              aria-label={isVi ? 'Sửa số tiền KHR' : 'Edit KHR amount'}
+                              aria-label={isKm ? 'កែប្រែចំនួនប្រាក់ KHR' : 'Edit KHR amount'}
                               className="w-28 h-10 px-2.5 text-sm font-mono-num font-semibold bg-stone-50 dark:bg-[#0B110E] text-stone-900 dark:text-[#F1F5F3] border border-stone-200 dark:border-[#24352C] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0D5C3E]/40 dark:focus:ring-[#10B981]/40"
                             />
                             <button
@@ -1318,8 +1324,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleStartEditPreset(amt)}
-                            aria-label={`${isVi ? 'Sửa' : 'Edit'} ${amt.toLocaleString('en-US')} KHR`}
-                            title={isVi ? 'Sửa mức tiền' : 'Edit preset'}
+                            aria-label={`${isKm ? 'កែប្រែ' : 'Edit'} ${amt.toLocaleString('en-US')} KHR`}
+                            title={isKm ? 'កែប្រែប៊ូតុង' : 'Edit preset'}
                             className="w-9 h-9 inline-flex items-center justify-center rounded-md text-stone-500 dark:text-[#94A39B] hover:text-[#0D5C3E] dark:hover:text-[#34D399] hover:bg-white dark:hover:bg-[#1F3028] transition-colors"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -1327,8 +1333,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleRemovePreset(amt)}
-                            aria-label={`${isVi ? 'Xóa' : 'Remove'} ${amt.toLocaleString('en-US')} KHR`}
-                            title={isVi ? 'Xóa mức tiền' : 'Remove preset'}
+                            aria-label={`${isKm ? 'លុប' : 'Remove'} ${amt.toLocaleString('en-US')} KHR`}
+                            title={isKm ? 'លុបប៊ូតុង' : 'Remove preset'}
                             className="w-9 h-9 inline-flex items-center justify-center rounded-md text-stone-500 dark:text-[#94A39B] hover:text-red-700 dark:hover:text-[#F87171] hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1359,7 +1365,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         }
                       }}
                       placeholder={
-                        isVi ? 'Thêm mức tiền (VD: 15000, 100000)' : 'Add amount (e.g., 15000, 100000)'
+                        isKm ? 'បន្ថែមចំនួន (ឧ. 15000, 100000)' : 'Add amount (e.g., 15000, 100000)'
                       }
                       className="w-full h-11 pl-3.5 pr-8 text-sm font-mono-num bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
                     />
@@ -1371,10 +1377,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="button"
                     disabled={!newPresetInput.trim() || cashPresets.length >= MAX_CASH_PRESETS}
                     onClick={handleAddPreset}
-                    className="h-11 px-4 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                    className="h-11 px-4 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] disabled:opacity-45 rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0"
                   >
                     <Plus className="w-4 h-4" />
-                    {isVi ? 'Thêm mức tiền' : 'Add Preset'}
+                    {isKm ? 'បន្ថែម' : 'Add Preset'}
                   </button>
                 </div>
 
@@ -1430,8 +1436,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         className="h-5 w-5 rounded border-stone-300 dark:border-[#24352C] accent-[#0F5C43] dark:accent-[#10B981] shrink-0"
                       />
                       <span className="text-sm font-medium text-stone-900 dark:text-[#F1F5F3]">
-                        {isVi
-                          ? 'Tự động tra cứu Open Food Facts v3 khi quét mã mới'
+                        {isKm
+                          ? 'ស្វែងរកបាកូដថ្មីដោយស្វ័យប្រវត្តិលើ Open Food Facts v3'
                           : 'Auto-lookup unrecognized barcodes on Open Food Facts v3'}
                       </span>
                     </label>
@@ -1439,8 +1445,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       hintId="openFoodFactsDesc"
                       active={isHintVisible('openFoodFactsDesc')}
                       label={
-                        isVi
-                          ? 'Thông tin tra cứu Open Food Facts v3'
+                        isKm
+                          ? 'ព័ត៌មានអំពីការស្វែងរក Open Food Facts v3'
                           : 'Open Food Facts v3 lookup info'
                       }
                       onToggle={toggleSingleHint}
@@ -1448,8 +1454,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                   {isHintVisible('openFoodFactsDesc') && (
                     <span className="pl-8 text-xs text-stone-500 dark:text-[#94A39B] leading-relaxed">
-                      {isVi
-                        ? 'Luôn kiểm tra sổ mã vạch JuiceFlow trước. Kết quả ngoài chỉ gợi ý tên, thương hiệu, nhóm hàng — không bao giờ tự điền giá KHR hay tồn kho.'
+                      {isKm
+                        ? 'តែងតែពិនិត្យបញ្ជីបាកូដ JuiceFlow មុនជានិច្ច។ លទ្ធផលខាងក្រៅគ្រាន់តែជួយបំពេញឈ្មោះ ម៉ាក និងប្រភេទប៉ុណ្ណោះ — មិនប៉ះពាល់តម្លៃ KHR ឬស្តុកទេ។'
                         : 'Always checks JuiceFlow Firestore registry first. External matches only prefill name, brand, and category — never local KHR prices or stock quantities.'}
                     </span>
                   )}
@@ -1504,12 +1510,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <Tag className="w-5 h-5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
               <div className="flex items-center gap-1 min-w-0">
                 <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
-                  {isVi ? 'Quản lý danh mục' : 'Categories'}
+                  {isKm ? 'គ្រប់គ្រងប្រភេទទំនិញ' : 'Categories'}
                 </h2>
                 <InfoTrigger
                   hintId="categoriesDesc"
                   active={isHintVisible('categoriesDesc')}
-                  label={isVi ? 'Thông tin quản lý danh mục' : 'Categories management info'}
+                  label={isKm ? 'ព័ត៌មានការគ្រប់គ្រងប្រភេទទំនិញ' : 'Categories management info'}
                   onToggle={toggleSingleHint}
                 />
               </div>
@@ -1527,8 +1533,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {isHintVisible('categoriesDesc') && (
             <p className="mt-2.5 text-sm text-stone-500 dark:text-[#94A39B] leading-relaxed">
-              {isVi
-                ? 'Thêm, đổi tên hoặc xóa danh mục tại đây. Mọi thay đổi tự động đồng bộ trên POS, Sản phẩm, Kho hàng và Báo cáo tài chính mà không làm mất lịch sử bán hàng.'
+              {isKm
+                ? 'បន្ថែម ប្តូរឈ្មោះ ឬលុបប្រភេទទំនិញនៅទីនេះ។ រាល់ការផ្លាស់ប្តូរនឹងធ្វើសមកាលកម្មលើ POS ផលិតផល ស្តុកទំនិញ និងរបាយការណ៍ហិរញ្ញវត្ថុ។'
                 : 'Add, rename, or remove categories here. Changes stay synced across POS, Products, Inventory, and Financial Reports without splitting historical data.'}
             </p>
           )}
@@ -1545,7 +1551,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     htmlFor="new-category-name"
                     className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                   >
-                    {isVi ? 'Tên danh mục mới' : 'New Category Name'}
+                    {isKm ? 'ឈ្មោះប្រភេទថ្មី' : 'New Category Name'}
                   </label>
                   <input
                     id="new-category-name"
@@ -1553,7 +1559,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     maxLength={64}
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder={isVi ? 'VD: Nước ép Detox, Bánh ngọt...' : 'e.g. Detox Juices, Pastries...'}
+                    placeholder={isKm ? 'ឧ. ទឹកផ្លែឈើសុខភាព, នំ...' : 'e.g. Detox Juices, Pastries...'}
                     className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
                   />
                 </div>
@@ -1562,7 +1568,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     htmlFor="new-category-scope"
                     className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                   >
-                    {isVi ? 'Áp dụng cho' : 'Scope'}
+                    {isKm ? 'ប្រើសម្រាប់' : 'Scope'}
                   </label>
                   <select
                     id="new-category-scope"
@@ -1570,9 +1576,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onChange={(e) => setNewCategoryScope(e.target.value as CategoryScope)}
                     className="w-full h-11 px-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
                   >
-                    <option value="product">{isVi ? 'Sản phẩm & POS' : 'Products & POS'}</option>
-                    <option value="inventory">{isVi ? 'Kho nguyên liệu' : 'Inventory'}</option>
-                    <option value="both">{isVi ? 'Cả hai' : 'Both'}</option>
+                    <option value="product">{isKm ? 'ផលិតផល និង POS' : 'Products & POS'}</option>
+                    <option value="inventory">{isKm ? 'ស្តុកទំនិញ' : 'Inventory'}</option>
+                    <option value="both">{isKm ? 'ទាំងពីរ' : 'Both'}</option>
                   </select>
                 </div>
                 <div className="sm:col-span-2">
@@ -1580,13 +1586,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     htmlFor="new-category-color"
                     className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                   >
-                    {isVi ? 'Chọn màu' : 'Color Picker'}
+                    {isKm ? 'ពណ៌សម្គាល់' : 'Color Picker'}
                   </label>
                   <CategoryColorPickerDropdown
                     id="new-category-color"
                     value={newCategoryColor}
                     onChange={setNewCategoryColor}
-                    isVi={isVi}
+                    isKm={isKm}
                     disabled={catBusy}
                   />
                 </div>
@@ -1594,10 +1600,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <button
                     type="submit"
                     disabled={!newCategoryName.trim() || catBusy}
-                    className="w-full h-11 px-4 inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
+                    className="w-full h-11 px-4 inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] disabled:opacity-50 rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                   >
                     <Plus className="w-4 h-4 shrink-0" />
-                    <span>{isVi ? 'Thêm' : 'Add'}</span>
+                    <span>{isKm ? 'បន្ថែម' : 'Add'}</span>
                   </button>
                 </div>
               </form>
@@ -1661,18 +1667,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               <select
                                 value={editCatScope}
                                 onChange={(e) => setEditCatScope(e.target.value as CategoryScope)}
-                                aria-label={isVi ? 'Phạm vi áp dụng' : 'Category scope'}
+                                aria-label={isKm ? 'វិសាលភាពប្រភេទ' : 'Category scope'}
                                 className="w-full lg:w-40 h-11 px-3 text-xs font-medium border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
                               >
-                                <option value="product">{isVi ? 'Sản phẩm & POS' : 'Products & POS'}</option>
-                                <option value="inventory">{isVi ? 'Kho nguyên liệu' : 'Inventory'}</option>
-                                <option value="both">{isVi ? 'Cả hai' : 'Both'}</option>
+                                <option value="product">{isKm ? 'ផលិតផល និង POS' : 'Products & POS'}</option>
+                                <option value="inventory">{isKm ? 'ស្តុកទំនិញ' : 'Inventory'}</option>
+                                <option value="both">{isKm ? 'ទាំងពីរ' : 'Both'}</option>
                               </select>
                               <div className="w-full lg:w-44">
                                 <CategoryColorPickerDropdown
                                   value={editCatColor}
                                   onChange={setEditCatColor}
-                                  isVi={isVi}
+                                  isKm={isKm}
                                   disabled={catBusy}
                                   align="right"
                                 />
@@ -1710,22 +1716,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(cat)}`}
                                 aria-hidden="true"
                               />
-                              {getCategoryDisplayName(cat, isVi)}
+                              {getCategoryDisplayName(cat, isKm)}
                             </span>
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-700 dark:bg-[#18251F] dark:text-[#94A39B] border border-stone-200/80 dark:border-[#24352C]">
                               {formatScopeLabel(cat.scope)}
                             </span>
                             <span className="font-mono-num text-[11px] text-stone-500 dark:text-[#94A39B]">
                               {totalLinked === 0
-                                ? isVi
-                                  ? 'Chưa dùng'
+                                ? isKm
+                                  ? 'មិនទាន់ប្រើ'
                                   : 'Unused'
                                 : [
                                     usage.products > 0
-                                      ? `${usage.products} ${isVi ? 'sản phẩm' : usage.products === 1 ? 'product' : 'products'}`
+                                      ? `${usage.products} ${isKm ? 'ផលិតផល' : usage.products === 1 ? 'product' : 'products'}`
                                       : '',
                                     usage.ingredients > 0
-                                      ? `${usage.ingredients} ${isVi ? 'nguyên liệu' : usage.ingredients === 1 ? 'ingredient' : 'ingredients'}`
+                                      ? `${usage.ingredients} ${isKm ? 'វត្ថុធាតុដើម' : usage.ingredients === 1 ? 'ingredient' : 'ingredients'}`
                                       : '',
                                   ]
                                     .filter(Boolean)
@@ -1734,7 +1740,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             {isSystem && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-[#0D5C3E] dark:bg-[#064E3B]/60 dark:text-[#6EE7B7]">
                                 <Lock className="w-2.5 h-2.5" />
-                                {isVi ? 'Mặc định hệ thống' : 'System Default'}
+                                {isKm ? 'លំនាំដើមប្រព័ន្ធ' : 'System Default'}
                               </span>
                             )}
                           </div>
@@ -1749,11 +1755,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 setEditCatScope(cat.scope);
                                 setEditCatColor(resolveCategoryColor(cat.id, cat.color));
                               }}
-                              aria-label={isVi ? `Sửa ${cat.name}` : `Edit ${cat.name}`}
+                              aria-label={isKm ? `កែប្រែ ${cat.name}` : `Edit ${cat.name}`}
                               className="h-11 px-3 inline-flex items-center gap-1.5 text-xs font-medium text-stone-700 dark:text-[#D5DFDA] bg-stone-100/80 dark:bg-[#18251F] hover:bg-stone-200/80 dark:hover:bg-[#1F3028] rounded-lg transition-colors"
                             >
                               <Pencil className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">{isVi ? 'Sửa' : 'Edit'}</span>
+                              <span className="hidden sm:inline">{isKm ? 'កែប្រែ' : 'Edit'}</span>
                             </button>
                             {!isSystem && (
                               <button
@@ -1763,7 +1769,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                   setDeletingCatId(isDeleting ? null : cat.id);
                                   setReassignTargetId(UNCATEGORIZED_ID);
                                 }}
-                                aria-label={isVi ? `Xóa ${cat.name}` : `Delete ${cat.name}`}
+                                aria-label={isKm ? `លុប ${cat.name}` : `Delete ${cat.name}`}
                                 className="w-11 h-11 inline-flex items-center justify-center text-stone-500 hover:text-rose-600 dark:text-[#94A39B] dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -1778,11 +1784,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
                             <span className="text-xs font-medium text-rose-800 dark:text-rose-200">
                               {totalLinked > 0
-                                ? isVi
-                                  ? `Chuyển ${totalLinked} mục sang:`
+                                ? isKm
+                                  ? `ផ្ទេរទំនិញពាក់ព័ន្ធ ${totalLinked} ទៅកាន់៖`
                                   : `Reassign ${totalLinked} linked ${totalLinked === 1 ? 'item' : 'items'} to:`
-                                : isVi
-                                  ? `Xóa danh mục "${cat.name}"?`
+                                : isKm
+                                  ? `លុបប្រភេទ "${cat.name}"?`
                                   : `Delete category "${cat.name}"?`}
                             </span>
                             {totalLinked > 0 && (
@@ -1793,7 +1799,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               >
                                 {replacementOptions.map((opt) => (
                                   <option key={opt.id} value={opt.id}>
-                                    {getCategoryDisplayName(opt, isVi)}
+                                    {getCategoryDisplayName(opt, isKm)}
                                   </option>
                                 ))}
                               </select>
@@ -1807,11 +1813,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               className="h-11 px-4 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap"
                             >
                               {totalLinked > 0
-                                ? isVi
-                                  ? 'Chuyển & Xóa'
+                                ? isKm
+                                  ? 'ផ្ទេរ និងលុប'
                                   : 'Reassign & Delete'
-                                : isVi
-                                  ? 'Xác nhận xóa'
+                                : isKm
+                                  ? 'បញ្ជាក់ការលុប'
                                   : 'Confirm Delete'}
                             </button>
                             <button
@@ -1861,7 +1867,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <InfoTrigger
                   hintId="familyDesc"
                   active={isHintVisible('familyDesc')}
-                  label={isVi ? 'Thông tin quyền gia đình' : 'Family access info'}
+                  label={isKm ? 'ព័ត៌មានសិទ្ធិគ្រួសារ' : 'Family access info'}
                   onToggle={toggleSingleHint}
                 />
               </div>
@@ -1915,7 +1921,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               : 'text-stone-500 dark:text-[#94A39B]'
                           }`}
                         >
-                          {isActive ? t.common.activeOperator : 'Full Access'}
+                          {isActive ? t.common.activeOperator : isKm ? 'សិទ្ធិពេញលេញ' : 'Full Access'}
                         </span>
                       </div>
                       <div className="flex items-center gap-2.5 shrink-0">
@@ -1923,9 +1929,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           <button
                             type="button"
                             onClick={() => setActiveOperator(member)}
-                            className="h-9 px-3.5 rounded-full text-xs font-semibold text-[#0D5C3E] dark:text-[#6EE7B7] bg-[#E6F2ED] dark:bg-[#064E3B] border border-[#0D5C3E]/20 dark:border-[#10B981]/30 hover:bg-[#D5EAE1] dark:hover:bg-[#065F46] transition-colors whitespace-nowrap"
+                            className="h-9 px-3.5 rounded-full text-xs font-semibold text-[#0D5C3E] dark:text-[#6EE7B7] bg-[#E6F2ED] dark:bg-[#064E3B] border border-[#0D5C3E]/20 dark:border-[#10B981]/30 hover:bg-[#D5EAE1] dark:hover:bg-[#065F46] transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                           >
-                            {isVi ? 'Chuyển' : 'Switch'}
+                            {isKm ? 'ប្តូរអ្នកប្រើ' : 'Switch'}
                           </button>
                         )}
                         {familyMembers.length > 1 && (
@@ -1990,12 +1996,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <Cloud className="w-5 h-5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
               <div className="flex items-center gap-1 min-w-0">
                 <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3] truncate">
-                  {isVi ? 'Đồng bộ Đám mây & Sao lưu' : 'Cloud Sync & Backup'}
+                  {isKm ? 'សមកាលកម្ម Cloud និងបម្រុងទុក' : 'Cloud Sync & Backup'}
                 </h2>
                 <InfoTrigger
                   hintId="cloudDesc"
                   active={isHintVisible('cloudDesc')}
-                  label={isVi ? 'Thông tin đồng bộ đám mây' : 'Cloud sync info'}
+                  label={isKm ? 'ព័ត៌មានសមកាលកម្ម Cloud' : 'Cloud sync info'}
                   onToggle={toggleSingleHint}
                 />
               </div>
@@ -2443,20 +2449,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="text-sm font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                          {isVi
-                            ? 'Dữ liệu & Bảo trì — Gộp mục trùng lặp'
+                          {isKm
+                            ? 'ទិន្នន័យ និងការថែទាំ — ការពារទិន្នន័យស្ទួន'
                             : 'Data & Maintenance — Duplicate Protection'}
                         </h4>
                         {duplicateAudit.totalDuplicateRecords === 0 ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-[#064E3B] text-[#0F5C43] dark:text-[#6EE7B7] border border-emerald-200/80 dark:border-[#10B981]/40">
                             <CheckCircle2 className="w-3 h-3" />
-                            {isVi ? 'Không có trùng lặp' : 'All Clean'}
+                            {isKm ? 'គ្មានទិន្នន័យស្ទួន' : 'All Clean'}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-500/40">
                             <AlertTriangle className="w-3 h-3" />
-                            {isVi
-                              ? `${duplicateAudit.totalDuplicateRecords} bản ghi trùng (${duplicateAudit.totalGroups} nhóm)`
+                            {isKm
+                              ? `មានទិន្នន័យស្ទួន ${duplicateAudit.totalDuplicateRecords} (${duplicateAudit.totalGroups} ក្រុម)`
                               : `${duplicateAudit.totalDuplicateRecords} duplicate ${
                                   duplicateAudit.totalDuplicateRecords === 1 ? 'record' : 'records'
                                 } (${duplicateAudit.totalGroups} ${
@@ -2466,8 +2472,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         )}
                       </div>
                       <p className="text-xs text-stone-500 dark:text-[#94A39B] leading-relaxed">
-                        {isVi
-                          ? 'Phát hiện sản phẩm hoặc nguyên liệu trùng tên chuẩn hóa (bỏ qua khoảng trắng/chữ hoa), gộp tồn kho vào bản ghi chính (ưu tiên có giá vốn/mã vạch) và giữ nguyên 100% doanh số lịch sử.'
+                        {isKm
+                          ? 'រកមើលផលិតផល ឬវត្ថុធាតុដើមដែលមានឈ្មោះដូចគ្នា (មិនគិតដកឃ្លា ឬអក្សរធំតូច) រួចបញ្ចូលស្តុកទៅក្នុងកំណត់ត្រាមេ ដោយរក្សាប្រវត្តិលក់ និងរបាយការណ៍ហិរញ្ញវត្ថុទាំងស្រុង។'
                           : 'Detects products or inventory items sharing the same normalized name, merges stock into the primary record (preferring valid cost & barcode), and preserves all historical sales and Financial Reports.'}
                       </p>
                     </div>
@@ -2488,11 +2494,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <GitMerge className="w-4 h-4" />
                       )}
                       {mergingDuplicates
-                        ? isVi
-                          ? 'Đang gộp...'
+                        ? isKm
+                          ? 'កំពុងបញ្ចូល...'
                           : 'Merging...'
-                        : isVi
-                          ? 'Gộp mục trùng lặp'
+                        : isKm
+                          ? 'បញ្ចូលទិន្នន័យស្ទួន'
                           : 'Merge Duplicate Items'}
                     </button>
                   </div>
@@ -2500,7 +2506,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   {duplicateAudit.totalGroups > 0 && (
                     <div className="p-3 rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-500/35 space-y-1.5">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-200">
-                        {isVi ? 'Nhóm trùng lặp được phát hiện:' : 'Detected Duplicate Groups:'}
+                        {isKm ? 'ក្រុមទិន្នន័យស្ទួនដែលបានរកឃើញ៖' : 'Detected Duplicate Groups:'}
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {[...duplicateAudit.productGroups, ...duplicateAudit.ingredientGroups]
@@ -2572,7 +2578,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <InfoTrigger
                   hintId="securityDesc"
                   active={isHintVisible('securityDesc')}
-                  label={isVi ? 'Thông tin bảo mật sinh trắc học' : 'Security & lock info'}
+                  label={isKm ? 'ព័ត៌មានសុវត្ថិភាព និងការចាក់សោ' : 'Security & lock info'}
                   onToggle={toggleSingleHint}
                 />
               </div>
@@ -2601,7 +2607,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <button
                     type="button"
                     onClick={handleEnrollBiometric}
-                    className="h-11 inline-flex items-center gap-2 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                    className="h-11 inline-flex items-center gap-2 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                   >
                     <Fingerprint className="w-4 h-4" />
                     {t.settings.enableBiometric}
@@ -2610,7 +2616,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <InfoTrigger
                     hintId="biometricStatusHint"
                     active={isHintVisible('biometricStatusHint')}
-                    label={isVi ? 'Trạng thái sinh trắc học thiết bị' : 'Device biometric support'}
+                    label={isKm ? 'ការគាំទ្រជីវមាត្រឧបករណ៍' : 'Device biometric support'}
                     onToggle={toggleSingleHint}
                   />
 

@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { HintsProvider, useHints } from './context/HintsContext';
 import { UndoToastProvider } from './context/UndoToastContext';
@@ -53,37 +54,37 @@ const BOTTOM_NAV_PRIMARY: {
   id: AppTab;
   icon: React.ComponentType<{ className?: string }>;
   shortEn: string;
-  shortVi: string;
+  shortKm: string;
 }[] = [
-  { id: 'sales', icon: ShoppingCart, shortEn: 'Sales & POS', shortVi: 'Bán hàng' },
-  { id: 'products', icon: Coffee, shortEn: 'Products', shortVi: 'Sản phẩm' },
-  { id: 'inventory', icon: Package, shortEn: 'Inventory', shortVi: 'Kho hàng' },
-  { id: 'reports', icon: BarChart3, shortEn: 'Reports', shortVi: 'Báo cáo' },
+  { id: 'sales', icon: ShoppingCart, shortEn: 'Sales & POS', shortKm: 'លក់ POS' },
+  { id: 'products', icon: Coffee, shortEn: 'Products', shortKm: 'ផលិតផល' },
+  { id: 'inventory', icon: Package, shortEn: 'Inventory', shortKm: 'ស្តុក' },
+  { id: 'reports', icon: BarChart3, shortEn: 'Reports', shortKm: 'របាយការណ៍' },
 ];
 
 const MORE_SHEET_TABS: {
   id: AppTab;
   icon: React.ComponentType<{ className?: string }>;
   descEn: string;
-  descVi: string;
+  descKm: string;
 }[] = [
   {
     id: 'dashboard',
     icon: LayoutDashboard,
     descEn: 'Today’s overview & quick shortcuts',
-    descVi: 'Tổng quan hôm nay & lối tắt nhanh',
+    descKm: 'ទិដ្ឋភាពទូទៅថ្ងៃនេះ និងផ្លូវកាត់រហ័ស',
   },
   {
     id: 'expenses',
     icon: Receipt,
     descEn: 'Log operating & daily shop costs',
-    descVi: 'Ghi chi phí vận hành hằng ngày',
+    descKm: 'កត់ត្រាចំណាយប្រតិបត្តិការប្រចាំថ្ងៃ',
   },
   {
     id: 'settings',
     icon: Settings,
     descEn: 'Shop details, exchange rate & sync',
-    descVi: 'Cài đặt quán, tỷ giá & đồng bộ',
+    descKm: 'ព័ត៌មានហាង អត្រាប្តូរប្រាក់ និងសមកាលកម្ម',
   },
 ];
 
@@ -93,10 +94,10 @@ interface JuiceFlowShellProps {
 }
 
 const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab }) => {
-  const { settings, t, setActiveOperator } = useStore();
+  const { settings, setActiveOperator } = useStore();
+  const { lang, setLang, isKm, t } = useLanguage();
   const { isDark, toggleTheme } = useTheme();
   const { showHints, toggleShowHints, areQuestionHintsVisible } = useHints();
-  const isVi = settings?.language === 'vi';
   const familyMembers =
     Array.isArray(settings?.familyMembers) && settings.familyMembers.length > 0
       ? settings.familyMembers
@@ -221,20 +222,20 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
               onClick={toggleSidebarCollapsed}
               title={
                 sidebarCollapsed
-                  ? isVi
-                    ? 'Mở rộng thanh bên'
+                  ? isKm
+                    ? 'ពង្រីករបារចំហៀង'
                     : 'Expand sidebar'
-                  : isVi
-                    ? 'Thu gọn thanh bên'
+                  : isKm
+                    ? 'បង្រួមរបារចំហៀង'
                     : 'Collapse sidebar'
               }
               aria-label={
                 sidebarCollapsed
-                  ? isVi
-                    ? 'Mở rộng thanh bên'
+                  ? isKm
+                    ? 'ពង្រីករបារចំហៀង'
                     : 'Expand sidebar'
-                  : isVi
-                    ? 'Thu gọn thanh bên'
+                  : isKm
+                    ? 'បង្រួមរបារចំហៀង'
                     : 'Collapse sidebar'
               }
               className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028] transition-colors shrink-0"
@@ -393,11 +394,11 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                   aria-checked={showHints}
                   onClick={toggleShowHints}
                   aria-label={
-                    isVi
-                      ? 'Bật hoặc tắt gợi ý trên toàn ứng dụng'
+                    isKm
+                      ? 'បើក ឬបិទជំនួយណែនាំលើកម្មវិធី'
                       : 'Toggle helper hints across all pages'
                   }
-                  title={isVi ? 'Hiện / ẩn gợi ý giải thích' : 'Show or hide helper hints'}
+                  title={isKm ? 'បង្ហាញ / លាក់ជំនួយណែនាំ' : 'Show or hide helper hints'}
                   className="inline-flex items-center gap-1.5 sm:gap-2 h-11 min-h-[44px] px-2.5 sm:px-3 text-xs font-medium text-stone-700 dark:text-[#D5DFDA] bg-transparent border border-slate-200/80 dark:border-emerald-950/70 hover:bg-stone-100/80 dark:hover:bg-[#18251F] rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
                 >
                   <HelpCircle
@@ -407,7 +408,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                         : 'text-stone-400 dark:text-[#94A39B]'
                     }`}
                   />
-                  <span className="hidden md:inline">{isVi ? 'Gợi ý' : 'Show Hints'}</span>
+                  <span className="hidden md:inline">{isKm ? 'ជំនួយ' : 'Show Hints'}</span>
                   <span
                     aria-hidden="true"
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
@@ -425,26 +426,59 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                 </button>
               )}
 
+              {/* Compact EN | ខ្មែរ Language Segmented Pill (h-10) */}
+              <div
+                role="group"
+                aria-label={isKm ? 'ប្តូរភាសា' : 'Switch language'}
+                className="inline-flex items-center h-10 p-0.5 rounded-lg bg-stone-100/90 dark:bg-[#16221C] border border-slate-200/80 dark:border-emerald-950/70 shrink-0"
+              >
+                <button
+                  type="button"
+                  onClick={() => setLang('en')}
+                  aria-pressed={lang === 'en'}
+                  className={`h-full px-2.5 rounded-md text-xs font-semibold leading-normal transition-all duration-150 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
+                    lang === 'en'
+                      ? 'bg-white dark:bg-[#10B981] text-[#0D5C3E] dark:text-[#042419] shadow-2xs'
+                      : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLang('km')}
+                  aria-pressed={lang === 'km'}
+                  style={{ fontFamily: "'Battambang', 'Inter', sans-serif" }}
+                  className={`h-full px-2.5 rounded-md text-xs font-bold leading-normal transition-all duration-150 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981] ${
+                    lang === 'km'
+                      ? 'bg-white dark:bg-[#10B981] text-[#0D5C3E] dark:text-[#042419] shadow-2xs'
+                      : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                  }`}
+                >
+                  ខ្មែរ
+                </button>
+              </div>
+
               {/* Light / Dark Mode Switcher (44x44px subtle ghost button) */}
               <button
                 type="button"
                 onClick={toggleTheme}
                 aria-label={
                   isDark
-                    ? isVi
-                      ? 'Chuyển sang chế độ sáng'
+                    ? isKm
+                      ? 'ប្តូរទៅរបៀបភ្លឺ'
                       : 'Switch to light mode'
-                    : isVi
-                      ? 'Chuyển sang chế độ tối'
+                    : isKm
+                      ? 'ប្តូរទៅរបៀបងងឹត'
                       : 'Switch to dark mode'
                 }
                 title={
                   isDark
-                    ? isVi
-                      ? 'Chế độ sáng'
+                    ? isKm
+                      ? 'របៀបភ្លឺ'
                       : 'Light mode'
-                    : isVi
-                      ? 'Chế độ tối'
+                    : isKm
+                      ? 'របៀបងងឹត'
                       : 'Dark mode'
                 }
                 className="inline-flex items-center justify-center w-11 h-11 text-stone-600 dark:text-[#D5DFDA] bg-transparent border border-slate-200/80 dark:border-emerald-950/70 hover:bg-stone-100/80 dark:hover:bg-[#18251F] hover:text-stone-900 dark:hover:text-[#F1F5F3] rounded-lg transition-all duration-150 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D5C3E] dark:focus-visible:ring-[#10B981]"
@@ -463,11 +497,11 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                 <button
                   type="button"
                   onClick={() => navigate('sales')}
-                  className="inline-flex items-center justify-center gap-1.5 h-11 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.98] whitespace-nowrap shrink-0"
+                  className="inline-flex items-center justify-center gap-1.5 h-11 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0"
                 >
                   <Plus className="w-4 h-4 shrink-0" />
                   <span className="hidden sm:inline">{t.dashboard.newSale}</span>
-                  <span className="sm:hidden">{isVi ? 'Bán' : 'POS'}</span>
+                  <span className="sm:hidden">{isKm ? 'លក់' : 'POS'}</span>
                 </button>
               )}
             </div>
@@ -550,11 +584,11 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
       {/* 5 primary workflows with >=48px touch targets                      */}
       {/* ================================================================== */}
       <nav
-        aria-label={isVi ? 'Điều hướng chính' : 'Primary mobile navigation'}
+        aria-label={isKm ? 'ការរុករកចម្បង' : 'Primary mobile navigation'}
         className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-xs border-t border-stone-200 dark:border-[#24352C] pb-[env(safe-area-inset-bottom)] print:hidden"
       >
         <div className="grid grid-cols-5 gap-0.5 px-1.5 py-1.5 max-w-2xl mx-auto">
-          {BOTTOM_NAV_PRIMARY.map(({ id, icon: Icon, shortEn, shortVi }) => {
+          {BOTTOM_NAV_PRIMARY.map(({ id, icon: Icon, shortEn, shortKm }) => {
             const isCurrent = activeTab === id && !moreSheetOpen;
             return (
               <button
@@ -575,8 +609,8 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                       : 'text-stone-500 dark:text-[#94A39B]'
                   }`}
                 />
-                <span className="text-[11px] leading-tight truncate max-w-full">
-                  {isVi ? shortVi : shortEn}
+                <span className="text-[11px] leading-normal truncate max-w-full">
+                  {isKm ? shortKm : shortEn}
                 </span>
               </button>
             );
@@ -600,8 +634,8 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                   : 'text-stone-500 dark:text-[#94A39B]'
               }`}
             />
-            <span className="text-[11px] leading-tight truncate max-w-full">
-              {isVi ? 'Thêm' : 'More'}
+            <span className="text-[11px] leading-normal truncate max-w-full">
+              {t.common.more}
             </span>
           </button>
         </div>
@@ -619,7 +653,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
           <div
             role="dialog"
             aria-modal="true"
-            aria-label={isVi ? 'Menu mở rộng' : 'More navigation and staff options'}
+            aria-label={isKm ? 'ម៉ឺនុយបន្ថែម' : 'More navigation and staff options'}
             className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-white dark:bg-[#111916] rounded-t-2xl border-t border-slate-200/80 dark:border-emerald-950/60 shadow-2xl max-h-[85vh] overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)] print:hidden animate-sheet-up"
           >
             {/* Drag Handle */}
@@ -634,7 +668,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
             <div className="px-4 py-2.5 border-b border-stone-200 dark:border-[#24352C] flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
                 <h2 className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3]">
-                  {isVi ? 'Thêm' : 'More'}
+                  {t.common.more}
                 </h2>
                 <SyncStatusPill compact onClick={goToCloudSync} />
               </div>
@@ -651,7 +685,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
             <div className="p-4 space-y-5">
               {/* Secondary Navigation Rows (h-14 / 56px generous touch targets) */}
               <div className="space-y-2">
-                {MORE_SHEET_TABS.map(({ id, icon: Icon, descEn, descVi }) => {
+                {MORE_SHEET_TABS.map(({ id, icon: Icon, descEn, descKm }) => {
                   const isCurrent = activeTab === id;
                   return (
                     <button
@@ -683,7 +717,7 @@ const JuiceFlowShell: React.FC<JuiceFlowShellProps> = ({ activeTab, setActiveTab
                                 : 'text-stone-500 dark:text-[#94A39B]'
                             }`}
                           >
-                            {isVi ? descVi : descEn}
+                            {isKm ? descKm : descEn}
                           </p>
                         </div>
                       </div>
@@ -758,13 +792,15 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <StoreProvider>
-        <HintsProvider activeView={activeTab}>
-          <UndoToastProvider>
-            <JuiceFlowShell activeTab={activeTab} setActiveTab={setActiveTab} />
-          </UndoToastProvider>
-        </HintsProvider>
-      </StoreProvider>
+      <LanguageProvider>
+        <StoreProvider>
+          <HintsProvider activeView={activeTab}>
+            <UndoToastProvider>
+              <JuiceFlowShell activeTab={activeTab} setActiveTab={setActiveTab} />
+            </UndoToastProvider>
+          </HintsProvider>
+        </StoreProvider>
+      </LanguageProvider>
     </ErrorBoundary>
   );
 }

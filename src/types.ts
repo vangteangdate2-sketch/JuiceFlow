@@ -1,4 +1,4 @@
-export type AppLanguage = 'en' | 'vi';
+export type AppLanguage = 'en' | 'km';
 
 export type AppTab =
   | 'dashboard'

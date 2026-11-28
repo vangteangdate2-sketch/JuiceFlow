@@ -4,6 +4,7 @@ import type { Sale, WorkspaceSettings } from '../types';
 import { formatDateTimeInPhnomPenh, formatKhr, formatUsdRef } from '../utils/format';
 import { formatUsdClean } from '../utils/cashTender';
 import { ModalPortal } from './ModalPortal';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ReceiptModalProps {
   sale: Sale | null;
@@ -84,12 +85,24 @@ export function buildReceiptPlainText(sale: Sale, settings: WorkspaceSettings): 
 }
 
 export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onClose }) => {
+  const { isKm } = useLanguage();
   const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm'>('80mm');
   const [copied, setCopied] = useState(false);
 
   if (!sale) return null;
 
-  const isVi = settings?.language === 'vi';
+  const paymentMethodLabel =
+    sale.paymentMethod === 'cash'
+      ? isKm
+        ? 'សាច់ប្រាក់'
+        : 'Cash'
+      : sale.paymentMethod === 'khqr'
+        ? 'KHQR'
+        : sale.paymentMethod === 'aba'
+          ? 'ABA Pay'
+          : sale.paymentMethod === 'wing'
+            ? 'Wing'
+            : String(sale.paymentMethod || 'cash').toUpperCase();
   const netAmount =
     sale.status === 'voided'
       ? 0
@@ -149,7 +162,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
               </span>
               <div className="min-w-0">
                 <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">
-                  {isVi ? 'Tiền thối cho khách' : 'Change to Return'}
+                  {isKm ? 'ប្រាក់អាប់ជូនភ្ញៀវ' : 'Change Due'}
                 </p>
                 <p className="font-mono-num text-lg sm:text-xl font-extrabold tracking-tight leading-tight">
                   {formatKhr(changeDueKhr)}{' '}
@@ -166,7 +179,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-200 dark:border-[#24352C] print:hidden">
           <div className="flex items-center gap-3 min-w-0">
             <h3 className="text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
-              {isVi ? `Hóa đơn ${sale.orderNumber}` : `Receipt ${sale.orderNumber}`}
+              {isKm ? `វិក្កយបត្រ ${sale.orderNumber}` : `Receipt ${sale.orderNumber}`}
             </h3>
             <div className="flex border border-stone-200 dark:border-[#24352C] rounded-lg overflow-hidden text-xs font-semibold shrink-0">
               <button
@@ -220,30 +233,30 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
 
             <div className="py-2.5 space-y-0.5 border-b border-dashed border-stone-300 text-[11px]">
               <div className="flex justify-between">
-                <span className="text-stone-500">Order</span>
+                <span className="text-stone-500">{isKm ? 'លេខកុម្ម៉ង់' : 'Order'}</span>
                 <span className="font-semibold">{sale.orderNumber}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-stone-500">Time (ICT)</span>
+                <span className="text-stone-500">{isKm ? 'ម៉ោង (ICT)' : 'Time (ICT)'}</span>
                 <span>{formatDateTimeInPhnomPenh(sale.createdAt)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-stone-500">Cashier</span>
+                <span className="text-stone-500">{isKm ? 'បុគ្គលិក' : 'Cashier'}</span>
                 <span>{sale.recordedBy}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-stone-500">Payment</span>
-                <span className="uppercase font-semibold">{sale.paymentMethod || 'cash'}</span>
+                <span className="text-stone-500">{isKm ? 'ការទូទាត់' : 'Payment'}</span>
+                <span className="uppercase font-semibold">{paymentMethodLabel}</span>
               </div>
               {sale.customerName && sale.customerName !== 'Walk-in' && (
                 <div className="flex justify-between">
-                  <span className="text-stone-500">Customer</span>
+                  <span className="text-stone-500">{isKm ? 'អតិថិជន' : 'Customer'}</span>
                   <span>{sale.customerName}</span>
                 </div>
               )}
               {sale.status && sale.status !== 'completed' && (
                 <div className="flex justify-between text-rose-700 font-bold">
-                  <span>Status</span>
+                  <span>{isKm ? 'ស្ថានភាព' : 'Status'}</span>
                   <span className="uppercase">{String(sale.status).replace('_', ' ')}</span>
                 </div>
               )}
@@ -261,7 +274,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
                   </div>
                   <div className="text-[10px] text-stone-500">
                     @ {formatKhr(item.unitPriceKhr)}
-                    {item.returnedQty && item.returnedQty > 0 ? ` • Returned: -${item.returnedQty}` : ''}
+                    {item.returnedQty && item.returnedQty > 0
+                      ? ` • ${isKm ? 'បង្វិលសង' : 'Returned'}: -${item.returnedQty}`
+                      : ''}
                   </div>
                 </div>
               ))}
@@ -269,22 +284,22 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
 
             <div className="py-2.5 space-y-1 border-b border-dashed border-stone-300">
               <div className="flex justify-between">
-                <span className="text-stone-600">Subtotal</span>
+                <span className="text-stone-600">{isKm ? 'សរុបរង' : 'Subtotal'}</span>
                 <span>{formatKhr(sale.subtotalKhr ?? sale.totalKhr)}</span>
               </div>
               {sale.refundedKhr && sale.refundedKhr > 0 ? (
                 <div className="flex justify-between text-rose-700">
-                  <span>Refunded</span>
+                  <span>{isKm ? 'បង្វិលសង' : 'Refunded'}</span>
                   <span>-{formatKhr(sale.refundedKhr)}</span>
                 </div>
               ) : null}
               <div className="flex justify-between text-sm font-bold pt-1">
-                <span>TOTAL</span>
+                <span>{isKm ? 'សរុបរួម' : 'TOTAL'}</span>
                 <span>{formatKhr(netAmount)}</span>
               </div>
               {(settings?.usdRate ?? 0) > 0 && (
                 <div className="flex justify-between text-[11px] text-stone-500">
-                  <span>USD Equivalent</span>
+                  <span>{isKm ? 'សមមូលជាដុល្លារ' : 'USD Equivalent'}</span>
                   <span>{formatUsdRef(netAmount, settings.usdRate)}</span>
                 </div>
               )}
@@ -294,7 +309,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
                   <div className="pt-1.5 mt-1.5 border-t border-dashed border-stone-200 space-y-0.5 text-[11px]">
                     {(sale.cash_received_usd ?? 0) > 0 && (
                       <div className="flex justify-between text-stone-600">
-                        <span>Cash (USD)</span>
+                        <span>{isKm ? 'ប្រាក់ទទួលបាន (USD)' : 'Cash Received (USD)'}</span>
                         <span>
                           {formatUsdClean(sale.cash_received_usd ?? 0)} @{' '}
                           {(sale.exchange_rate_used ?? settings?.posExchangeRate ?? 4000).toLocaleString(
@@ -306,13 +321,13 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
                     )}
                     {(sale.cash_received_khr ?? 0) > 0 && (
                       <div className="flex justify-between text-stone-600">
-                        <span>Cash (KHR)</span>
+                        <span>{isKm ? 'ប្រាក់ទទួលបាន (KHR)' : 'Cash Received (KHR)'}</span>
                         <span>{formatKhr(sale.cash_received_khr ?? 0)}</span>
                       </div>
                     )}
                     {sale.change_given_khr !== null && sale.change_given_khr !== undefined && (
                       <div className="flex justify-between font-semibold text-stone-900">
-                        <span>Change (KHR)</span>
+                        <span>{isKm ? 'ប្រាក់អាប់ (KHR)' : 'Change Due (KHR)'}</span>
                         <span>{formatKhr(sale.change_given_khr)}</span>
                       </div>
                     )}
@@ -322,12 +337,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
 
             {sale.note && (
               <div className="py-2 text-[11px] text-stone-600 border-b border-dashed border-stone-300">
-                Note: {sale.note}
+                {isKm ? 'កំណត់ចំណាំ៖' : 'Note:'} {sale.note}
               </div>
             )}
 
             <div className="pt-2.5 text-center text-[11px] text-stone-500">
-              Thank you for supporting {settings?.name || 'JuiceFlow'}!
+              {isKm
+                ? `សូមអរគុណដែលបានគាំទ្រ ${settings?.name || 'JuiceFlow'}!`
+                : `Thank you for supporting ${settings?.name || 'JuiceFlow'}!`}
             </div>
           </div>
         </div>
@@ -337,18 +354,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, settings, onCl
           <button
             type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 h-12 px-4 text-sm font-semibold text-stone-700 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] border border-transparent dark:border-[#24352C] hover:bg-stone-200 dark:hover:bg-[#1F3028] rounded-xl transition-colors"
+            className="inline-flex items-center gap-1.5 h-12 px-4 text-sm font-semibold text-stone-700 dark:text-[#F1F5F3] bg-stone-100 dark:bg-[#18251F] border border-transparent dark:border-[#24352C] hover:bg-stone-200 dark:hover:bg-[#1F3028] rounded-xl transition-all duration-150 active:scale-[0.97]"
           >
             {copied ? <Check className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399]" /> : <Copy className="w-4 h-4" />}
-            {copied ? (isVi ? 'Đã sao chép!' : 'Copied!') : isVi ? 'Sao chép' : 'Copy Summary'}
+            {copied ? (isKm ? 'បានចម្លង!' : 'Copied!') : isKm ? 'ចម្លង' : 'Copy Summary'}
           </button>
           <button
             type="button"
             onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 h-12 px-4 text-sm font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4633] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-xl transition-colors"
+            className="inline-flex items-center gap-1.5 h-12 px-4 text-sm font-semibold text-white dark:text-[#042419] bg-[#0F5C43] hover:bg-[#0B4633] dark:bg-[#10B981] dark:hover:bg-[#34D399] rounded-xl transition-all duration-150 active:scale-[0.97]"
           >
             <Printer className="w-4 h-4" />
-            {isVi ? `In nhiệt (${paperWidth})` : `Print Thermal (${paperWidth})`}
+            {isKm ? `បោះពុម្ពវិក្កយបត្រ (${paperWidth})` : `Print Receipt (${paperWidth})`}
           </button>
         </div>
         </div>

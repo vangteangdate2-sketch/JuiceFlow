@@ -14,19 +14,32 @@ export const UNCATEGORIZED_ID = 'uncategorized';
 export const CATEGORY_COLOR_OPTIONS: {
   key: CategoryColorKey;
   label: string;
-  labelVi: string;
+  labelKm: string;
 }[] = [
-  { key: 'emerald', label: 'Fresh Emerald', labelVi: 'Xanh ngọc tươi' },
-  { key: 'amber', label: 'Mango Amber', labelVi: 'Vàng xoài' },
-  { key: 'sky', label: 'Iced Blue', labelVi: 'Xanh dương mát' },
-  { key: 'teal', label: 'Mint Teal', labelVi: 'Xanh bạc hà' },
-  { key: 'indigo', label: 'Berry Indigo', labelVi: 'Tím chàm' },
-  { key: 'orange', label: 'Citrus Orange', labelVi: 'Cam tươi' },
-  { key: 'purple', label: 'Dragonfruit Purple', labelVi: 'Tím thanh long' },
-  { key: 'lime', label: 'Matcha Lime', labelVi: 'Xanh matcha' },
-  { key: 'rose', label: 'Hibiscus Rose', labelVi: 'Hồng dâm bụt' },
-  { key: 'stone', label: 'Stone Neutral', labelVi: 'Xám trung tính' },
+  { key: 'emerald', label: 'Fresh Emerald', labelKm: 'បៃតងត្បូងមរកត' },
+  { key: 'amber', label: 'Mango Amber', labelKm: 'លឿងស្វាយទុំ' },
+  { key: 'sky', label: 'Iced Blue', labelKm: 'ខៀវទឹកកក' },
+  { key: 'teal', label: 'Mint Teal', labelKm: 'បៃតងជីអង្កាម' },
+  { key: 'indigo', label: 'Berry Indigo', labelKm: 'ស្វាយប៊ឺរី' },
+  { key: 'orange', label: 'Citrus Orange', labelKm: 'ទឹកក្រូចស្រស់' },
+  { key: 'purple', label: 'Dragonfruit Purple', labelKm: 'ស្វាយស្រកានាគ' },
+  { key: 'lime', label: 'Matcha Lime', labelKm: 'បៃតងម៉ាត់ឆា' },
+  { key: 'rose', label: 'Hibiscus Rose', labelKm: 'ផ្កាឈូក' },
+  { key: 'stone', label: 'Stone Neutral', labelKm: 'ប្រផេះធម្មជាតិ' },
 ];
+
+export const DEFAULT_CATEGORY_KM_NAMES: Record<string, string> = {
+  juice: 'ទឹកផ្លែឈើស្រស់',
+  smoothie: 'ទឹកក្រឡុក',
+  coffee: 'កាហ្វេ',
+  tea: 'តែទឹកកក',
+  packaged: 'ភេសជ្ជៈវេចខ្ចប់',
+  snack: 'អាហារសម្រន់',
+  specialty: 'ភេសជ្ជៈពិសេស',
+  produce: 'ផ្លែឈើ និងវត្ថុធាតុដើម',
+  packaging_supplies: 'កែវ និងសម្ភារៈវេចខ្ចប់',
+  [UNCATEGORIZED_ID]: 'មិនទាន់ចាត់ប្រភេទ',
+};
 
 const VALID_COLORS = new Set<CategoryColorKey>(CATEGORY_COLOR_OPTIONS.map((c) => c.key));
 
@@ -268,13 +281,20 @@ export function getCategoriesForScope(
   return safe.filter((c) => c.scope === target || c.scope === 'both');
 }
 
+const KHMER_SCRIPT_REGEX = /[\u1780-\u17FF]/;
+
 export function getCategoryDisplayName(
   category: CategoryItem | undefined | null,
-  isVi = false
+  isKm = false
 ): string {
-  if (!category) return isVi ? 'Chưa phân loại' : 'Uncategorized';
-  if (isVi && category.nameVi && category.nameVi.trim()) {
-    return category.nameVi;
+  if (!category) return isKm ? 'មិនទាន់ចាត់ប្រភេទ' : 'Uncategorized';
+  if (isKm) {
+    if (category.nameVi && KHMER_SCRIPT_REGEX.test(category.nameVi)) {
+      return category.nameVi.trim();
+    }
+    if (DEFAULT_CATEGORY_KM_NAMES[category.id]) {
+      return DEFAULT_CATEGORY_KM_NAMES[category.id];
+    }
   }
   return category.name;
 }

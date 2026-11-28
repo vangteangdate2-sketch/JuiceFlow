@@ -71,7 +71,9 @@ function getStartOfWeekIso(referenceIso: string): string {
 export const ReportsView: React.FC = () => {
   const { settings, sales, expenses, purchases, products, ingredients, categories, t } = useStore();
   const { isDark } = useTheme();
-  const isVi = settings.language === 'vi';
+  const isKm = settings.language === 'km';
+  const getLocalizedName = (name: string, nameVi?: string) =>
+    isKm && nameVi && /[\u1780-\u17FF]/.test(nameVi) ? nameVi : name;
   const usdRate = settings.usdRate > 0 ? settings.usdRate : 4000;
 
   const reportCategories = useMemo(
@@ -115,8 +117,8 @@ export const ReportsView: React.FC = () => {
   const activeFilterCount = categoryFilter !== 'all' ? 1 : 0;
   const activeCategoryName = useMemo(() => {
     if (categoryFilter === 'all') return null;
-    return getCategoryDisplayName(getCategoryById(categoryFilter, categories), isVi);
-  }, [categoryFilter, categories, isVi]);
+    return getCategoryDisplayName(getCategoryById(categoryFilter, categories), isKm);
+  }, [categoryFilter, categories, isKm]);
 
   const dateRange = useMemo(() => {
     const today = todayIso();
@@ -133,11 +135,11 @@ export const ReportsView: React.FC = () => {
   }, [preset, customStart, customEnd]);
 
   const periodLabel = useMemo(() => {
-    if (preset === 'today') return isVi ? 'Hôm nay' : 'Today';
-    if (preset === 'week') return isVi ? 'Tuần này' : 'This Week';
-    if (preset === 'month') return isVi ? 'Tháng này' : 'This Month';
+    if (preset === 'today') return isKm ? 'ថ្ងៃនេះ' : 'Today';
+    if (preset === 'week') return isKm ? 'សប្តាហ៍នេះ' : 'This Week';
+    if (preset === 'month') return isKm ? 'ខែនេះ' : 'This Month';
     return `${dateRange.start} – ${dateRange.end}`;
-  }, [preset, dateRange, isVi]);
+  }, [preset, dateRange, isKm]);
 
   const handlePresetChange = (next: PeriodPreset) => {
     setPreset(next);
@@ -231,22 +233,22 @@ export const ReportsView: React.FC = () => {
     const netUsd = formatUsdRef(report.netProfitKhr, usdRate);
 
     if (activeCategoryName) {
-      if (isVi) {
+      if (isKm) {
         if (report.completedOrderCount === 0) {
           return {
-            headline: `Không có đơn hàng nào thuộc danh mục "${activeCategoryName}" trong ${periodLabel}.`,
-            detail: 'Hãy chọn danh mục khác hoặc nhấn Đặt lại tất cả để xem toàn bộ quán.',
+            headline: `មិនមានការកុម្ម៉ង់សម្រាប់ប្រភេទ "${activeCategoryName}" ក្នុងអំឡុងពេល ${periodLabel} ទេ។`,
+            detail: 'សូមជ្រើសរើសប្រភេទផ្សេង ឬចុច កំណត់ឡើងវិញ ដើម្បីមើលទិន្នន័យសរុបទាំងហាង។',
           };
         }
         return {
-          headline: `Trong ${periodLabel}, danh mục "${activeCategoryName}" mang lại ${revKhr} (${revUsd}) từ ${report.unitsSoldNet} sản phẩm (${report.completedOrderCount} đơn).`,
-          detail: `Giá vốn (COGS) là ${cogsKhr}, lợi nhuận gộp đạt ${gpKhr} (${gpUsd}, biên gộp ${report.grossMarginPct}%). Lưu ý: Chi phí vận hành ${opExKhr} được tính chung cho toàn quán.`,
+          headline: `ក្នុងអំឡុងពេល ${periodLabel} ប្រភេទ "${activeCategoryName}" រកបានចំណូលសុទ្ធ ${revKhr} (${revUsd}) ពី ${report.unitsSoldNet} មុខ (${report.completedOrderCount} វិក្កយបត្រ)។`,
+          detail: `ថ្លៃដើមទំនិញលក់ (COGS) សរុប ${cogsKhr} ប្រាក់ចំណេញដុល ${gpKhr} (${gpUsd}, អត្រាចំណេញដុល ${report.grossMarginPct}%)។ ចំណាយប្រតិបត្តិការទូទាំងហាង (${opExKhr}) ត្រូវបានបង្ហាញដាច់ដោយឡែក។`,
         };
       }
       if (report.completedOrderCount === 0) {
         return {
           headline: `No completed orders found in "${activeCategoryName}" for ${periodLabel}.`,
-          detail: 'Pick another category above or tap Reset All to view shop-wide totals.',
+          detail: 'Pick another category above or tap Reset to view shop-wide totals.',
         };
       }
       return {
@@ -257,16 +259,16 @@ export const ReportsView: React.FC = () => {
       };
     }
 
-    if (isVi) {
+    if (isKm) {
       if (report.completedOrderCount === 0 && report.operatingExpensesKhr === 0) {
         return {
-          headline: `Chưa có dữ liệu bán hàng hoặc chi phí vận hành trong giai đoạn ${periodLabel}.`,
-          detail: 'Hãy chọn khoảng thời gian khác hoặc ghi nhận đơn hàng mới để xem phân tích lãi/lỗ chi tiết.',
+          headline: `មិនទាន់មានទិន្នន័យលក់ ឬចំណាយប្រតិបត្តិការសម្រាប់ ${periodLabel} ទេ។`,
+          detail: 'សូមជ្រើសរើសកាលបរិច្ឆេទផ្សេង ឬកត់ត្រាការលក់ថ្មីលើ POS ដើម្បីមើលរបាយការណ៍ចំណេញ-ខាត។',
         };
       }
       return {
-        headline: `Trong ${periodLabel}, quán đạt ${revKhr} (${revUsd}) doanh thu thuần từ ${report.completedOrderCount} đơn hàng.`,
-        detail: `Sau khi trừ ${cogsKhr} giá vốn nguyên liệu/sản phẩm (COGS) và ${opExKhr} chi phí vận hành, thu nhập ròng là ${netKhr} (${netUsd}, biên ròng ${report.netMarginPct}%).`,
+        headline: `ក្នុងអំឡុងពេល ${periodLabel} ហាងរកបានចំណូលសុទ្ធ ${revKhr} (${revUsd}) ពី ${report.completedOrderCount} វិក្កយបត្រ។`,
+        detail: `បន្ទាប់ពីដកថ្លៃដើមទំនិញលក់ ${cogsKhr} និងចំណាយប្រតិបត្តិការ ${opExKhr} ប្រាក់ចំណេញសុទ្ធគឺ ${netKhr} (${netUsd}, អត្រាចំណេញសុទ្ធ ${report.netMarginPct}%)។`,
       };
     }
 
@@ -296,7 +298,7 @@ export const ReportsView: React.FC = () => {
     report.unitsSoldNet,
     usdRate,
     periodLabel,
-    isVi,
+    isKm,
   ]);
 
   const operatingCategorySeries = useMemo(() => {
@@ -318,11 +320,11 @@ export const ReportsView: React.FC = () => {
     () =>
       report.categoryBreakdown.map((row) => ({
         categoryId: row.categoryId,
-        name: isVi ? row.categoryNameVi || row.categoryName : row.categoryName,
+        name: getCategoryDisplayName(getCategoryById(row.categoryId, categories), isKm),
         netRevenueKhr: row.netRevenueKhr,
         grossProfitKhr: row.grossProfitKhr,
       })),
-    [report.categoryBreakdown, isVi]
+    [report.categoryBreakdown, categories, isKm]
   );
 
   const chartSeries = useMemo(
@@ -372,7 +374,7 @@ export const ReportsView: React.FC = () => {
         'Gross Margin %',
       ],
       ...report.categoryBreakdown.map((cat) => [
-        isVi ? cat.categoryNameVi || cat.categoryName : cat.categoryName,
+        getCategoryDisplayName(getCategoryById(cat.categoryId, categories), isKm),
         cat.netQty,
         cat.orderCount,
         cat.netRevenueKhr,
@@ -473,8 +475,8 @@ export const ReportsView: React.FC = () => {
   const getPaymentMeta = (pm: PaymentMethod) => {
     if (pm === 'cash') {
       return {
-        label: isVi ? 'Tiền mặt' : 'Cash',
-        sub: isVi ? 'Ngăn kéo tiền mặt' : 'Physical cash drawer',
+        label: isKm ? 'សាច់ប្រាក់' : 'Cash',
+        sub: isKm ? 'ថតដាក់ប្រាក់ផ្ទាល់' : 'Physical cash drawer',
         icon: Banknote,
         accent:
           'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-[#064E3B]/70 dark:text-[#6EE7B7] dark:border-[#10B981]/35',
@@ -484,7 +486,7 @@ export const ReportsView: React.FC = () => {
     if (pm === 'khqr') {
       return {
         label: 'KHQR',
-        sub: isVi ? 'Quét mã chuyển khoản' : 'Bakong QR transfer',
+        sub: isKm ? 'ស្កេនកូដបាគង KHQR' : 'Bakong QR transfer',
         icon: QrCode,
         accent:
           'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-500/35',
@@ -494,7 +496,7 @@ export const ReportsView: React.FC = () => {
     if (pm === 'aba') {
       return {
         label: 'ABA Pay',
-        sub: isVi ? 'Chuyển khoản ABA' : 'ABA digital transfer',
+        sub: isKm ? 'ផ្ទេរប្រាក់ ABA' : 'ABA digital transfer',
         icon: Building2,
         accent:
           'bg-indigo-50 text-indigo-800 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-200 dark:border-indigo-500/35',
@@ -503,7 +505,7 @@ export const ReportsView: React.FC = () => {
     }
     return {
       label: 'Wing',
-      sub: isVi ? 'Ví điện tử Wing' : 'Wing mobile wallet',
+      sub: isKm ? 'កាបូបលុយអេឡិចត្រូនិក Wing' : 'Wing mobile wallet',
       icon: Smartphone,
       accent:
         'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-500/35',
@@ -522,8 +524,8 @@ export const ReportsView: React.FC = () => {
             </h1>
             <InfoHint
               text={
-                isVi
-                  ? `Báo cáo Lãi/Lỗ dồn tích, đối soát thanh toán & giá trị tồn kho theo múi giờ ${BUSINESS_TIMEZONE}.`
+                isKm
+                  ? `របាយការណ៍ចំណេញ-ខាត ការផ្ទៀងផ្ទាត់ការទូទាត់ និងការវាយតម្លៃស្តុក (${BUSINESS_TIMEZONE})។`
                   : `Plain-English P&L statements, payment reconciliation, and live inventory valuation (${BUSINESS_TIMEZONE}).`
               }
               label={t.reports.title}
@@ -538,7 +540,7 @@ export const ReportsView: React.FC = () => {
         <button
           type="button"
           onClick={handleExportCsv}
-          className="inline-flex items-center gap-2 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap shrink-0 self-start sm:self-auto"
+          className="inline-flex items-center gap-2 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all active:scale-[0.97] whitespace-nowrap shrink-0 self-start sm:self-auto"
         >
           <Download className="w-4 h-4" />
           <span>{t.reports.exportCsv}</span>
@@ -553,15 +555,15 @@ export const ReportsView: React.FC = () => {
           <div className="overflow-x-auto pb-0.5 -mx-1 px-1">
             <div
               role="tablist"
-              aria-label={isVi ? 'Chọn kỳ báo cáo' : 'Report period'}
+              aria-label={isKm ? 'ជ្រើសរើសរយៈពេលរបាយការណ៍' : 'Report period'}
               className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl"
             >
               {(
                 [
-                  ['today', isVi ? 'Hôm nay' : 'Today'],
-                  ['week', isVi ? 'Tuần này' : 'This Week'],
-                  ['month', isVi ? 'Tháng này' : 'This Month'],
-                  ['custom', isVi ? 'Tùy chỉnh' : 'Custom Range'],
+                  ['today', isKm ? 'ថ្ងៃនេះ' : 'Today'],
+                  ['week', isKm ? 'សប្តាហ៍នេះ' : 'This Week'],
+                  ['month', isKm ? 'ខែនេះ' : 'This Month'],
+                  ['custom', isKm ? 'កំណត់ផ្ទាល់ខ្លួន' : 'Custom Range'],
                 ] as const
               ).map(([key, label]) => {
                 const active = preset === key;
@@ -572,7 +574,7 @@ export const ReportsView: React.FC = () => {
                     role="tab"
                     aria-selected={active}
                     onClick={() => handlePresetChange(key)}
-                    className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap shrink-0 ${
+                    className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0 ${
                       active
                         ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                         : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -588,21 +590,21 @@ export const ReportsView: React.FC = () => {
 
           <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto shrink-0">
             <span className="text-xs font-medium text-stone-500 dark:text-[#94A39B] whitespace-nowrap">
-              {isVi ? 'Nhóm theo:' : 'Group by:'}
+              {isKm ? 'បែងចែកតាម៖' : 'Group by:'}
             </span>
             <div className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl">
               {(
                 [
-                  ['daily', isVi ? 'Ngày' : 'Daily'],
-                  ['monthly', isVi ? 'Tháng' : 'Monthly'],
-                  ['yearly', isVi ? 'Năm' : 'Yearly'],
+                  ['daily', isKm ? 'ប្រចាំថ្ងៃ' : 'Daily'],
+                  ['monthly', isKm ? 'ប្រចាំខែ' : 'Monthly'],
+                  ['yearly', isKm ? 'ប្រចាំឆ្នាំ' : 'Yearly'],
                 ] as const
               ).map(([grp, lbl]) => (
                 <button
                   key={grp}
                   type="button"
                   onClick={() => setGrouping(grp)}
-                  className={`h-9 px-3 text-xs font-semibold rounded-lg transition-all duration-200 ease-out whitespace-nowrap ${
+                  className={`h-9 px-3 text-xs font-semibold rounded-lg transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap ${
                     grouping === grp
                       ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                       : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
@@ -618,22 +620,14 @@ export const ReportsView: React.FC = () => {
               onClick={toggleFilters}
               aria-expanded={filtersOpen}
               aria-controls="reports-category-filters"
-              className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-colors whitespace-nowrap border ${
+              className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-semibold rounded-[10px] transition-all active:scale-[0.97] whitespace-nowrap border ${
                 filtersOpen || activeFilterCount > 0
                   ? 'bg-stone-100 dark:bg-[#18251F] border-transparent dark:border-[#24352C] text-stone-900 dark:text-[#F1F5F3] hover:bg-stone-200/70 dark:hover:bg-[#1F3028]'
                   : 'bg-transparent border-transparent text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#1F3028]'
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5 text-[#0D5C3E] dark:text-[#10B981] shrink-0" />
-              <span>
-                {filtersOpen
-                  ? isVi
-                    ? 'Ẩn bộ lọc'
-                    : 'Hide Filters'
-                  : isVi
-                    ? 'Hiện bộ lọc'
-                    : 'Show Filters'}
-              </span>
+              <span>{isKm ? 'តម្រង' : 'Filters'}</span>
               {activeFilterCount > 0 && (
                 <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-mono-num font-semibold bg-[#0D5C3E]/12 text-[#0D5C3E] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
                   {activeFilterCount}
@@ -650,9 +644,9 @@ export const ReportsView: React.FC = () => {
               type="button"
               disabled={activeFilterCount === 0}
               onClick={() => setCategoryFilter('all')}
-              className="inline-flex items-center justify-center h-11 px-3 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors whitespace-nowrap"
+              className="inline-flex items-center justify-center h-11 px-3 text-xs font-semibold text-[#0D5C3E] dark:text-[#34D399] hover:underline disabled:text-stone-400 dark:disabled:text-[#94A39B]/40 disabled:no-underline disabled:cursor-default rounded-lg transition-colors active:scale-[0.97] whitespace-nowrap"
             >
-              {isVi ? 'Đặt lại tất cả' : 'Reset All'}
+              {isKm ? 'កំណត់ឡើងវិញ' : 'Reset'}
             </button>
           </div>
         </div>
@@ -699,7 +693,7 @@ export const ReportsView: React.FC = () => {
               categories={reportCategories}
               selectedCategoryId={categoryFilter}
               onSelect={setCategoryFilter}
-              isVi={isVi}
+              isKm={isKm}
               allLabel={t.common.all}
             />
           </div>
@@ -710,7 +704,7 @@ export const ReportsView: React.FC = () => {
       {/* 2. PLAIN-ENGLISH FINANCIAL TAKEAWAY BANNER                         */}
       {/* ================================================================== */}
       <section
-        aria-label={isVi ? 'Tóm tắt tài chính' : 'Financial Takeaway'}
+        aria-label={isKm ? 'សង្ខេបហិរញ្ញវត្ថុ' : 'Financial Takeaway'}
         className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl px-4 sm:px-5 py-4 flex items-start gap-3.5"
       >
         <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-[#064E3B]/70 border border-emerald-200/80 dark:border-[#10B981]/30 flex items-center justify-center shrink-0 mt-0.5">
@@ -718,7 +712,7 @@ export const ReportsView: React.FC = () => {
         </div>
         <div className="min-w-0 space-y-1">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#0F5C43] dark:text-[#34D399]">
-            {isVi ? 'Tóm tắt tài chính' : 'Financial Takeaway'}
+            {isKm ? 'សង្ខេបហិរញ្ញវត្ថុ' : 'Financial Takeaway'}
           </p>
           <p className="text-sm sm:text-[15px] leading-relaxed text-stone-900 dark:text-[#F1F5F3] font-medium">
             {financialTakeaway.headline}{' '}
@@ -736,16 +730,16 @@ export const ReportsView: React.FC = () => {
         <div className="p-5">
           <div className="flex flex-wrap items-center gap-x-1">
             <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'Doanh thu thuần' : 'Net Revenue'}
+              {isKm ? 'ចំណូលសុទ្ធ' : 'Net Revenue'}
             </p>
             <InfoHint
               compact
               text={
-                isVi
-                  ? 'Doanh thu gộp từ đơn đã hoàn tất trừ đi giá trị trả hàng và hoàn tiền trong kỳ.'
+                isKm
+                  ? 'ចំណូលដុលពីការលក់ដែលបានបញ្ចប់ ដកនឹងការសងប្រាក់វិញក្នុងរយៈពេលដែលបានជ្រើស។'
                   : 'Gross sales from completed orders minus returns and refunds in the selected period.'
               }
-              label={isVi ? 'Giải thích doanh thu thuần' : 'About Net Revenue'}
+              label={isKm ? 'អំពីចំណូលសុទ្ធ' : 'About Net Revenue'}
             />
           </div>
           <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
@@ -760,23 +754,23 @@ export const ReportsView: React.FC = () => {
         <div className="p-5">
           <div className="flex flex-wrap items-center gap-x-1">
             <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'Giá vốn (COGS) & Biên gộp' : 'COGS & Gross Margin %'}
+              {isKm ? 'ថ្លៃដើមទំនិញលក់ & អត្រាចំណេញដុល' : 'COGS & Gross Margin %'}
             </p>
             <InfoHint
               compact
               text={
-                isVi
-                  ? 'COGS là chi phí nguyên liệu / giá vốn đơn vị của đúng lượng hàng đã bán. Biên gộp % = (Doanh thu − COGS) ÷ Doanh thu.'
+                isKm
+                  ? 'ថ្លៃដើមទំនិញលក់ (COGS) គឺជាថ្លៃវត្ថុធាតុដើម ឬថ្លៃដើមទំនិញពិតប្រាកដដែលបានលក់។ អត្រាចំណេញដុល = (ចំណូលសុទ្ធ − COGS) ÷ ចំណូលសុទ្ធ។'
                   : 'COGS is the exact ingredient and unit cost of items sold. Gross Margin % = (Net Revenue − COGS) ÷ Net Revenue.'
               }
-              label={isVi ? 'Giải thích COGS & Biên gộp' : 'About COGS & Gross Margin %'}
+              label={isKm ? 'អំពីថ្លៃដើមទំនិញលក់' : 'About COGS & Gross Margin %'}
             />
           </div>
           <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
             {formatKhr(report.netCogsKhr)}
           </p>
           <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
-            {isVi ? 'Biên gộp' : 'Gross Margin'}:{' '}
+            {isKm ? 'អត្រាចំណេញដុល' : 'Gross Margin'}:{' '}
             <strong className="text-emerald-700 dark:text-[#34D399]">
               {report.grossMarginPct}%
             </strong>{' '}
@@ -787,16 +781,16 @@ export const ReportsView: React.FC = () => {
         <div className="p-5">
           <div className="flex flex-wrap items-center gap-x-1">
             <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'Chi phí vận hành' : 'Operating Expenses'}
+              {isKm ? 'ចំណាយប្រតិបត្តិការ' : 'Operating Expenses'}
             </p>
             <InfoHint
               compact
               text={
-                isVi
-                  ? 'Chi phí duy trì quán như mặt bằng, điện nước, bao bì — không cộng trùng tiền nhập kho (đã tính qua COGS).'
+                isKm
+                  ? 'ចំណាយប្រចាំថ្ងៃរបស់ហាង (ថ្លៃជួល ទឹកភ្លើង សម្ភារៈវេចខ្ចប់) — មិនរាប់បញ្ចូលការទិញស្តុកដើម្បីជៀសវាងការគិតជាន់គ្នាជាមួយ COGS។'
                   : 'Day-to-day shop overheads (rent, utilities, packaging, equipment) — excludes stock restocks so COGS is never double-counted.'
               }
-              label={isVi ? 'Giải thích chi phí vận hành' : 'About Operating Expenses'}
+              label={isKm ? 'អំពីចំណាយប្រតិបត្តិការ' : 'About Operating Expenses'}
             />
           </div>
           <p className="mt-1.5 font-mono-num text-2xl font-semibold text-stone-900 dark:text-[#F1F5F3]">
@@ -805,7 +799,7 @@ export const ReportsView: React.FC = () => {
           <p className="mt-1 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
             {formatUsdRef(report.operatingExpensesKhr, usdRate)}
             {activeCategoryName && (
-              <span className="font-sans"> · {isVi ? 'toàn quán' : 'shop-wide'}</span>
+              <span className="font-sans"> · {isKm ? 'ទូទាំងហាង' : 'shop-wide'}</span>
             )}
           </p>
         </div>
@@ -813,16 +807,16 @@ export const ReportsView: React.FC = () => {
         <div className="p-5">
           <div className="flex flex-wrap items-center gap-x-1">
             <p className="text-xs font-medium text-stone-500 dark:text-[#94A39B]">
-              {isVi ? 'Thu nhập ròng (Net Income)' : 'Net Income'}
+              {isKm ? 'ប្រាក់ចំណេញសុទ្ធ' : 'Net Income'}
             </p>
             <InfoHint
               compact
               text={
-                isVi
-                  ? 'Thu nhập ròng = Doanh thu thuần − Giá vốn (COGS) − Chi phí vận hành. Phản ánh lợi nhuận thật của quán.'
+                isKm
+                  ? 'ប្រាក់ចំណេញសុទ្ធ = ចំណូលសុទ្ធ − ថ្លៃដើមទំនិញលក់ (COGS) − ចំណាយប្រតិបត្តិការ។ បង្ហាញពីប្រាក់ចំណេញពិតប្រាកដរបស់ហាង។'
                   : 'Net Income = Net Revenue − COGS − Operating Expenses. Shows your true shop profitability before personal drawings.'
               }
-              label={isVi ? 'Giải thích thu nhập ròng' : 'About Net Income'}
+              label={isKm ? 'អំពីប្រាក់ចំណេញសុទ្ធ' : 'About Net Income'}
             />
           </div>
           <p
@@ -848,14 +842,14 @@ export const ReportsView: React.FC = () => {
           <div className="flex items-center gap-2 min-w-0">
             <Wallet className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
             <h2 className="font-display text-base sm:text-lg font-bold text-stone-900 dark:text-[#F1F5F3]">
-              {isVi ? 'Đối soát Phương thức Thanh toán' : 'Payment Method Breakdown'}
+              {isKm ? 'ការបែងចែកតាមវិធីទូទាត់' : 'Payment Method Breakdown'}
             </h2>
             <InfoHint
               compact
-              label={isVi ? 'Đối soát thanh toán' : 'About Payment Method Breakdown'}
+              label={isKm ? 'អំពីការផ្ទៀងផ្ទាត់វិធីទូទាត់' : 'About Payment Method Breakdown'}
               text={
-                isVi
-                  ? 'Tách bạch tiền mặt tại két với chuyển khoản ngân hàng (KHQR, ABA Pay, Wing) kèm số lượng giao dịch để chốt ca trong vài giây.'
+                isKm
+                  ? 'ផ្ទៀងផ្ទាត់សាច់ប្រាក់ក្នុងថតជាមួយការផ្ទេរប្រាក់តាមធនាគារ (KHQR, ABA Pay, Wing) ព្រមទាំងចំនួនប្រតិបត្តិការជាក់លាក់។'
                   : 'Reconcile your physical cash drawer against digital bank transfers (KHQR, ABA Pay, Wing) with exact transaction counts and net totals.'
               }
             />
@@ -866,16 +860,16 @@ export const ReportsView: React.FC = () => {
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-[#064E3B]/60 border border-emerald-200 dark:border-[#10B981]/35 text-emerald-900 dark:text-[#A7F3D0] font-semibold">
               <Banknote className="w-3.5 h-3.5 shrink-0" />
               <span>
-                {isVi ? 'Tiền mặt' : 'Cash Drawer'}: {formatKhr(paymentReconciliation.cashInKhr)}
+                {isKm ? 'សាច់ប្រាក់' : 'Cash Drawer'}: {formatKhr(paymentReconciliation.cashInKhr)}
               </span>
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] text-stone-800 dark:text-[#D5DFDA] font-semibold">
               <Building2 className="w-3.5 h-3.5 shrink-0 text-stone-500 dark:text-[#94A39B]" />
               <span>
-                {isVi ? 'Chuyển khoản' : 'Digital Bank'}:{' '}
+                {isKm ? 'ផ្ទេរតាមធនាគារ' : 'Digital Bank'}:{' '}
                 {formatKhr(paymentReconciliation.digitalTotalKhr)} (
                 {paymentReconciliation.digitalTxCount}{' '}
-                {isVi ? 'GD' : 'tx'})
+                {isKm ? 'ដង' : 'tx'})
               </span>
             </span>
           </div>
@@ -889,7 +883,7 @@ export const ReportsView: React.FC = () => {
               return (
                 <div
                   key={row.method}
-                  className="p-4 rounded-xl border border-stone-200 dark:border-[#24352C] bg-stone-50/50 dark:bg-[#0F1814] flex flex-col justify-between gap-3"
+                  className="p-4 rounded-xl border border-stone-200 dark:border-[#24352C] bg-stone-50/50 dark:bg-[#0F1814] flex flex-col justify-between gap-3 pos-lift"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -908,7 +902,7 @@ export const ReportsView: React.FC = () => {
                       </div>
                     </div>
                     <span className="font-mono-num text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] text-stone-700 dark:text-[#D5DFDA] whitespace-nowrap">
-                      {row.txCount} {isVi ? 'GD' : 'tx'}
+                      {row.txCount} {isKm ? 'ដង' : 'tx'}
                     </span>
                   </div>
 
@@ -935,8 +929,8 @@ export const ReportsView: React.FC = () => {
           {/* Physical Cash Drawer Check Bar */}
           <div className="px-4 py-3 rounded-xl bg-stone-50 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] flex flex-wrap items-center justify-between gap-2 text-xs font-mono-num">
             <span className="font-sans font-medium text-stone-600 dark:text-[#94A39B]">
-              {isVi
-                ? 'Kiểm tra ngăn kéo tiền mặt (Thu tiền mặt − Chi tiền mặt):'
+              {isKm
+                ? 'ផ្ទៀងផ្ទាត់ថតសាច់ប្រាក់ (លក់ជាសាច់ប្រាក់ − ចំណាយជាសាច់ប្រាក់)៖'
                 : 'Cash Drawer Check (Cash Sales − Cash Paid Out):'}
             </span>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -973,15 +967,15 @@ export const ReportsView: React.FC = () => {
             <div className="flex items-baseline justify-between gap-2 pb-4 border-b border-stone-200 dark:border-[#24352C]">
               <div className="flex flex-wrap items-center gap-x-1 min-w-0">
                 <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                  {isVi ? '1. Báo cáo Lãi / Lỗ (P&L)' : '1. Profit & Loss Statement'}
+                  {isKm ? '១. របាយការណ៍ចំណេញ និងខាត (P&L)' : '1. Profit & Loss Statement'}
                 </h2>
                 <InfoHint
                   text={
-                    isVi
-                      ? 'Chỉ tính Giá vốn hàng đã bán (COGS) & Chi phí vận hành — không tính trùng tiền nhập kho.'
+                    isKm
+                      ? 'ផ្ទៀងផ្ទាត់ថ្លៃដើមទំនិញលក់ (COGS) ជាមួយចំណាយប្រតិបត្តិការ — គ្មានការគិតជាន់គ្នានៃការទិញស្តុកឡើយ។'
                       : 'Matches COGS of sold items against operating expenses — zero double-counting of stock purchases.'
                   }
-                  label={isVi ? 'Giải thích báo cáo Lãi/Lỗ' : 'About Profit & Loss Statement'}
+                  label={isKm ? 'អំពីរបាយការណ៍ចំណេញ-ខាត' : 'About Profit & Loss Statement'}
                 />
               </div>
             </div>
@@ -997,7 +991,7 @@ export const ReportsView: React.FC = () => {
               </div>
               <div className="py-2.5 flex justify-between gap-4 text-xs">
                 <dt className="text-stone-500 dark:text-[#94A39B] pl-3">
-                  {isVi ? 'Trả hàng & Hoàn tiền' : 'Less: Returns & Refunds'}
+                  {isKm ? 'ដក៖ ការបង្វិលសង និងសងប្រាក់វិញ' : 'Less: Returns & Refunds'}
                 </dt>
                 <dd className="font-mono-num text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
                   -{formatKhr(report.returnsRefundsKhr)}
@@ -1005,7 +999,7 @@ export const ReportsView: React.FC = () => {
               </div>
               <div className="py-3 flex justify-between gap-4">
                 <dt className="text-stone-800 dark:text-[#F1F5F3] font-semibold">
-                  {isVi ? 'Doanh thu thuần' : 'Net Revenue'}
+                  {isKm ? 'ចំណូលសុទ្ធ' : 'Net Revenue'}
                 </dt>
                 <dd className="font-mono-num font-semibold text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
                   {formatKhr(report.netRevenueKhr)}
@@ -1013,15 +1007,15 @@ export const ReportsView: React.FC = () => {
               </div>
               <div className="py-2.5 flex justify-between items-start gap-4 text-xs">
                 <dt className="text-stone-500 dark:text-[#94A39B] pl-3 flex flex-wrap items-center gap-x-1 min-w-0">
-                  <span>{isVi ? 'Giá vốn hàng bán (COGS)' : 'Less: COGS'}</span>
+                  <span>{isKm ? 'ដក៖ ថ្លៃដើមទំនិញលក់ (COGS)' : 'Less: COGS'}</span>
                   <InfoHint
                     compact
                     text={
-                      isVi
-                        ? 'Chi phí nguyên liệu / giá vốn đơn vị thực tế của đúng số lượng sản phẩm đã bán (đã hoàn lại COGS cho hàng trả).'
+                      isKm
+                        ? 'ថ្លៃដើមទំនិញលក់ — ថ្លៃវត្ថុធាតុដើមតាមរូបមន្ត ឬថ្លៃដើមមធ្យមនៃទំនិញដែលបានលក់ក្នុងរយៈពេលនេះ ដកថ្លៃដើមនៃទំនិញដែលបានបង្វិលសង។'
                         : 'Cost of Goods Sold — actual recipe ingredient cost or weighted-average unit cost for items sold in this period, minus COGS restored from returns.'
                     }
-                    label="About COGS"
+                    label={isKm ? 'អំពីថ្លៃដើមទំនិញលក់' : 'About COGS'}
                   />
                 </dt>
                 <dd className="font-mono-num text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
@@ -1035,15 +1029,15 @@ export const ReportsView: React.FC = () => {
                     <InfoHint
                       compact
                       text={
-                        isVi
-                          ? 'Lợi nhuận gộp = Doanh thu thuần − COGS. Biên gộp % = Lợi nhuận gộp ÷ Doanh thu thuần.'
+                        isKm
+                          ? 'ប្រាក់ចំណេញដុល = ចំណូលសុទ្ធ − COGS។ អត្រាចំណេញដុល % = ប្រាក់ចំណេញដុល ÷ ចំណូលសុទ្ធ។'
                           : 'Gross Profit = Net Revenue − COGS. Gross Margin % = Gross Profit ÷ Net Revenue.'
                       }
-                      label="About Gross Margin %"
+                      label={isKm ? 'អំពីអត្រាចំណេញដុល' : 'About Gross Margin %'}
                     />
                   </dt>
                   <span className="text-[11px] font-mono-num text-stone-400 dark:text-[#94A39B]">
-                    {isVi ? 'Biên gộp %' : 'Gross Margin %'}: {report.grossMarginPct}%
+                    {isKm ? 'អត្រាចំណេញដុល %' : 'Gross Margin %'}: {report.grossMarginPct}%
                   </span>
                 </div>
                 <dd className="font-mono-num font-semibold text-emerald-700 dark:text-[#34D399] whitespace-nowrap">
@@ -1052,15 +1046,15 @@ export const ReportsView: React.FC = () => {
               </div>
               <div className="py-2.5 flex justify-between items-start gap-4 text-xs">
                 <dt className="text-stone-500 dark:text-[#94A39B] pl-3 flex flex-wrap items-center gap-x-1 min-w-0">
-                  <span>{isVi ? 'Chi phí vận hành' : 'Less: Operating Expenses'}</span>
+                  <span>{isKm ? 'ដក៖ ចំណាយប្រតិបត្តិការ' : 'Less: Operating Expenses'}</span>
                   <InfoHint
                     compact
                     text={
-                      isVi
-                        ? 'Chi phí kinh doanh như điện, nước, thuê mặt bằng, bao bì — không bao gồm tiền nhập hàng tồn kho (đã tính qua COGS).'
+                      isKm
+                        ? 'ចំណាយប្រតិបត្តិការហាង (ថ្លៃជួល ទឹកភ្លើង សម្ភារៈវេចខ្ចប់) — មិនរាប់បញ្ចូលការទិញស្តុកដើម្បីជៀសវាងការគិតជាន់គ្នាជាមួយ COGS។'
                         : 'Business overheads (rent, utilities, packaging, equipment) — excludes inventory purchases so stock is never double-counted with COGS.'
                     }
-                    label="About Operating Expenses"
+                    label={isKm ? 'អំពីចំណាយប្រតិបត្តិការ' : 'About Operating Expenses'}
                   />
                 </dt>
                 <dd className="font-mono-num text-stone-600 dark:text-[#94A39B] whitespace-nowrap">
@@ -1070,15 +1064,15 @@ export const ReportsView: React.FC = () => {
               <div className="py-4 flex justify-between items-baseline gap-4 border-t-2 border-stone-200 dark:border-[#24352C]">
                 <div className="min-w-0">
                   <dt className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] flex flex-wrap items-center gap-x-1">
-                    <span>{isVi ? 'Thu nhập ròng (Net Income)' : 'Net Income'}</span>
+                    <span>{isKm ? 'ប្រាក់ចំណេញសុទ្ធ' : 'Net Income'}</span>
                     <InfoHint
                       compact
                       text={
-                        isVi
-                          ? 'Thu nhập ròng kinh doanh = Lợi nhuận gộp − Chi phí vận hành (không gồm chi tiêu cá nhân/gia đình).'
+                        isKm
+                          ? 'ប្រាក់ចំណេញសុទ្ធ = ប្រាក់ចំណេញដុល − ចំណាយប្រតិបត្តិការ (ចំណាយគ្រួសារត្រូវបានតាមដានដាច់ដោយឡែក)។'
                           : 'Net Income = Gross Profit − Operating Expenses (household/personal spending is tracked separately).'
                       }
-                      label="About Net Income"
+                      label={isKm ? 'អំពីប្រាក់ចំណេញសុទ្ធ' : 'About Net Income'}
                     />
                   </dt>
                   <span className="text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
@@ -1105,8 +1099,8 @@ export const ReportsView: React.FC = () => {
 
           {report.voidedOrdersCount > 0 && (
             <p className="mt-3 pt-3 border-t border-stone-100 dark:border-[#1F3028] text-xs text-stone-500 dark:text-[#94A39B] font-mono-num">
-              {isVi
-                ? `Đã loại trừ ${report.voidedOrdersCount} đơn hủy (${formatKhr(report.voidedTotalKhr)}).`
+              {isKm
+                ? `មិនរាប់បញ្ចូលវិក្កយបត្រដែលបានលុបចោល ${report.voidedOrdersCount} (${formatKhr(report.voidedTotalKhr)})។`
                 : `Excluded ${report.voidedOrdersCount} voided order(s) totaling ${formatKhr(report.voidedTotalKhr)}.`}
             </p>
           )}
@@ -1118,15 +1112,15 @@ export const ReportsView: React.FC = () => {
             <div className="pb-4 border-b border-stone-200 dark:border-[#24352C]">
               <div className="flex flex-wrap items-center gap-x-1">
                 <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
-                  {isVi ? '2. Báo cáo Dòng tiền (Thực thu / Thực chi)' : '2. Cash Flow Statement'}
+                  {isKm ? '២. របាយការណ៍លំហូរសាច់ប្រាក់' : '2. Cash Flow Statement'}
                 </h2>
                 <InfoHint
                   text={
-                    isVi
-                      ? 'Theo dõi tiền vào từ bán hàng và tiền ra cho nhập hàng + vận hành trong kỳ.'
+                    isKm
+                      ? 'តាមដានសាច់ប្រាក់ដែលទទួលបានពិតប្រាកដពីការលក់ ដកនឹងប្រាក់ដែលបានចំណាយលើការបញ្ចូលស្តុក និងចំណាយប្រតិបត្តិការ។'
                       : 'Tracks actual cash collected from sales minus cash paid for stock restocks and operating expenses.'
                   }
-                  label={isVi ? 'Giải thích báo cáo dòng tiền' : 'About Cash Flow Statement'}
+                  label={isKm ? 'អំពីរបាយការណ៍លំហូរសាច់ប្រាក់' : 'About Cash Flow Statement'}
                 />
               </div>
             </div>
@@ -1134,7 +1128,7 @@ export const ReportsView: React.FC = () => {
             <dl className="divide-y divide-stone-100 dark:divide-[#1F3028] text-sm mt-2">
               <div className="py-3 flex justify-between gap-4">
                 <dt className="text-stone-800 dark:text-[#F1F5F3] font-medium">
-                  {isVi ? 'Tiền thu bán hàng (sau hoàn tiền)' : 'Sales Cash Inflows (Net)'}
+                  {isKm ? 'សាច់ប្រាក់ចូលពីការលក់ (សុទ្ធ)' : 'Sales Cash Inflows (Net)'}
                 </dt>
                 <dd className="font-mono-num font-semibold text-emerald-700 dark:text-[#34D399] whitespace-nowrap">
                   +{formatKhr(report.cashInflowsKhr)}
@@ -1143,7 +1137,7 @@ export const ReportsView: React.FC = () => {
 
               <div className="py-3 flex justify-between gap-4">
                 <dt className="text-stone-700 dark:text-[#D5DFDA]">
-                  {isVi ? 'Tiền chi nhập kho (Hàng hóa & Nguyên liệu)' : 'Inventory Purchases Paid'}
+                  {isKm ? 'ការចំណាយលើការទិញស្តុក' : 'Inventory Purchases Paid'}
                 </dt>
                 <dd className="font-mono-num font-medium text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
                   -{formatKhr(report.inventoryPurchasesCashOutKhr)}
@@ -1152,7 +1146,7 @@ export const ReportsView: React.FC = () => {
 
               <div className="py-3 flex justify-between gap-4">
                 <dt className="text-stone-700 dark:text-[#D5DFDA]">
-                  {isVi ? 'Tiền chi vận hành (Điện, thuê, đóng gói...)' : 'Operating Expenses Paid'}
+                  {isKm ? 'ចំណាយប្រតិបត្តិការដែលបានបង់' : 'Operating Expenses Paid'}
                 </dt>
                 <dd className="font-mono-num font-medium text-stone-900 dark:text-[#F1F5F3] whitespace-nowrap">
                   -{formatKhr(report.operatingExpensesCashOutKhr)}
@@ -1162,15 +1156,15 @@ export const ReportsView: React.FC = () => {
               <div className="py-4 flex justify-between items-baseline gap-4 border-t-2 border-stone-200 dark:border-[#24352C]">
                 <div className="min-w-0">
                   <dt className="font-display text-base font-bold text-stone-900 dark:text-[#F1F5F3] flex flex-wrap items-center gap-x-1">
-                    <span>{isVi ? 'Dòng tiền thuần kinh doanh' : 'Business Net Cash Flow'}</span>
+                    <span>{isKm ? 'លំហូរសាច់ប្រាក់សុទ្ធអាជីវកម្ម' : 'Business Net Cash Flow'}</span>
                     <InfoHint
                       compact
                       text={
-                        isVi
-                          ? 'Thu bán hàng − Nhập kho − Chi vận hành'
+                        isKm
+                          ? 'សាច់ប្រាក់ចូលពីការលក់ − ការទិញស្តុក − ចំណាយប្រតិបត្តិការ'
                           : 'Sales Cash Inflows − Stock Purchases Paid − Operating Expenses Paid'
                       }
-                      label={isVi ? 'Công thức dòng tiền thuần' : 'Net Cash Flow formula'}
+                      label={isKm ? 'រូបមន្តលំហូរសាច់ប្រាក់សុទ្ធ' : 'Net Cash Flow formula'}
                     />
                   </dt>
                 </div>
@@ -1208,15 +1202,15 @@ export const ReportsView: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 pb-4 border-b border-stone-200 dark:border-[#24352C]">
           <div className="flex flex-wrap items-center gap-x-1 min-w-0">
             <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
-              {isVi ? '3. Định giá Tồn kho hiện tại' : '3. Current Inventory Valuation'}
+              {isKm ? '៣. ការវាយតម្លៃស្តុកបច្ចុប្បន្ន' : '3. Current Inventory Valuation'}
             </h2>
             <InfoHint
               text={
-                isVi
-                  ? 'Tồn kho đầu kỳ (Opening Stock) và hàng chưa bán được ghi nhận tại đây như tài sản, không tính là chi phí.'
+                isKm
+                  ? 'ស្តុកដើមគ្រា និងទំនិញមិនទាន់លក់ត្រូវបានវាយតម្លៃជាទ្រព្យសម្បត្តិនៅទីនេះ — មិនរាប់បញ្ចូលជាចំណាយប្រតិបត្តិការទេ។'
                   : 'Opening stock balances and unsold inventory are valued here as assets — never counted as operating expenses.'
               }
-              label={isVi ? 'Giải thích định giá tồn kho' : 'About Inventory Valuation'}
+              label={isKm ? 'អំពីការវាយតម្លៃស្តុក' : 'About Inventory Valuation'}
             />
           </div>
           <span className="font-mono-num text-base font-bold text-[#0F5C43] dark:text-[#34D399] whitespace-nowrap shrink-0">
@@ -1228,7 +1222,7 @@ export const ReportsView: React.FC = () => {
           <div className="bg-stone-50/40 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg p-4">
             <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-400">
               <Package className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>{isVi ? 'Đóng gói bán lẻ' : 'Retail Packaged'}</span>
+              <span>{isKm ? 'ទំនិញវេចខ្ចប់ស្រាប់' : 'Retail Packaged'}</span>
             </p>
             <p className="mt-1.5 font-mono-num text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
               {formatKhr(report.inventoryValuation.packagedValueKhr)}
@@ -1241,7 +1235,7 @@ export const ReportsView: React.FC = () => {
           <div className="bg-stone-50/40 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] rounded-lg p-4">
             <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 dark:text-teal-400">
               <Wheat className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>{isVi ? 'Nguyên liệu thô' : 'Raw Ingredients'}</span>
+              <span>{isKm ? 'វត្ថុធាតុដើម' : 'Raw Ingredients'}</span>
             </p>
             <p className="mt-1.5 font-mono-num text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
               {formatKhr(report.inventoryValuation.ingredientsValueKhr)}
@@ -1259,11 +1253,11 @@ export const ReportsView: React.FC = () => {
           <div>
             <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
               {chartView === 'pnl'
-                ? isVi
-                  ? 'Xu hướng Doanh thu, Chi phí & Thu nhập ròng'
+                ? isKm
+                  ? 'និន្នាការចំណូល ថ្លៃដើម និងប្រាក់ចំណេញសុទ្ធ'
                   : 'Revenue, Costs & Net Income Trend'
-                : isVi
-                  ? 'Xu hướng Dòng tiền vào & ra'
+                : isKm
+                  ? 'និន្នាការសាច់ប្រាក់ចូល និងចេញ'
                   : 'Cash Inflows vs Cash Outflows Trend'}
             </h2>
           </div>
@@ -1272,24 +1266,24 @@ export const ReportsView: React.FC = () => {
             <button
               type="button"
               onClick={() => setChartView('pnl')}
-              className={`h-9 px-3.5 text-xs font-semibold rounded-lg transition-colors ${
+              className={`h-9 px-3.5 text-xs font-semibold rounded-lg transition-all active:scale-[0.97] ${
                 chartView === 'pnl'
                   ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                   : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
               }`}
             >
-              {isVi ? 'Lãi / Lỗ (P&L)' : 'Accrual P&L'}
+              {isKm ? 'ចំណេញ / ខាត (P&L)' : 'Accrual P&L'}
             </button>
             <button
               type="button"
               onClick={() => setChartView('cashflow')}
-              className={`h-9 px-3.5 text-xs font-semibold rounded-lg transition-colors ${
+              className={`h-9 px-3.5 text-xs font-semibold rounded-lg transition-all active:scale-[0.97] ${
                 chartView === 'cashflow'
                   ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
                   : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
               }`}
             >
-              {isVi ? 'Dòng tiền' : 'Cash Flow'}
+              {isKm ? 'លំហូរសាច់ប្រាក់' : 'Cash Flow'}
             </button>
           </div>
         </div>
@@ -1331,7 +1325,7 @@ export const ReportsView: React.FC = () => {
                 />
                 <Bar
                   dataKey="netRevenueKhr"
-                  name={isVi ? 'Doanh thu thuần' : 'Net Revenue'}
+                  name={isKm ? 'ចំណូលសុទ្ធ' : 'Net Revenue'}
                   fill={chartColors.revenue}
                   radius={[4, 4, 0, 0]}
                   maxBarSize={28}
@@ -1340,11 +1334,11 @@ export const ReportsView: React.FC = () => {
                   dataKey={chartView === 'pnl' ? 'totalPnlCostKhr' : 'cashOutflowsKhr'}
                   name={
                     chartView === 'pnl'
-                      ? isVi
-                        ? 'COGS + Chi phí vận hành'
+                      ? isKm
+                        ? 'COGS + ចំណាយប្រតិបត្តិការ'
                         : 'COGS + Operating Expenses'
-                      : isVi
-                        ? 'Nhập kho + Chi vận hành'
+                      : isKm
+                        ? 'ទិញស្តុក + ចំណាយប្រតិបត្តិការ'
                         : 'Stock Purchases + OpEx'
                   }
                   fill={chartColors.cost}
@@ -1356,11 +1350,11 @@ export const ReportsView: React.FC = () => {
                   dataKey={chartView === 'pnl' ? 'netProfitKhr' : 'businessNetCashFlowKhr'}
                   name={
                     chartView === 'pnl'
-                      ? isVi
-                        ? 'Thu nhập ròng'
+                      ? isKm
+                        ? 'ប្រាក់ចំណេញសុទ្ធ'
                         : 'Net Income'
-                      : isVi
-                        ? 'Dòng tiền thuần'
+                      : isKm
+                        ? 'លំហូរសាច់ប្រាក់សុទ្ធ'
                         : 'Net Cash Flow'
                   }
                   stroke={chartColors.line}
@@ -1379,16 +1373,16 @@ export const ReportsView: React.FC = () => {
           <div className="flex items-center gap-2 min-w-0">
             <Layers className="w-4 h-4 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
             <h2 className="font-display text-base sm:text-lg font-bold text-stone-900 dark:text-[#F1F5F3]">
-              {isVi
-                ? 'Doanh thu & Lợi nhuận gộp theo Danh mục'
+              {isKm
+                ? 'ចំណូល និងប្រាក់ចំណេញដុលតាមប្រភេទ'
                 : 'Revenue & Gross Profit by Category'}
             </h2>
             <InfoHint
               compact
-              label={isVi ? 'Giải thích phân bổ theo danh mục' : 'About Category Breakdown'}
+              label={isKm ? 'អំពីការបែងចែកតាមប្រភេទ' : 'About Category Breakdown'}
               text={
-                isVi
-                  ? 'So sánh doanh thu thuần, giá vốn (COGS) và biên lợi nhuận gộp giữa các danh mục sản phẩm. Nhấn vào một dòng để lọc toàn bộ báo cáo theo danh mục đó.'
+                isKm
+                  ? 'ប្រៀបធៀបចំណូលសុទ្ធ ថ្លៃដើមទំនិញលក់ និងអត្រាចំណេញដុលតាមប្រភេទផលិតផល។ ចុចលើជួរណាមួយដើម្បីច្រោះរបាយការណ៍ទាំងមូល។'
                   : 'Compare net revenue, COGS, and gross margin across product categories. Tap any category row to filter the entire report.'
               }
             />
@@ -1398,10 +1392,10 @@ export const ReportsView: React.FC = () => {
             <button
               type="button"
               onClick={() => setCategoryFilter('all')}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold bg-emerald-50 text-[#0D5C3E] border border-[#0D5C3E]/30 hover:bg-emerald-100 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/40 transition-colors"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold bg-emerald-50 text-[#0D5C3E] border border-[#0D5C3E]/30 hover:bg-emerald-100 dark:bg-[#064E3B] dark:text-[#6EE7B7] dark:border-[#10B981]/40 transition-all active:scale-[0.97]"
             >
               <span>
-                {isVi ? `Đang lọc: ${activeCategoryName}` : `Filtered: ${activeCategoryName}`}
+                {isKm ? `កំពុងច្រោះ៖ ${activeCategoryName}` : `Filtered: ${activeCategoryName}`}
               </span>
               <span aria-hidden="true">×</span>
             </button>
@@ -1458,14 +1452,14 @@ export const ReportsView: React.FC = () => {
                     />
                     <Bar
                       dataKey="netRevenueKhr"
-                      name={isVi ? 'Doanh thu thuần' : 'Net Revenue'}
+                      name={isKm ? 'ចំណូលសុទ្ធ' : 'Net Revenue'}
                       fill={chartColors.revenue}
                       radius={[0, 4, 4, 0]}
                       maxBarSize={14}
                     />
                     <Bar
                       dataKey="grossProfitKhr"
-                      name={isVi ? 'Lợi nhuận gộp' : 'Gross Profit'}
+                      name={isKm ? 'ប្រាក់ចំណេញដុល' : 'Gross Profit'}
                       fill={chartColors.grossProfit}
                       radius={[0, 4, 4, 0]}
                       maxBarSize={14}
@@ -1479,14 +1473,14 @@ export const ReportsView: React.FC = () => {
                     className="w-2.5 h-2.5 rounded-xs"
                     style={{ backgroundColor: chartColors.revenue }}
                   />
-                  {isVi ? 'Doanh thu thuần' : 'Net Revenue'}
+                  {isKm ? 'ចំណូលសុទ្ធ' : 'Net Revenue'}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span
                     className="w-2.5 h-2.5 rounded-xs"
                     style={{ backgroundColor: chartColors.grossProfit }}
                   />
-                  {isVi ? 'Lợi nhuận gộp' : 'Gross Profit'}
+                  {isKm ? 'ប្រាក់ចំណេញដុល' : 'Gross Profit'}
                 </span>
               </div>
             </div>
@@ -1496,26 +1490,31 @@ export const ReportsView: React.FC = () => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-stone-200 dark:border-[#24352C] text-xs text-stone-500 dark:text-[#94A39B] bg-stone-50/70 dark:bg-[#18251F]/80">
-                    <th className="py-3 px-5 font-medium">{isVi ? 'Danh mục' : 'Category'}</th>
+                    <th className="py-3 px-5 font-medium">{isKm ? 'ប្រភេទ' : 'Category'}</th>
                     <th className="py-3 px-3 font-medium text-right whitespace-nowrap">
                       {t.reports.unitsSold}
                     </th>
                     <th className="py-3 px-3 font-medium text-right whitespace-nowrap">
-                      {isVi ? 'Đơn' : 'Orders'}
+                      {isKm ? 'វិក្កយបត្រ' : 'Orders'}
                     </th>
                     <th className="py-3 px-3 font-medium text-right whitespace-nowrap">
                       {t.reports.revenue}
                     </th>
-                    <th className="py-3 px-3 font-medium text-right whitespace-nowrap">COGS</th>
+                    <th className="py-3 px-3 font-medium text-right whitespace-nowrap">
+                      {isKm ? 'ថ្លៃដើម' : 'COGS'}
+                    </th>
                     <th className="py-3 px-5 font-medium text-right whitespace-nowrap">
-                      {isVi ? 'Lãi gộp' : 'Gross Profit'}
+                      {isKm ? 'ចំណេញដុល' : 'Gross Profit'}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 dark:divide-[#1F3028] text-sm">
                   {report.categoryBreakdown.map((row) => {
                     const isActiveRow = categoryFilter === row.categoryId;
-                    const label = isVi ? row.categoryNameVi || row.categoryName : row.categoryName;
+                    const label = getCategoryDisplayName(
+                      getCategoryById(row.categoryId, categories),
+                      isKm
+                    );
                     return (
                       <tr
                         key={row.categoryId}
@@ -1549,7 +1548,7 @@ export const ReportsView: React.FC = () => {
                             </span>
                             {isActiveRow && (
                               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#0D5C3E] text-white dark:bg-[#10B981] dark:text-[#042419]">
-                                {isVi ? 'Đang lọc' : 'Active'}
+                                {isKm ? 'កំពុងច្រោះ' : 'Active'}
                               </span>
                             )}
                           </div>
@@ -1609,7 +1608,9 @@ export const ReportsView: React.FC = () => {
                     <th className="py-3 px-6 font-medium">{t.nav.products}</th>
                     <th className="py-3 px-3 font-medium text-right">{t.reports.unitsSold}</th>
                     <th className="py-3 px-3 font-medium text-right">{t.reports.revenue}</th>
-                    <th className="py-3 px-3 font-medium text-right">COGS</th>
+                    <th className="py-3 px-3 font-medium text-right">
+                      {isKm ? 'ថ្លៃដើម' : 'COGS'}
+                    </th>
                     <th className="py-3 px-6 font-medium text-right">{t.reports.profit}</th>
                   </tr>
                 </thead>
@@ -1621,7 +1622,7 @@ export const ReportsView: React.FC = () => {
                     >
                       <td className="py-3 px-6">
                         <p className="font-medium text-stone-900 dark:text-[#F1F5F3]">
-                          {isVi ? row.nameVi || row.name : row.name}
+                          {getLocalizedName(row.name, row.nameVi)}
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500 dark:text-[#94A39B]">
                           <span
@@ -1640,13 +1641,13 @@ export const ReportsView: React.FC = () => {
                             const catItem = getCategoryById(row.categoryId, categories);
                             return (
                               <span className="truncate">
-                                · {getCategoryDisplayName(catItem, isVi)}
+                                · {getCategoryDisplayName(catItem, isKm)}
                               </span>
                             );
                           })()}
                           {row.returnedQty > 0 && (
                             <span>
-                              · {row.returnedQty} {isVi ? 'đã trả' : 'returned'}
+                              · {row.returnedQty} {isKm ? 'បានបង្វិលសង' : 'returned'}
                             </span>
                           )}
                         </div>
@@ -1679,16 +1680,16 @@ export const ReportsView: React.FC = () => {
         <div className="lg:col-span-5 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-6 flex flex-col">
           <div className="mb-4 flex flex-wrap items-center gap-x-1">
             <h2 className="font-display text-lg font-semibold text-stone-900 dark:text-[#F1F5F3]">
-              {isVi ? 'Phân bổ Chi phí vận hành' : 'Operating Expense Breakdown'}
+              {isKm ? 'ការបែងចែកចំណាយប្រតិបត្តិការ' : 'Operating Expense Breakdown'}
             </h2>
             <InfoHint
               text={
-                isVi
-                  ? 'Không bao gồm nhập hàng tồn kho (được theo dõi ở Dòng tiền)'
+                isKm
+                  ? 'មិនរាប់បញ្ចូលការទិញស្តុក (ត្រូវបានតាមដានក្នុងលំហូរសាច់ប្រាក់)'
                   : 'Excludes inventory purchases (tracked in Cash Flow)'
               }
               label={
-                isVi ? 'Giải thích phân bổ chi phí vận hành' : 'About Operating Expense Breakdown'
+                isKm ? 'អំពីការបែងចែកចំណាយប្រតិបត្តិការ' : 'About Operating Expense Breakdown'
               }
             />
           </div>

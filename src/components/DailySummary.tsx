@@ -6,7 +6,7 @@ import { InfoHint } from './InfoHint';
 
 export interface DailySummaryProps {
   dateLabel: string;
-  isVi: boolean;
+  isKm: boolean;
   usdRate: number;
   todaySalesKhr: number;
   todayOrderCount: number;
@@ -24,7 +24,7 @@ export interface DailySummaryProps {
 
 export const DailySummary: React.FC<DailySummaryProps> = ({
   dateLabel,
-  isVi,
+  isKm,
   usdRate,
   todaySalesKhr,
   todayOrderCount,
@@ -47,15 +47,15 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
             id="daily-summary-heading"
             className="font-display text-base font-semibold text-stone-900 dark:text-[#F1F5F3] tracking-tight"
           >
-            {isVi ? 'Tổng kết hôm nay' : 'Daily Summary'}
+            {isKm ? 'សង្ខេបប្រចាំថ្ងៃ' : 'Daily Summary'}
           </h2>
           <InfoHint
             text={
-              isVi
-                ? 'Ảnh chụp nhanh hôm nay theo múi giờ Phnom Penh (ICT) cho doanh thu thuần, mặt hàng tồn kho hoạt động và tổng tiền chi.'
+              isKm
+                ? 'ទិដ្ឋភាពផ្ទាល់នៃការលក់សុទ្ធ មុខទំនិញក្នុងស្តុក និងចំណាយសរុបថ្ងៃនេះ (ម៉ោងភ្នំពេញ ICT)។'
                 : "Live snapshot of today's net sales, active stock items, and total cash spent (Asia/Phnom_Penh)."
             }
-            label={isVi ? 'Thông tin tổng kết hôm nay' : 'About Daily Summary'}
+            label={isKm ? 'អំពីសង្ខេបប្រចាំថ្ងៃ' : 'About Daily Summary'}
           />
         </div>
         <span className="text-xs font-mono-num text-stone-500 dark:text-[#94A39B] shrink-0 pt-1">{dateLabel}</span>
@@ -73,9 +73,9 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
               onNavigate('sales');
             }
           }}
-          className={`bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between transition-colors ${
+          className={`bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between transition-all ${
             onNavigate
-              ? 'cursor-pointer hover:border-stone-300 dark:hover:border-[#344E41] dark:hover:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
+              ? 'pos-lift cursor-pointer hover:border-emerald-300/70 dark:hover:border-emerald-500/40 dark:hover:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
               : ''
           }`}
         >
@@ -85,16 +85,16 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
                 <ShoppingBag className="w-4 h-4" />
               </span>
               <span className="text-xs font-medium text-stone-600 dark:text-[#94A39B]">
-                {isVi ? 'Doanh thu hôm nay' : 'Total Sales (Today)'}
+                {isKm ? 'ចំណូលលក់ថ្ងៃនេះ' : 'Total Sales (Today)'}
               </span>
               <InfoHint
                 compact
                 text={
-                  isVi
-                    ? 'Doanh thu thuần hôm nay sau khi trừ đơn hủy và hàng trả lại.'
+                  isKm
+                    ? 'ចំណូលលក់សុទ្ធថ្ងៃនេះ បន្ទាប់ពីដកការបង្វិលសង និងការបោះបង់វិក្កយបត្រ។'
                     : 'Net sales revenue collected today after returns, refunds, and voided orders.'
                 }
-                label={isVi ? 'Giải thích doanh thu hôm nay' : 'About Total Sales (Today)'}
+                label={isKm ? 'អំពីចំណូលលក់ថ្ងៃនេះ' : 'About Total Sales (Today)'}
               />
             </div>
             {onNavigate && <ArrowUpRight className="w-4 h-4 text-stone-400 dark:text-[#94A39B] shrink-0 mt-2" />}
@@ -105,8 +105,8 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
               {formatKhr(todaySalesKhr)}
             </p>
             <p className="mt-1.5 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate">
-              {todayOrderCount} {isVi ? 'đơn' : todayOrderCount === 1 ? 'order' : 'orders'} ·{' '}
-              {todayUnitsSold} {isVi ? 'món' : 'units'} · {formatUsdRef(todaySalesKhr, usdRate)}
+              {todayOrderCount} {isKm ? 'ការកុម្ម៉ង់' : todayOrderCount === 1 ? 'order' : 'orders'} ·{' '}
+              {todayUnitsSold} {isKm ? 'មុខ' : 'units'} · {formatUsdRef(todaySalesKhr, usdRate)}
             </p>
           </div>
         </div>
@@ -122,9 +122,9 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
               onNavigate('inventory');
             }
           }}
-          className={`bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between transition-colors ${
+          className={`bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between transition-all ${
             onNavigate
-              ? 'cursor-pointer hover:border-stone-300 dark:hover:border-[#344E41] dark:hover:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
+              ? 'pos-lift cursor-pointer hover:border-emerald-300/70 dark:hover:border-emerald-500/40 dark:hover:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
               : ''
           }`}
         >
@@ -134,16 +134,16 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
                 <Package className="w-4 h-4" />
               </span>
               <span className="text-xs font-medium text-stone-600 dark:text-[#94A39B]">
-                {isVi ? 'Mặt hàng tồn kho hoạt động' : 'Active Inventory Items'}
+                {isKm ? 'មុខទំនិញក្នុងស្តុក' : 'Active Inventory Items'}
               </span>
               <InfoHint
                 compact
                 text={
-                  isVi
-                    ? 'Tổng số sản phẩm Đóng gói bán lẻ và Nguyên liệu thô đang theo dõi tồn kho và cảnh báo sắp hết.'
+                  isKm
+                    ? 'ចំនួនសរុបនៃទំនិញវេចខ្ចប់ស្រាប់ និងវត្ថុធាតុដើមដែលកំពុងតាមដានស្តុក និងការជូនដំណឹងស្តុកជិតអស់។'
                     : 'Combined count of tracked Retail Packaged items and Raw Ingredients monitored for low-stock alerts.'
                 }
-                label={isVi ? 'Giải thích tồn kho hoạt động' : 'About Stock Health'}
+                label={isKm ? 'អំពីស្ថានភាពស្តុក' : 'About Stock Health'}
               />
             </div>
             {onNavigate && <ArrowUpRight className="w-4 h-4 text-stone-400 dark:text-[#94A39B] shrink-0 mt-2" />}
@@ -154,12 +154,12 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
               {activeInventoryCount}
             </p>
             <p className="mt-1.5 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate">
-              {activeDirectProductsCount} {isVi ? 'sản phẩm' : 'products'} ·{' '}
-              {activeIngredientsCount} {isVi ? 'nguyên liệu' : 'ingredients'}
+              {activeDirectProductsCount} {isKm ? 'ផលិតផល' : 'products'} ·{' '}
+              {activeIngredientsCount} {isKm ? 'វត្ថុធាតុដើម' : 'ingredients'}
               {lowStockCount > 0 && (
                 <span className="text-amber-700 dark:text-amber-400 font-semibold">
                   {' '}
-                  · {lowStockCount} {isVi ? 'sắp hết' : 'low'}
+                  · {lowStockCount} {isKm ? 'ស្តុកជិតអស់' : 'low'}
                 </span>
               )}
             </p>
@@ -177,9 +177,9 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
               onNavigate('expenses');
             }
           }}
-          className={`bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between transition-colors ${
+          className={`bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between transition-all ${
             onNavigate
-              ? 'cursor-pointer hover:border-stone-300 dark:hover:border-[#344E41] dark:hover:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
+              ? 'pos-lift cursor-pointer hover:border-emerald-300/70 dark:hover:border-emerald-500/40 dark:hover:bg-[#18251F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
               : ''
           }`}
         >
@@ -189,16 +189,16 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
                 <Receipt className="w-4 h-4" />
               </span>
               <span className="text-xs font-medium text-stone-600 dark:text-[#94A39B]">
-                {isVi ? 'Tổng chi phí hôm nay' : 'Total Expenses (Today)'}
+                {isKm ? 'ចំណាយសរុបថ្ងៃនេះ' : 'Total Expenses (Today)'}
               </span>
               <InfoHint
                 compact
                 text={
-                  isVi
-                    ? 'Bao gồm chi phí vận hành và tiền chi nhập hàng tồn kho trong ngày hôm nay.'
+                  isKm
+                    ? 'រួមបញ្ចូលចំណាយប្រតិបត្តិការ និងប្រាក់ចំណាយទិញបញ្ចូលស្តុកក្នុងថ្ងៃនេះ។'
                     : 'Includes today’s operating expenses plus cash spent on inventory stock-in purchases.'
                 }
-                label={isVi ? 'Giải thích tổng chi phí hôm nay' : 'About Total Expenses (Today)'}
+                label={isKm ? 'អំពីចំណាយសរុបថ្ងៃនេះ' : 'About Total Expenses (Today)'}
               />
             </div>
             {onNavigate && <ArrowUpRight className="w-4 h-4 text-stone-400 dark:text-[#94A39B] shrink-0 mt-2" />}
@@ -210,9 +210,9 @@ export const DailySummary: React.FC<DailySummaryProps> = ({
             </p>
             <p className="mt-1.5 text-xs text-stone-500 dark:text-[#94A39B] font-mono-num truncate">
               {todayExpenseEntriesCount}{' '}
-              {isVi ? 'khoản chi' : todayExpenseEntriesCount === 1 ? 'entry' : 'entries'}
+              {isKm ? 'កំណត់ត្រា' : todayExpenseEntriesCount === 1 ? 'entry' : 'entries'}
               {todayStockPurchasesKhr > 0 && todayOperatingExpensesKhr > 0
-                ? ` · ${isVi ? 'Vận hành' : 'OpEx'} ${formatKhr(todayOperatingExpensesKhr)}`
+                ? ` · ${isKm ? 'ប្រតិបត្តិការ' : 'OpEx'} ${formatKhr(todayOperatingExpensesKhr)}`
                 : ` · ${formatUsdRef(todayExpensesKhr, usdRate)}`}
             </p>
           </div>

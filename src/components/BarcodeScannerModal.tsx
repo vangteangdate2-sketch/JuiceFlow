@@ -6,6 +6,7 @@ import {
   type CameraDevice,
 } from 'html5-qrcode';
 import { ModalPortal } from './ModalPortal';
+import { useLanguage } from '../context/LanguageContext';
 
 interface BarcodeScannerModalProps {
   open: boolean;
@@ -51,11 +52,18 @@ async function safeStopAndClear(scanner: Html5Qrcode | null): Promise<void> {
 
 export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   open,
-  title = 'Scan Barcode',
-  subtitle = 'Point camera at an EAN-13, UPC-A, or SKU barcode, or enter it manually below.',
+  title,
+  subtitle,
   onDetected,
   onClose,
 }) => {
+  const { isKm } = useLanguage();
+  const resolvedTitle = title ?? (isKm ? 'ស្កេនបាកូដ' : 'Scan Barcode');
+  const resolvedSubtitle =
+    subtitle ??
+    (isKm
+      ? 'តម្រង់កាមេរ៉ាទៅលើបាកូដ EAN-13, UPC-A ឬ SKU ឬវាយបញ្ចូលខាងក្រោម។'
+      : 'Point camera at an EAN-13, UPC-A, or SKU barcode, or enter it manually below.');
   const reactId = useId().replace(/[^a-zA-Z0-9]/g, '');
   const containerId = `jf_scanner_${reactId}`;
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -234,8 +242,12 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             err instanceof Error ? err.message : 'Camera access unavailable on this device.';
           setCameraError(
             msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied')
-              ? 'Camera permission denied. Allow camera access in your browser or enter the barcode manually below.'
-              : 'Camera unavailable on this device or browser. You can enter the EAN-13 / UPC-A code manually below.'
+              ? isKm
+                ? 'មិនទាន់អនុញ្ញាតកាមេរ៉ា។ សូមអនុញ្ញាតកាមេរ៉ាក្នុងកម្មវិធីរុករក ឬវាយបញ្ចូលបាកូដខាងក្រោម។'
+                : 'Camera permission denied. Allow camera access in your browser or enter the barcode manually below.'
+              : isKm
+                ? 'មិនអាចបើកកាមេរ៉ានៅលើឧបករណ៍នេះទេ។ អ្នកអាចវាយបញ្ចូលកូដ EAN-13 / UPC-A ខាងក្រោមបាន។'
+                : 'Camera unavailable on this device or browser. You can enter the EAN-13 / UPC-A code manually below.'
           );
         }
       }
@@ -285,16 +297,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               <ScanBarcode className="w-5 h-5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
               <div className="min-w-0">
                 <h3 className="text-base font-bold text-stone-900 dark:text-[#F1F5F3] truncate">
-                  {title}
+                  {resolvedTitle}
                 </h3>
-                <p className="text-xs text-stone-500 dark:text-[#94A39B]">{subtitle}</p>
+                <p className="text-xs text-stone-500 dark:text-[#94A39B]">{resolvedSubtitle}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="w-11 h-11 inline-flex items-center justify-center rounded-lg text-stone-500 dark:text-[#94A39B] hover:text-stone-800 dark:hover:text-[#F1F5F3] hover:bg-stone-100 dark:hover:bg-[#18251F] transition-colors shrink-0"
-              aria-label="Close scanner"
+              aria-label={isKm ? 'បិទម៉ាស៊ីនស្កេន' : 'Close scanner'}
             >
               <X className="w-5 h-5" />
             </button>
@@ -315,10 +327,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                       type="button"
                       onClick={handleSwitchCamera}
                       className="absolute top-2.5 right-2.5 h-9 px-2.5 inline-flex items-center gap-1.5 rounded-lg bg-black/65 hover:bg-black/80 backdrop-blur-xs text-xs font-medium text-white border border-white/15 transition-colors"
-                      title="Switch camera"
+                      title={isKm ? 'ប្ដូរកាមេរ៉ា' : 'Switch camera'}
                     >
                       <SwitchCamera className="w-3.5 h-3.5" />
-                      <span>Switch</span>
+                      <span>{isKm ? 'ប្ដូរ' : 'Switch'}</span>
                     </button>
                   )}
                 </>
@@ -327,7 +339,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               {!cameraActive && !cameraError && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-stone-300 text-xs px-4 text-center">
                   <Camera className="w-7 h-7 text-stone-400 animate-pulse" />
-                  <span>Starting camera viewfinder…</span>
+                  <span>{isKm ? 'កំពុងបើកកាមេរ៉ា...' : 'Starting camera viewfinder…'}</span>
                 </div>
               )}
 
@@ -341,7 +353,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     className="h-9 px-3.5 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/15 rounded-lg transition-colors"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
-                    Retry Camera
+                    {isKm ? 'ព្យាយាមម្ដងទៀត' : 'Retry Camera'}
                   </button>
                 </div>
               )}
@@ -350,7 +362,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             <form onSubmit={handleManualSubmit} className="space-y-2.5">
               <label className="flex items-center gap-1.5 text-xs font-semibold text-stone-700 dark:text-[#D5DFDA]">
                 <Keyboard className="w-3.5 h-3.5 text-stone-500 dark:text-[#94A39B]" />
-                Manual EAN-13 / UPC-A / SKU Entry
+                {isKm ? 'វាយបញ្ចូលកូដ EAN-13 / UPC-A / SKU' : 'Manual EAN-13 / UPC-A / SKU Entry'}
               </label>
               <div className="flex gap-2">
                 <input
@@ -363,9 +375,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 />
                 <button
                   type="submit"
-                  className="h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4633] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-colors whitespace-nowrap"
+                  className="h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4633] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap"
                 >
-                  Search
+                  {isKm ? 'ស្វែងរក' : 'Search'}
                 </button>
               </div>
             </form>
