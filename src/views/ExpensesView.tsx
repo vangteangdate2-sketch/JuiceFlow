@@ -1,13 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Briefcase,
+  ChevronDown,
   Edit2,
+  Home,
+  Plus,
   Search,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { useUndoToast } from '../context/UndoToastContext';
+import { useFilterVisibility } from '../hooks/useFilterVisibility';
 import type { Expense, ExpenseCategory, ExpenseScope, PaymentMethod } from '../types';
 import { formatKhr, formatUsdRef, todayIso } from '../utils/format';
 import { isLegacyInventoryPurchaseExpense } from '../utils/inventoryEngine';
@@ -70,6 +76,10 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const [scopeFilter, setScopeFilter] = useState<'all' | ExpenseScope>('all');
   const [categoryFilter, setCategoryFilter] = useState<'all' | ExpenseCategory>('all');
   const [search, setSearch] = useState('');
+  const { filtersOpen, toggleFilters } = useFilterVisibility();
+  const drawerFilterCount = categoryFilter !== 'all' ? 1 : 0;
+  const hasActiveFilters =
+    categoryFilter !== 'all' || scopeFilter !== 'all' || search.trim().length > 0;
 
   // Compact inline Add / Edit Expense form state
   const [formOpen, setFormOpen] = useState(false);
@@ -480,105 +490,188 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       </div>
 
       {/* ================================================================== */}
-      {/* STICKY SCOPE, SEARCH, CATEGORY & PRIMARY CTA TOOLBAR               */}
+      {/* UNBOXED SINGLE-STRIP TOOLBAR (Matches Products & Inventory)        */}
       {/* ================================================================== */}
-      <div className="sticky top-16 z-20 bg-white/95 dark:bg-[#131D18]/95 backdrop-blur-md border border-stone-200 dark:border-[#24352C] rounded-xl p-4 space-y-3 shadow-xs">
-        {/* Row 1: Segmented Scope Tabs with Counts */}
-        <div className="overflow-x-auto pb-0.5 -mx-1 px-1">
-          <div
-            role="tablist"
-            aria-label={t.expenses.scopeLabel}
-            className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#0F1814] border border-stone-200/80 dark:border-[#24352C] rounded-xl"
-          >
-            {(
-              [
-                { id: 'all', label: t.expenses.scopeAll, count: scopeCounts.all },
-                { id: 'business', label: t.expenses.scopeBusiness, count: scopeCounts.business },
-                {
-                  id: 'household',
-                  label: t.expenses.scopeHousehold,
-                  count: scopeCounts.household,
-                },
-              ] as const
-            ).map((tab) => {
-              const active = scopeFilter === tab.id;
-              return (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Left Side: Search, Filters toggle & conditional Reset */}
+          <div className="flex items-center gap-2.5 flex-1 min-w-[260px]">
+            <div className="relative flex-1 max-w-md min-w-[160px]">
+              <Search className="w-4 h-4 text-stone-400 dark:text-[#6E8278] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={isKm ? 'ស្វែងរក...' : 'Search'}
+                className="w-full h-11 pl-9 pr-10 text-sm bg-white/80 dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#6E8278] border border-slate-200/80 dark:border-emerald-950/80 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]/30 dark:focus-visible:ring-[#10B981]/40 focus-visible:border-[#0F5C43] dark:focus-visible:border-[#10B981] transition-all duration-150"
+              />
+              {search && (
                 <button
-                  key={tab.id}
                   type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setScopeFilter(tab.id)}
-                  className={`h-11 px-3.5 inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0 ${
-                    active
-                      ? 'bg-white dark:bg-[#10B981] text-stone-900 dark:text-[#042419] shadow-xs'
-                      : 'text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
-                  }`}
+                  onClick={() => setSearch('')}
+                  className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] absolute right-1 top-1/2 -translate-y-1/2 rounded-md transition-colors"
+                  aria-label={isKm ? 'សម្អាតការស្វែងរក' : 'Clear search'}
                 >
-                  <span>{tab.label}</span>
-                  <span
-                    className={`font-mono-num text-[11px] font-bold ${
-                      active ? 'opacity-80' : 'text-stone-400 dark:text-[#94A39B]'
-                    }`}
-                  >
-                    ({tab.count})
-                  </span>
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              );
-            })}
-          </div>
-        </div>
+              )}
+            </div>
 
-        {/* Row 2: Search Bar + Labeled Category Filter + Sticky + Log Expense CTA */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-stone-400 dark:text-[#94A39B] absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={isKm ? 'ស្វែងរក...' : 'Search'}
-              className="w-full h-11 pl-10 pr-9 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-            />
-            {search && (
+            <button
+              type="button"
+              onClick={toggleFilters}
+              aria-expanded={filtersOpen}
+              aria-controls="expenses-category-filters"
+              className={`inline-flex items-center gap-1.5 h-11 px-3 text-xs sm:text-sm font-medium rounded-lg border transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0 ${
+                filtersOpen || drawerFilterCount > 0
+                  ? 'bg-stone-100/90 dark:bg-[#18251F] border-slate-300/90 dark:border-emerald-800/60 text-stone-900 dark:text-[#F1F5F3]'
+                  : 'bg-transparent border-slate-200/80 dark:border-emerald-950/80 text-stone-600 dark:text-[#94A39B] hover:text-stone-900 dark:hover:text-[#F1F5F3] hover:bg-stone-100/70 dark:hover:bg-[#18251F]'
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399] shrink-0" />
+              <span>{isKm ? 'តម្រង' : 'Filters'}</span>
+              {drawerFilterCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-mono-num font-semibold bg-[#0F5C43]/12 text-[#0F5C43] dark:bg-[#10B981]/20 dark:text-[#6EE7B7]">
+                  {drawerFilterCount}
+                </span>
+              )}
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-stone-400 dark:text-[#94A39B] transition-transform duration-150 motion-reduce:transition-none ${
+                  filtersOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {hasActiveFilters && (
               <button
                 type="button"
-                onClick={() => setSearch('')}
-                className="w-9 h-9 inline-flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-[#F1F5F3] absolute right-1 top-1/2 -translate-y-1/2 rounded-md"
-                aria-label={isKm ? 'សម្អាតការស្វែងរក' : 'Clear search'}
+                onClick={() => {
+                  setCategoryFilter('all');
+                  setScopeFilter('all');
+                  setSearch('');
+                }}
+                className="inline-flex items-center justify-center h-11 px-2 text-xs font-medium text-stone-500 hover:text-stone-900 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] transition-colors active:scale-[0.97] whitespace-nowrap shrink-0"
               >
-                <X className="w-3.5 h-3.5" />
+                {isKm ? 'កំណត់ឡើងវិញ' : 'Reset'}
               </button>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <label
-              htmlFor="expenses-category-filter"
-              className="text-xs font-medium text-stone-500 dark:text-[#94A39B] whitespace-nowrap"
-            >
-              {t.expenses.categoryLabel}:
-            </label>
-            <select
-              id="expenses-category-filter"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value as 'all' | ExpenseCategory)}
-              className="h-11 px-3.5 text-sm font-medium border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-            >
-              <option value="all">{t.common.all}</option>
-              {ALL_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {t.expenseCategories[c]}
-                </option>
-              ))}
-            </select>
+          {/* Right Side: Compact Segmented Scope Tabs & Primary Action */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="min-w-0 max-w-full overflow-x-auto">
+              <div
+                role="tablist"
+                aria-label={t.expenses.scopeLabel}
+                className="inline-flex items-center gap-0.5 h-11 p-1 bg-stone-100/90 dark:bg-[#131D18] border border-slate-200/60 dark:border-emerald-950/60 rounded-xl"
+              >
+                {(
+                  [
+                    {
+                      id: 'all',
+                      label: t.expenses.scopeAll,
+                      count: scopeCounts.all,
+                      icon: null,
+                      iconClass: '',
+                    },
+                    {
+                      id: 'business',
+                      label: t.expenses.scopeBusiness,
+                      count: scopeCounts.business,
+                      icon: Briefcase,
+                      iconClass: 'text-emerald-600 dark:text-emerald-400',
+                    },
+                    {
+                      id: 'household',
+                      label: t.expenses.scopeHousehold,
+                      count: scopeCounts.household,
+                      icon: Home,
+                      iconClass: 'text-sky-600 dark:text-sky-400',
+                    },
+                  ] as const
+                ).map((tab) => {
+                  const active = scopeFilter === tab.id;
+                  const TabIcon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setScopeFilter(tab.id)}
+                      className={`h-9 px-3 inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-lg transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0 ${
+                        active
+                          ? 'bg-white dark:bg-[#1F3028] text-stone-900 dark:text-[#F1F5F3] font-semibold shadow-2xs'
+                          : 'text-stone-500 dark:text-[#94A39B] font-medium hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                      }`}
+                    >
+                      {TabIcon && <TabIcon className={`w-3.5 h-3.5 shrink-0 ${tab.iconClass}`} />}
+                      <span>{tab.label}</span>
+                      <span className="font-mono-num text-[11px] opacity-65">{tab.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <button
               type="button"
               onClick={openNew}
-              className="inline-flex items-center justify-center h-11 px-4 text-xs sm:text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg transition-all duration-150 active:scale-[0.97] whitespace-nowrap shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 h-11 px-4 text-sm font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] dark:hover:bg-[#34D399] rounded-lg shadow-2xs transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0"
             >
-              {`+ ${t.expenses.addExpense}`}
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>{t.expenses.addExpense}</span>
             </button>
+          </div>
+        </div>
+
+        {/* Collapsible Category Filter Drawer (Unboxed, Hairline Top Divider) */}
+        <div
+          id="expenses-category-filters"
+          className={`grid transition-all duration-200 ease-out motion-reduce:transition-none ${
+            filtersOpen
+              ? 'grid-rows-[1fr] opacity-100 pt-3 border-t border-slate-200/60 dark:border-emerald-950/50'
+              : '!mt-0 grid-rows-[0fr] opacity-0 pointer-events-none'
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-[11px] font-semibold text-stone-500 dark:text-[#94A39B] w-16 shrink-0">
+                {t.expenses.categoryLabel}
+              </span>
+              <div className="flex flex-nowrap items-center gap-2 overflow-x-auto min-w-0 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter('all')}
+                  aria-pressed={categoryFilter === 'all'}
+                  className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0 border ${
+                    categoryFilter === 'all'
+                      ? 'bg-[#0F5C43] text-white border-[#0F5C43] dark:bg-[#10B981] dark:text-[#042419] dark:border-[#10B981]'
+                      : 'bg-white/80 dark:bg-[#131D18] text-stone-600 dark:text-[#A8B8B0] border-slate-200/80 dark:border-emerald-950/80 hover:bg-stone-100/80 dark:hover:bg-[#18251F] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                  }`}
+                >
+                  <span>{t.common.all}</span>
+                </button>
+                {ALL_CATEGORIES.map((c) => {
+                  const active = categoryFilter === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCategoryFilter(c)}
+                      aria-pressed={active}
+                      className={`inline-flex items-center gap-1.5 h-11 px-4 text-xs font-medium rounded-full transition-all duration-150 ease-out active:scale-[0.97] whitespace-nowrap shrink-0 border ${
+                        active
+                          ? 'bg-[#0F5C43] text-white border-[#0F5C43] dark:bg-[#10B981] dark:text-[#042419] dark:border-[#10B981]'
+                          : 'bg-white/80 dark:bg-[#131D18] text-stone-600 dark:text-[#A8B8B0] border-slate-200/80 dark:border-emerald-950/80 hover:bg-stone-100/80 dark:hover:bg-[#18251F] hover:text-stone-900 dark:hover:text-[#F1F5F3]'
+                      }`}
+                    >
+                      <span>{t.expenseCategories[c]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>

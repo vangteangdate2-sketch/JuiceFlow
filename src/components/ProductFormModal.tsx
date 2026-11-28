@@ -2197,12 +2197,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                     ) : isKm ? (
                                       `${t.productTypes[duplicateGuard.product.productType]} · ស្តុកបច្ចុប្បន្ន ${formatQty(
                                         duplicateGuard.product.stockQty,
-                                        duplicateGuard.product.unit
+                                        duplicateGuard.product.productType === 'PACKAGED'
+                                          ? 'pcs'
+                                          : duplicateGuard.product.unit
                                       )} — កែប្រែ ឬបញ្ចូលស្តុកបន្ថែមដើម្បីកុំឱ្យបែកស្តុក។`
                                     ) : (
                                       `${t.productTypes[duplicateGuard.product.productType]} · Currently ${formatQty(
                                         duplicateGuard.product.stockQty,
-                                        duplicateGuard.product.unit
+                                        duplicateGuard.product.productType === 'PACKAGED'
+                                          ? 'pcs'
+                                          : duplicateGuard.product.unit
                                       )} in stock — Edit or restock the existing record so stock stays unified.`
                                     )
                                   ) : duplicateGuard.reason === 'barcode' ? (
@@ -3626,16 +3630,24 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   ? `ជូនដំណឹងស្តុកទាប (${unitLabel})`
                                   : `Low-Stock Alert (${unitLabel})`}
                               </label>
-                              <input
-                                id="pf-reorder"
-                                type="number"
-                                min={0}
-                                step="any"
-                                value={reorderLevel}
-                                onChange={(e) => setReorderLevel(e.target.value)}
-                                placeholder="12"
-                                className="w-full h-11 px-3.5 text-sm font-semibold tabular-nums border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
-                              />
+                              <div className="flex items-center h-11 rounded-xl border border-slate-200/80 dark:border-emerald-950/70 bg-white dark:bg-[#0B1712] focus-within:border-emerald-600 dark:focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15 transition-colors overflow-hidden">
+                                <input
+                                  id="pf-reorder"
+                                  type="number"
+                                  min={0}
+                                  step="any"
+                                  value={reorderLevel}
+                                  onChange={(e) => setReorderLevel(e.target.value)}
+                                  placeholder="12"
+                                  className="min-w-0 flex-1 h-full px-3.5 text-sm font-semibold tabular-nums bg-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:outline-none"
+                                />
+                                <span
+                                  aria-hidden="true"
+                                  className="px-3 text-xs font-semibold text-slate-400 dark:text-slate-500 select-none shrink-0"
+                                >
+                                  pcs
+                                </span>
+                              </div>
                             </div>
 
                             <div className="sm:col-span-7">
@@ -3682,20 +3694,28 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               htmlFor="pf-stock"
                               className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 whitespace-nowrap"
                             >
-                              {isKm ? `ស្តុក (${unitLabel})` : `Stock Qty (${unitLabel})`}
+                              {isKm ? 'ស្តុក (pcs)' : 'Stock Qty (pcs)'}
                             </label>
-                            <input
-                              id="pf-stock"
-                              type="number"
-                              min={0}
-                              step="any"
-                              value={stockQty === '0' ? '' : stockQty}
-                              onChange={(e) =>
-                                setStockQty(e.target.value === '' ? '0' : e.target.value)
-                              }
-                              placeholder="0"
-                              className="w-full h-11 px-3.5 text-sm font-semibold tabular-nums border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
-                            />
+                            <div className="flex items-center h-11 rounded-xl border border-slate-200/80 dark:border-emerald-950/70 bg-white dark:bg-[#0B1712] focus-within:border-emerald-600 dark:focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15 transition-colors overflow-hidden">
+                              <input
+                                id="pf-stock"
+                                type="number"
+                                min={0}
+                                step="any"
+                                value={stockQty === '0' ? '' : stockQty}
+                                onChange={(e) =>
+                                  setStockQty(e.target.value === '' ? '0' : e.target.value)
+                                }
+                                placeholder="0"
+                                className="min-w-0 flex-1 h-full px-3 text-sm font-semibold tabular-nums bg-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:outline-none"
+                              />
+                              <span
+                                aria-hidden="true"
+                                className="pr-3 text-xs font-semibold text-slate-400 dark:text-slate-500 select-none shrink-0"
+                              >
+                                pcs
+                              </span>
+                            </div>
                           </div>
 
                           <div className="lg:col-span-3">
@@ -3703,20 +3723,26 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               htmlFor="pf-reorder"
                               className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 whitespace-nowrap"
                             >
-                              {isKm
-                                ? `ជូនដំណឹងស្តុកទាប (${unitLabel})`
-                                : `Low-Stock Alert (${unitLabel})`}
+                              {isKm ? 'ជូនដំណឹងស្តុកទាប (pcs)' : 'Low-Stock Alert (pcs)'}
                             </label>
-                            <input
-                              id="pf-reorder"
-                              type="number"
-                              min={0}
-                              step="any"
-                              value={reorderLevel}
-                              onChange={(e) => setReorderLevel(e.target.value)}
-                              placeholder="12"
-                              className="w-full h-11 px-3.5 text-sm font-semibold tabular-nums border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
-                            />
+                            <div className="flex items-center h-11 rounded-xl border border-slate-200/80 dark:border-emerald-950/70 bg-white dark:bg-[#0B1712] focus-within:border-emerald-600 dark:focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15 transition-colors overflow-hidden">
+                              <input
+                                id="pf-reorder"
+                                type="number"
+                                min={0}
+                                step="any"
+                                value={reorderLevel}
+                                onChange={(e) => setReorderLevel(e.target.value)}
+                                placeholder="12"
+                                className="min-w-0 flex-1 h-full px-3.5 text-sm font-semibold tabular-nums bg-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:outline-none"
+                              />
+                              <span
+                                aria-hidden="true"
+                                className="px-3 text-xs font-semibold text-slate-400 dark:text-slate-500 select-none shrink-0"
+                              >
+                                pcs
+                              </span>
+                            </div>
                           </div>
 
                           <div className="sm:col-span-2 lg:col-span-3">

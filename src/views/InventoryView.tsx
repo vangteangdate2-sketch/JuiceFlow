@@ -1340,7 +1340,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         {isKm ? 'ក្នុងស្តុក' : 'In stock'}:{' '}
                         {formatQty(
                           scannedInventoryMatch.product.stockQty,
-                          scannedInventoryMatch.product.unit || 'pcs'
+                          scannedInventoryMatch.product.productType === 'PACKAGED'
+                            ? 'pcs'
+                            : scannedInventoryMatch.product.unit || 'pcs'
                         )}
                         {scannedInventoryMatch.unitsPerScan > 1
                           ? ` (${scannedInventoryMatch.packLabel || `${scannedInventoryMatch.unitsPerScan}x pack`})`
@@ -2216,7 +2218,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                         }`}
                       >
                         {mov.deltaQty > 0 ? '+' : ''}
-                        {formatQty(mov.deltaQty, mov.unit)}
+                        {formatQty(
+                          mov.deltaQty,
+                          mov.itemClassification === 'packaged' ? 'pcs' : mov.unit
+                        )}
                       </td>
                       <td className="py-3 px-4 text-right font-mono-num text-xs text-stone-700 dark:text-[#D5DFDA] whitespace-nowrap">
                         {formatKhr(mov.totalCostKhr)}
@@ -2304,8 +2309,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                               ? `មានក្នុងវត្ថុធាតុដើម (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)})។ ការបង្កើតស្ទួនត្រូវបានទប់ស្កាត់ ដើម្បីរក្សាស្តុកឱ្យរួមគ្នា។`
                               : `Found in Raw Ingredients (${formatQty(ingDuplicateGuard.ingredient.stockQty, ingDuplicateGuard.ingredient.unit)}). Duplicates are blocked so stock stays unified.`
                             : isKm
-                              ? `មានក្នុងបញ្ជីផលិតផល (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')})។ ការបង្កើតស្ទួនត្រូវបានទប់ស្កាត់។`
-                              : `Found in Product Catalog (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.unit || 'pcs')}). Duplicates are blocked so stock stays unified.`}
+                              ? `មានក្នុងបញ្ជីផលិតផល (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.productType === 'PACKAGED' ? 'pcs' : ingDuplicateGuard.product.unit || 'pcs')})។ ការបង្កើតស្ទួនត្រូវបានទប់ស្កាត់។`
+                              : `Found in Product Catalog (${formatQty(ingDuplicateGuard.product.stockQty, ingDuplicateGuard.product.productType === 'PACKAGED' ? 'pcs' : ingDuplicateGuard.product.unit || 'pcs')}). Duplicates are blocked so stock stays unified.`}
                       </p>
                     </div>
                   </div>
@@ -2797,17 +2802,25 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               ) : (
                 <div>
                   <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                    {t.inventory.purchaseQty} ({purchaseTarget.unit})
+                    {t.inventory.purchaseQty} ({purchaseTarget.classification === 'packaged' ? 'pcs' : purchaseTarget.unit})
                   </label>
-                  <input
-                    type="number"
-                    required
-                    min={0.01}
-                    step="any"
-                    value={purchaseQty}
-                    onChange={(e) => setPurchaseQty(e.target.value)}
-                    className="w-full h-12 px-3.5 text-base font-mono-num font-bold border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-                  />
+                  <div className="flex items-center h-12 rounded-lg border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] focus-within:ring-2 focus-within:ring-[#0F5C43] dark:focus-within:ring-[#10B981] overflow-hidden">
+                    <input
+                      type="number"
+                      required
+                      min={0.01}
+                      step="any"
+                      value={purchaseQty}
+                      onChange={(e) => setPurchaseQty(e.target.value)}
+                      className="min-w-0 flex-1 h-full px-3.5 text-base font-mono-num font-bold bg-transparent text-stone-900 dark:text-[#F1F5F3] focus:outline-none"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="px-3.5 text-xs font-semibold text-stone-400 dark:text-[#94A39B] select-none shrink-0"
+                    >
+                      {purchaseTarget.classification === 'packaged' ? 'pcs' : purchaseTarget.unit}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -3025,18 +3038,27 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                      {isKm ? 'បរិមាណកាត់ចោល' : 'Write-off Quantity'} ({adjustModalTarget.unit})
+                      {isKm ? 'បរិមាណកាត់ចោល' : 'Write-off Quantity'} (
+                      {adjustModalTarget.classification === 'packaged' ? 'pcs' : adjustModalTarget.unit})
                     </label>
-                    <input
-                      type="number"
-                      required
-                      min={0.01}
-                      step="any"
-                      placeholder="e.g. 2"
-                      value={adjustDelta}
-                      onChange={(e) => setAdjustDelta(e.target.value)}
-                      className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                    />
+                    <div className="flex items-center h-11 rounded-lg border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] focus-within:ring-2 focus-within:ring-[#0F5C43] dark:focus-within:ring-[#10B981] overflow-hidden">
+                      <input
+                        type="number"
+                        required
+                        min={0.01}
+                        step="any"
+                        placeholder="e.g. 2"
+                        value={adjustDelta}
+                        onChange={(e) => setAdjustDelta(e.target.value)}
+                        className="min-w-0 flex-1 h-full px-3.5 text-sm font-mono-num bg-transparent text-stone-900 dark:text-[#F1F5F3] focus:outline-none"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="px-3 text-xs font-semibold text-stone-400 dark:text-[#94A39B] select-none shrink-0"
+                      >
+                        {adjustModalTarget.classification === 'packaged' ? 'pcs' : adjustModalTarget.unit}
+                      </span>
+                    </div>
                   </div>
                 </>
               )}
@@ -3048,18 +3070,26 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     <span className="inline-flex items-center gap-1">
                       <ClipboardCheck className="w-3.5 h-3.5 text-[#0F5C43] dark:text-[#34D399]" />
                       {isKm ? 'បរិមាណរាប់បានជាក់ស្តែង' : 'Actual Counted Quantity'} (
-                      {adjustModalTarget.unit})
+                      {adjustModalTarget.classification === 'packaged' ? 'pcs' : adjustModalTarget.unit})
                     </span>
                   </label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    step="any"
-                    value={countedQty}
-                    onChange={(e) => setCountedQty(e.target.value)}
-                    className="w-full h-11 px-3.5 text-sm font-mono-num font-bold border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                  />
+                  <div className="flex items-center h-11 rounded-lg border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] focus-within:ring-2 focus-within:ring-[#0F5C43] dark:focus-within:ring-[#10B981] overflow-hidden">
+                    <input
+                      type="number"
+                      required
+                      min={0}
+                      step="any"
+                      value={countedQty}
+                      onChange={(e) => setCountedQty(e.target.value)}
+                      className="min-w-0 flex-1 h-full px-3.5 text-sm font-mono-num font-bold bg-transparent text-stone-900 dark:text-[#F1F5F3] focus:outline-none"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="px-3 text-xs font-semibold text-stone-400 dark:text-[#94A39B] select-none shrink-0"
+                    >
+                      {adjustModalTarget.classification === 'packaged' ? 'pcs' : adjustModalTarget.unit}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -3067,17 +3097,26 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
               {adjustModalMode === 'adjust' && (
                 <div>
                   <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                    {t.inventory.deltaQty} ({adjustModalTarget.unit})
+                    {t.inventory.deltaQty} (
+                    {adjustModalTarget.classification === 'packaged' ? 'pcs' : adjustModalTarget.unit})
                   </label>
-                  <input
-                    type="number"
-                    required
-                    step="any"
-                    placeholder="-2 or +5"
-                    value={adjustDelta}
-                    onChange={(e) => setAdjustDelta(e.target.value)}
-                    className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                  />
+                  <div className="flex items-center h-11 rounded-lg border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] focus-within:ring-2 focus-within:ring-[#0F5C43] dark:focus-within:ring-[#10B981] overflow-hidden">
+                    <input
+                      type="number"
+                      required
+                      step="any"
+                      placeholder="-2 or +5"
+                      value={adjustDelta}
+                      onChange={(e) => setAdjustDelta(e.target.value)}
+                      className="min-w-0 flex-1 h-full px-3.5 text-sm font-mono-num bg-transparent text-stone-900 dark:text-[#F1F5F3] focus:outline-none"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="px-3 text-xs font-semibold text-stone-400 dark:text-[#94A39B] select-none shrink-0"
+                    >
+                      {adjustModalTarget.classification === 'packaged' ? 'pcs' : adjustModalTarget.unit}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -3095,21 +3134,31 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
                     <div className="sm:col-span-5">
                       <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                        {isKm ? 'បរិមាណដើមគ្រា' : 'Opening Qty'} ({adjustModalTarget.unit})
+                        {isKm ? 'បរិមាណដើមគ្រា' : 'Opening Qty'} (
+                        {adjustModalTarget.classification === 'packaged' ? 'pcs' : adjustModalTarget.unit})
                       </label>
-                      <input
-                        type="number"
-                        required
-                        min={0.01}
-                        step="any"
-                        value={openingQty}
-                        onChange={(e) => setOpeningQty(e.target.value)}
-                        className="w-full h-11 px-3.5 text-sm font-mono-num border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3]"
-                      />
+                      <div className="flex items-center h-11 rounded-lg border border-stone-200 dark:border-[#24352C] bg-white dark:bg-[#18251F] focus-within:ring-2 focus-within:ring-[#0F5C43] dark:focus-within:ring-[#10B981] overflow-hidden">
+                        <input
+                          type="number"
+                          required
+                          min={0.01}
+                          step="any"
+                          value={openingQty}
+                          onChange={(e) => setOpeningQty(e.target.value)}
+                          className="min-w-0 flex-1 h-full px-3.5 text-sm font-mono-num bg-transparent text-stone-900 dark:text-[#F1F5F3] focus:outline-none"
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="px-3 text-xs font-semibold text-stone-400 dark:text-[#94A39B] select-none shrink-0"
+                        >
+                          {adjustModalTarget.classification === 'packaged' ? 'pcs' : adjustModalTarget.unit}
+                        </span>
+                      </div>
                     </div>
                     <div className="sm:col-span-7">
                       <label className="block text-xs font-medium text-stone-700 dark:text-[#D5DFDA] mb-1.5">
-                        {isKm ? 'ថ្លៃដើមឯកតា' : 'Unit Cost'} ({adjustModalTarget.unit})
+                        {isKm ? 'ថ្លៃដើមឯកតា' : 'Unit Cost'} (
+                        {adjustModalTarget.classification === 'packaged' ? 'pcs' : adjustModalTarget.unit})
                       </label>
                       <CurrencyInput
                         valueKhr={Math.max(0, Number(openingUnitCost) || 0)}
