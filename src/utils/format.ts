@@ -1,4 +1,4 @@
-import type { Ingredient, IngredientUnit, Product, ProductVariant, RecipeItem } from '../types';
+import type { Ingredient, IngredientUnit, NetSizeUnit, Product, ProductVariant, RecipeItem } from '../types';
 
 export const BUSINESS_TIMEZONE = 'Asia/Phnom_Penh';
 
@@ -123,6 +123,90 @@ export function normalizeName(name: string): string {
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
+}
+
+export const NET_SIZE_UNITS: readonly NetSizeUnit[] = ['ml', 'L', 'g', 'kg'] as const;
+
+const VALID_NET_SIZE_UNIT_SET = new Set<string>(NET_SIZE_UNITS);
+
+function escapeRegexLiteral(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Normalizes a numeric net-size string (e.g., "500", "1.5", Khmer digits -> ASCII)
+ * and strips invalid/zero-only values.
+ */
+export function sanitizeNetSizeValue(raw?: string): string {
+  if (!raw) return '';
+  const ascii = String(raw)
+    .replace(/[\u17E0-\u17E9]/g, (ch) => String(ch.charCodeAt(0) - 0x17e0))
+    .replace(/\s+/g, '')
+    .trim();
+  if (!ascii) return '';
+  const match = ascii.match(/^\d*\.?\d*/);
+  let clean = match ? match[0] : '';
+  if (!clean || clean === '.') return '';
+  if (clean.startsWith('.')) clean = `0${clean}`;
+  if (clean.endsWith('.')) clean = clean.slice(0, -1);
+  const num = parseFloat(clean);
+  if (!Number.isFinite(num) || num <= 0) return '';
+  return clean.slice(0, 16);
+}
+
+/**
+ * Formats a canonical retail packaged product display name with optional net size
+ * (e.g., "Vital Water" + "500" + "ml" -> "Vital Water (500ml)").
+ * Skips appending if the name already ends with that exact size.
+ */
+export function formatCanonicalProductName(
+  baseName: string,
+  netSizeValue?: string,
+  netSizeUnit?: NetSizeUnit
+): string {
+  const cleanBase = String(baseName ?? '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!cleanBase) return '';
+
+  const cleanVal = sanitizeNetSizeValue(netSizeValue);
+  if (!cleanVal || !netSizeUnit || !VALID_NET_SIZE_UNIT_SET.has(netSizeUnit)) {
+    return cleanBase.slice(0, 100);
+  }
+
+  const valRe = escapeRegexLiteral(cleanVal);
+  const unitRe = escapeRegexLiteral(netSizeUnit);
+  const alreadyEndsWithSizeRe = new RegExp(
+    `(?:\\(\\s*${valRe}\\s*${unitRe}\\s*\\)|\\b${valRe}\\s*${unitRe})$`,
+    'i'
+  );
+  if (alreadyEndsWithSizeRe.test(cleanBase)) {
+    return cleanBase.slice(0, 100);
+  }
+
+  const suffix = ` (${cleanVal}${netSizeUnit})`;
+  const maxBaseLen = Math.max(1, 100 - suffix.length);
+  return `${cleanBase.slice(0, maxBaseLen).trimEnd()}${suffix}`;
+}
+
+/**
+ * Strips the auto-appended trailing " (<val><unit>)" suffix when loading an existing
+ * packaged product into the edit form so editing the size does not double-append.
+ */
+export function stripNetSizeFromName(
+  fullName: string,
+  netSizeValue?: string,
+  netSizeUnit?: NetSizeUnit
+): string {
+  const cleanFull = String(fullName ?? '').trim();
+  const cleanVal = sanitizeNetSizeValue(netSizeValue);
+  if (!cleanFull || !cleanVal || !netSizeUnit || !VALID_NET_SIZE_UNIT_SET.has(netSizeUnit)) {
+    return cleanFull;
+  }
+  const valRe = escapeRegexLiteral(cleanVal);
+  const unitRe = escapeRegexLiteral(netSizeUnit);
+  const trailingParenRe = new RegExp(`\\s*\\(\\s*${valRe}\\s*${unitRe}\\s*\\)$`, 'i');
+  return cleanFull.replace(trailingParenRe, '').trim();
 }
 
 export function clampNumber(value: number, min: number, max: number): number {

@@ -1252,7 +1252,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                                     : 'Out'
                                   : product.productType === 'PREPARED_TO_ORDER'
                                   ? `~${availability.availableUnits}`
-                                  : `${availability.availableUnits} ${product.unit}`}
+                                  : `${availability.availableUnits} pcs`}
                               </span>
                             )
                           )}

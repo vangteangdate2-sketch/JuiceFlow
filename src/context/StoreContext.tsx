@@ -91,9 +91,11 @@ import {
   BUSINESS_TIMEZONE,
   clampNumber,
   convertUnitQty,
+  formatCanonicalProductName,
   generateId,
   generateInviteCode,
   normalizeName,
+  sanitizeNetSizeValue,
   sanitizeString,
   todayIso,
 } from '../utils/format';
@@ -736,12 +738,29 @@ function categoryToFirestoreDoc(
   });
 }
 
-function productToFirestoreFields(clean: Product) {
+function productToFirestoreFields(clean: Product, isUpdate = false) {
   const safeCatId = sanitizeString(clean.categoryId || clean.category || UNCATEGORIZED_ID, 64) || UNCATEGORIZED_ID;
+  const cleanNetVal =
+    clean.productType === 'PACKAGED' ? sanitizeNetSizeValue(clean.netSizeValue) : '';
+  const cleanNetUnit =
+    clean.productType === 'PACKAGED' && cleanNetVal && clean.netSizeUnit
+      ? clean.netSizeUnit
+      : undefined;
   return stripUndefined({
     name: sanitizeString(clean.name, 100),
     nameVi: sanitizeString(clean.nameVi || clean.name, 100),
     brand: sanitizeString(clean.brand || '', 80),
+    ...(cleanNetVal && cleanNetUnit
+      ? {
+          netSizeValue: sanitizeString(cleanNetVal, 24),
+          netSizeUnit: cleanNetUnit,
+        }
+      : isUpdate
+        ? {
+            netSizeValue: deleteField(),
+            netSizeUnit: deleteField(),
+          }
+        : {}),
     category: sanitizeString(clean.category || safeCatId, 64) || UNCATEGORIZED_ID,
     categoryId: safeCatId,
     productType: clean.productType,
@@ -780,7 +799,7 @@ function productToFirestoreFields(clean: Product) {
       })),
     stockQty: clampNumber(clean.stockQty, -1000000, 100000000),
     reorderLevel: clampNumber(clean.reorderLevel, 0, 100000000),
-    unit: clean.unit || 'pcs',
+    unit: clean.productType === 'PACKAGED' ? 'pcs' : clean.unit || 'pcs',
     supplier: sanitizeString(clean.supplier || '', 100),
     recipe: (clean.recipe || []).slice(0, 25).map((r) =>
       stripUndefined({
@@ -1736,8 +1755,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const cur = latestRef.current;
       const existingProd = isEdit ? cur.products.find((p) => p.id === id) : undefined;
 
-      // Enforce canonical normalized name uniqueness across active products (and stock-tracked inventory)
-      const normName = normalizeName(productInput.name);
+      // Enforce canonical normalized name uniqueness (including Retail Packaged net size)
+      const canonicalName =
+        productInput.productType === 'PACKAGED'
+          ? formatCanonicalProductName(
+              productInput.name,
+              productInput.netSizeValue,
+              productInput.netSizeUnit
+            )
+          : sanitizeString(productInput.name, 100);
+      const normName = normalizeName(canonicalName);
       if (!normName) {
         return { ok: false, error: 'Product name is required.' };
       }
@@ -1769,7 +1796,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         {
           id,
           itemType: 'product',
-          name: productInput.name,
+          name: canonicalName,
           barcode: productInput.barcode,
           variants: productInput.variants,
           packSizes: productInput.packSizes,
@@ -1798,9 +1825,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ? (existingProd?.recipeVersion ?? 1) + 1
         : Math.max(1, productInput.recipeVersion ?? existingProd?.recipeVersion ?? 1);
 
+      const canonicalNameVi =
+        productInput.nameVi && productInput.nameVi.trim() !== productInput.name.trim()
+          ? productInput.productType === 'PACKAGED'
+            ? formatCanonicalProductName(
+                productInput.nameVi,
+                productInput.netSizeValue,
+                productInput.netSizeUnit
+              )
+            : sanitizeString(productInput.nameVi, 100)
+          : canonicalName;
+
       const clean = normalizeProduct({
         ...productInput,
         id,
+        name: canonicalName,
+        nameVi: canonicalNameVi,
+        unit: productInput.productType === 'PACKAGED' ? 'pcs' : productInput.unit,
         recipeVersion: nextRecipeVersion,
         updatedAt: new Date().toISOString(),
       });
@@ -1820,7 +1861,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (user && cloudWorkspaceId) {
         const path = `workspaces/${cloudWorkspaceId}/products/${id}`;
-        const fields = productToFirestoreFields(clean);
+        const fields = productToFirestoreFields(clean, isEdit);
         const uids = activeMemberUids();
         try {
           const batch = writeBatch(db);

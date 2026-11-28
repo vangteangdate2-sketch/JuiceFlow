@@ -138,7 +138,7 @@ service cloud.firestore {
           'priceKhr', 'imageUrl', 'active', 'recipe', 'createdBy', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'workspaceId', 'memberUids', 'name', 'nameVi', 'brand', 'category', 'categoryId', 'productType',
+          'workspaceId', 'memberUids', 'name', 'nameVi', 'brand', 'netSizeValue', 'netSizeUnit', 'category', 'categoryId', 'productType',
           'priceKhr', 'costPriceKhr', 'markupPercent', 'manualPriceOverride', 'allowSingleUnitSale',
           'imageUrl', 'active', 'barcode', 'packagingBarcodes',
           'stockQty', 'reorderLevel', 'unit', 'supplier',
@@ -150,6 +150,8 @@ service cloud.firestore {
         && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
         && data.nameVi is string && data.nameVi.size() <= 100
         && (!('brand' in data) || (data.brand is string && data.brand.size() <= 80))
+        && (!('netSizeValue' in data) || (data.netSizeValue is string && data.netSizeValue.size() <= 24))
+        && (!('netSizeUnit' in data) || (data.netSizeUnit is string && data.netSizeUnit in ['ml', 'L', 'g', 'kg']))
         && data.category is string && data.category.size() >= 1 && data.category.size() <= 64
         && (!('categoryId' in data) || isValidId(data.categoryId))
         && (!('productType' in data) || (data.productType is string && data.productType in ['PACKAGED', 'PREPARED_TO_ORDER', 'PREPARED_STOCK']))
@@ -567,7 +569,7 @@ service cloud.firestore {
           && isWorkspaceMember(workspaceId)
           && (
             incoming().diff(existing()).affectedKeys().hasOnly([
-              'name', 'nameVi', 'brand', 'category', 'categoryId', 'productType',
+              'name', 'nameVi', 'brand', 'netSizeValue', 'netSizeUnit', 'category', 'categoryId', 'productType',
               'priceKhr', 'costPriceKhr', 'markupPercent', 'manualPriceOverride', 'allowSingleUnitSale',
               'imageUrl', 'active', 'barcode', 'packagingBarcodes',
               'stockQty', 'reorderLevel', 'unit', 'supplier',

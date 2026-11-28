@@ -13,6 +13,8 @@ export type PaymentMethod = 'cash' | 'khqr' | 'aba' | 'wing';
 
 export type IngredientUnit = 'g' | 'kg' | 'ml' | 'L' | 'pcs';
 
+export type NetSizeUnit = 'ml' | 'L' | 'g' | 'kg';
+
 export type ProductType = 'PACKAGED' | 'PREPARED_TO_ORDER';
 
 export type StockClassification = 'packaged' | 'ingredient';
@@ -120,6 +122,8 @@ export interface Product {
   name: string;
   nameVi: string;
   brand?: string;
+  netSizeValue?: string; // e.g., "500", "1.5" (Retail Packaged only)
+  netSizeUnit?: NetSizeUnit; // 'ml' | 'L' | 'g' | 'kg'
   category: ProductCategory;
   categoryId?: string;
   productType: ProductType;

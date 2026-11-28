@@ -33,6 +33,7 @@ import type {
   ExternalBarcodePrefill,
   Ingredient,
   IngredientUnit,
+  NetSizeUnit,
   PackOption,
   PackagingBarcode,
   Product,
@@ -57,11 +58,15 @@ import {
 import {
   calculateRecipeCogs,
   convertUnitQty,
+  formatCanonicalProductName,
   formatKhr,
   formatQty,
   formatUsdRef,
   generateId,
   getCompatibleUnits,
+  NET_SIZE_UNITS,
+  sanitizeNetSizeValue,
+  stripNetSizeFromName,
 } from '../utils/format';
 import { getProductPackSizes } from '../utils/inventoryEngine';
 import {
@@ -254,6 +259,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [name, setName] = useState('');
   const [nameVi, setNameVi] = useState('');
   const [brand, setBrand] = useState('');
+  const [netSizeValue, setNetSizeValue] = useState('');
+  const [netSizeUnit, setNetSizeUnit] = useState<NetSizeUnit>('ml');
   const [productType, setProductType] = useState<ProductType>('PREPARED_TO_ORDER');
   const [category, setCategory] = useState<ProductCategory>('juice');
   const [costPriceKhr, setCostPriceKhr] = useState('0');
@@ -329,9 +336,32 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       const hasSellablePack = existingPacks.some((pk) => pk.sellableOnPos !== false && pk.priceKhr > 0);
       const hasAnyPack = existingPacks.length > 0;
 
-      setName(activeEditingProduct.name);
-      setNameVi(activeEditingProduct.nameVi);
+      const initNetVal =
+        activeEditingProduct.productType === 'PACKAGED'
+          ? sanitizeNetSizeValue(activeEditingProduct.netSizeValue)
+          : '';
+      const initNetUnit: NetSizeUnit = activeEditingProduct.netSizeUnit || 'ml';
+      const baseEditName =
+        activeEditingProduct.productType === 'PACKAGED' && initNetVal
+          ? stripNetSizeFromName(activeEditingProduct.name, initNetVal, initNetUnit)
+          : activeEditingProduct.name;
+      const hasDistinctVi = Boolean(
+        activeEditingProduct.nameVi &&
+          activeEditingProduct.nameVi.trim() &&
+          activeEditingProduct.nameVi.trim() !== activeEditingProduct.name.trim()
+      );
+      const baseEditNameVi =
+        hasDistinctVi && activeEditingProduct.productType === 'PACKAGED' && initNetVal
+          ? stripNetSizeFromName(activeEditingProduct.nameVi, initNetVal, initNetUnit)
+          : hasDistinctVi
+            ? activeEditingProduct.nameVi
+            : '';
+
+      setName(baseEditName);
+      setNameVi(baseEditNameVi);
       setBrand(activeEditingProduct.brand || '');
+      setNetSizeValue(initNetVal);
+      setNetSizeUnit(initNetUnit);
       setProductType(activeEditingProduct.productType);
       setCategory(resolveProductCategoryId(activeEditingProduct, allCategories));
       setCostPriceKhr(String(activeEditingProduct.costPriceKhr ?? 0));
@@ -359,7 +389,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setPackSizes(existingPacks);
       setStockQty(String(activeEditingProduct.stockQty ?? 0));
       setReorderLevel(String(activeEditingProduct.reorderLevel ?? 10));
-      setUnit(activeEditingProduct.unit || 'pcs');
+      setUnit(
+        activeEditingProduct.productType === 'PACKAGED'
+          ? 'pcs'
+          : activeEditingProduct.unit || 'pcs'
+      );
       setSupplier(activeEditingProduct.supplier || '');
       setImageUrl(activeEditingProduct.imageUrl || '');
       setActive(activeEditingProduct.active);
@@ -373,11 +407,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         }))
       );
 
-      const hasDistinctVi = Boolean(
-        activeEditingProduct.nameVi &&
-          activeEditingProduct.nameVi.trim() &&
-          activeEditingProduct.nameVi.trim() !== activeEditingProduct.name.trim()
-      );
       setShowSecondaryNaming(hasDistinctVi || Boolean(activeEditingProduct.brand));
       setPrefillBanner('none');
     } else {
@@ -387,6 +416,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setName(initialPrefill?.name || '');
       setNameVi(initialPrefill?.nameVi || '');
       setBrand(initialPrefill?.brand || '');
+      setNetSizeValue('');
+      setNetSizeUnit('ml');
       setProductType(hasScannedInit ? 'PACKAGED' : 'PREPARED_TO_ORDER');
       setCategory(
         initialPrefill?.suggestedCategory || (hasScannedInit ? 'packaged' : 'juice')
@@ -468,13 +499,26 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     [productType, sellByCarton, buyMode, packSizes]
   );
 
+  const cleanNetSizeValue = useMemo(
+    () => (productType === 'PACKAGED' ? sanitizeNetSizeValue(netSizeValue) : ''),
+    [productType, netSizeValue]
+  );
+
+  const canonicalProductName = useMemo(
+    () =>
+      productType === 'PACKAGED'
+        ? formatCanonicalProductName(name, cleanNetSizeValue, netSizeUnit)
+        : name.trim(),
+    [productType, name, cleanNetSizeValue, netSizeUnit]
+  );
+
   const barcodeConflicts = useMemo(
     () =>
       findDuplicateBarcodeConflicts(
         {
           id: activeEditingProduct?.id,
           itemType: 'product',
-          name: name.trim() || activeEditingProduct?.name || 'This product',
+          name: canonicalProductName || activeEditingProduct?.name || 'This product',
           barcode,
           variants: productType === 'PREPARED_TO_ORDER' ? variants : [],
           packSizes: activePacksForValidation,
@@ -485,7 +529,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       ),
     [
       activeEditingProduct,
-      name,
+      canonicalProductName,
       barcode,
       productType,
       variants,
@@ -502,13 +546,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     return barcodeConflicts.filter((c) => c.code === cleanUnit);
   }, [barcode, barcodeConflicts]);
 
-  // Real-time canonical normalized-name & barcode duplicate guard
+  // Real-time canonical normalized-name & barcode duplicate guard (uses full canonical name incl. net size)
   const duplicateGuard = useMemo<
     | { kind: 'product'; product: Product; reason: 'name' | 'barcode'; matchedCode?: string }
     | { kind: 'ingredient'; ingredient: Ingredient; reason: 'name' | 'barcode'; matchedCode?: string }
     | null
   >(() => {
-    const normInput = normalizeName(name);
+    const normInput = normalizeName(canonicalProductName);
     if (normInput && active) {
       const matchedProduct = existingProducts.find(
         (p) =>
@@ -561,7 +605,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
     return null;
   }, [
-    name,
+    canonicalProductName,
     active,
     productType,
     existingProducts,
@@ -590,7 +634,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const cartonSellingPriceKhr = Math.max(0, Number(primaryPack?.priceKhr) || 0);
   const cartonCostKhr = Math.max(0, Number(primaryPack?.costKhr) || 0);
   const cartonBarcode = primaryPack?.barcode ?? '';
-  const unitLabel = unit || 'pcs';
+  const unitLabel = productType === 'PACKAGED' ? 'pcs' : unit || 'pcs';
 
   const suggestedUnitCostKhr =
     cartonCostKhr > 0 && cartonUnits > 0 ? Math.round(cartonCostKhr / cartonUnits) : 0;
@@ -649,8 +693,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const draftProductForLabels = useMemo<Product>(
     () => ({
       id: editingProduct?.id || 'draft',
-      name: name.trim() || (isKm ? 'ផលិតផលថ្មី' : 'New Product'),
-      nameVi: nameVi.trim() || name.trim() || 'ផលិតផលថ្មី',
+      name: canonicalProductName || name.trim() || (isKm ? 'ផលិតផលថ្មី' : 'New Product'),
+      nameVi: nameVi.trim() || canonicalProductName || name.trim() || 'ផលិតផលថ្មី',
       brand: brand.trim(),
       category,
       productType,
@@ -673,7 +717,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         })),
       stockQty: Number(stockQty) || 0,
       reorderLevel: Number(reorderLevel) || 0,
-      unit,
+      unit: productType === 'PACKAGED' ? 'pcs' : unit,
+      ...(productType === 'PACKAGED' && cleanNetSizeValue
+        ? { netSizeValue: cleanNetSizeValue, netSizeUnit }
+        : {}),
       supplier,
       recipe,
       recipeVersion: 1,
@@ -681,9 +728,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     }),
     [
       editingProduct,
+      canonicalProductName,
       name,
       nameVi,
       brand,
+      cleanNetSizeValue,
+      netSizeUnit,
       category,
       productType,
       liveSellingPrice,
@@ -910,6 +960,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     if (nextType === 'PACKAGED') {
       if (!['packaged', 'snack'].includes(category) && hasPackaged) setCategory('packaged');
       setVariants([]);
+      setUnit('pcs');
     } else {
       setAllowSingleUnitSale(true);
       if (['packaged', 'snack'].includes(category) && hasJuice) setCategory('juice');
@@ -1196,14 +1247,26 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         sellableOnPos: pk.sellableOnPos,
       }));
 
-    const trimmedName = name.trim();
+    const trimmedName = canonicalProductName || name.trim();
+    const persistedNetVal =
+      productType === 'PACKAGED' ? sanitizeNetSizeValue(netSizeValue) : '';
+    const persistedNetUnit: NetSizeUnit | undefined =
+      productType === 'PACKAGED' && persistedNetVal ? netSizeUnit : undefined;
+    const trimmedNameVi = nameVi.trim()
+      ? productType === 'PACKAGED' && persistedNetVal && persistedNetUnit
+        ? formatCanonicalProductName(nameVi.trim(), persistedNetVal, persistedNetUnit)
+        : nameVi.trim()
+      : trimmedName;
+
     setSaving(true);
     try {
       const result = await onSave({
         id: activeEditingProduct?.id,
         name: trimmedName,
-        nameVi: nameVi.trim() || trimmedName,
+        nameVi: trimmedNameVi,
         brand: brand.trim(),
+        netSizeValue: persistedNetVal || undefined,
+        netSizeUnit: persistedNetUnit,
         productType,
         category,
         categoryId: category,
@@ -1221,7 +1284,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         stockQty: productType === 'PREPARED_TO_ORDER' ? 0 : Number(stockQty) || 0,
         reorderLevel:
           productType === 'PREPARED_TO_ORDER' ? 0 : Math.max(0, Number(reorderLevel) || 0),
-        unit,
+        unit: productType === 'PACKAGED' ? 'pcs' : unit,
         supplier: supplier.trim(),
         recipe: productType === 'PACKAGED' ? [] : cleanRecipe,
         recipeVersion: 1,
@@ -1246,6 +1309,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         setName('');
         setNameVi('');
         setBrand('');
+        setNetSizeValue('');
         setBarcode('');
         setBarcodeSource(undefined);
         setPackSizes([]);
@@ -1641,9 +1705,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     }
                   />
                 </div>
-                {isEditing && name.trim() && (
+                {isEditing && (canonicalProductName || name.trim()) && (
                   <p className="text-xs text-stone-500 dark:text-[#94A39B] truncate mt-0.5">
-                    {name.trim()} · {t.productTypes[productType]}
+                    {canonicalProductName || name.trim()} · {t.productTypes[productType]}
                   </p>
                 )}
               </div>
@@ -1704,7 +1768,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             <div
               ref={scrollBodyRef}
               className={`flex-1 overflow-y-auto space-y-5 ${
-                productType === 'PACKAGED' && (currentStep === 2 || currentStep === 3)
+                productType === 'PACKAGED'
                   ? 'bg-white dark:bg-[#111A16] px-5 sm:px-7 py-6'
                   : 'p-4 sm:p-6'
               }`}
@@ -1785,122 +1849,299 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
                   {/* Primary Inputs Beside Product Photo Card */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-                    {/* Left: Name, Category, Item Type */}
-                    <fieldset className="lg:col-span-7 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between">
+                    {/* Left: Name, Net Size (Packaged), Category, Item Type */}
+                    <fieldset
+                      className={
+                        productType === 'PACKAGED'
+                          ? 'lg:col-span-7 flex flex-col justify-between'
+                          : 'lg:col-span-7 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between'
+                      }
+                    >
                       <legend className="sr-only">
                         {isKm ? 'ព័ត៌មានមូលដ្ឋាន' : 'Basic Information'}
                       </legend>
 
                       <div className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
-                          <div className="sm:col-span-7">
-                            <label
-                              htmlFor="pf-name"
-                              className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
-                            >
-                              {isKm ? 'ឈ្មោះផលិតផល' : 'Product Name'} *
-                            </label>
-                            <input
-                              id="pf-name"
-                              type="text"
-                              required
-                              maxLength={100}
-                              value={name}
-                              onChange={(e) => {
-                                setName(e.target.value);
-                                if (stepError) setStepError('');
-                              }}
-                              placeholder={
-                                isKm
-                                  ? 'ឧ. ទឹកក្រូចស្រស់, Dasani 500ml'
-                                  : 'e.g. Fresh Orange Juice, Dasani 500ml'
+                        <div className="space-y-3.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-start">
+                            <div
+                              className={
+                                productType === 'PACKAGED' ? 'sm:col-span-6' : 'sm:col-span-7'
                               }
-                              className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-5">
-                            <label
-                              htmlFor="pf-category"
-                              className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
                             >
-                              {t.products.category} *
-                            </label>
-                            <select
-                              id="pf-category"
-                              value={category}
-                              onChange={(e) => {
-                                if (e.target.value === NEW_CATEGORY_SENTINEL) {
-                                  setCreatingCategory(true);
-                                  setInlineCategoryError('');
-                                  return;
+                              <label
+                                htmlFor="pf-name"
+                                className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                              >
+                                {isKm ? 'ឈ្មោះផលិតផល' : 'Product Name'} *
+                              </label>
+                              <input
+                                id="pf-name"
+                                type="text"
+                                required
+                                maxLength={100}
+                                value={name}
+                                onChange={(e) => {
+                                  setName(e.target.value);
+                                  if (stepError) setStepError('');
+                                }}
+                                placeholder={
+                                  productType === 'PACKAGED'
+                                    ? isKm
+                                      ? 'ឧ. ទឹកសុទ្ធ Vital, Coca-Cola'
+                                      : 'e.g. Vital Water, Coca-Cola'
+                                    : isKm
+                                      ? 'ឧ. ទឹកក្រូចស្រស់, កាហ្វេទឹកដោះគោ'
+                                      : 'e.g. Fresh Orange Juice, Iced Latte'
                                 }
-                                setCategory(e.target.value as ProductCategory);
-                              }}
-                              className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
-                            >
-                              {productCategories.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {getCategoryDisplayName(c, isKm)}
-                                </option>
-                              ))}
-                              <option value={NEW_CATEGORY_SENTINEL}>
-                                {isKm ? '+ បង្កើតប្រភេទថ្មី...' : '+ New Category...'}
-                              </option>
-                            </select>
+                                className={
+                                  productType === 'PACKAGED'
+                                    ? 'w-full h-11 px-3.5 text-sm border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors'
+                                    : 'w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]'
+                                }
+                              />
+                            </div>
 
-                            {creatingCategory && (
-                              <div className="animate-drawer-in mt-2 p-2.5 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2">
-                                <div className="flex items-center gap-1.5">
+                            {productType === 'PACKAGED' ? (
+                              <div className="sm:col-span-6 animate-drawer-in">
+                                <label
+                                  htmlFor="pf-net-size"
+                                  className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5"
+                                >
+                                  {isKm ? 'ចំណុះ / ទម្ងន់ (ស្រេចចិត្ត)' : 'Net Size (Optional)'}
+                                </label>
+                                <div className="flex items-center h-11 rounded-xl border border-slate-200/80 dark:border-emerald-950/70 bg-white dark:bg-[#0B1712] focus-within:border-emerald-600 dark:focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15 transition-colors overflow-hidden">
                                   <input
+                                    id="pf-net-size"
                                     type="text"
-                                    maxLength={64}
-                                    value={inlineCategoryName}
+                                    inputMode="decimal"
+                                    maxLength={12}
+                                    value={netSizeValue}
                                     onChange={(e) => {
-                                      setInlineCategoryName(e.target.value);
-                                      if (inlineCategoryError) setInlineCategoryError('');
+                                      const ascii = e.target.value.replace(
+                                        /[\u17E0-\u17E9]/g,
+                                        (ch) => String(ch.charCodeAt(0) - 0x17e0)
+                                      );
+                                      if (!/^\d*\.?\d*$/.test(ascii)) return;
+                                      setNetSizeValue(ascii);
+                                      if (stepError) setStepError('');
                                     }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        void handleCreateInlineCategory();
-                                      } else if (e.key === 'Escape') {
-                                        setCreatingCategory(false);
-                                      }
-                                    }}
-                                    placeholder={isKm ? 'ឈ្មោះប្រភេទថ្មី...' : 'New category name...'}
-                                    autoFocus
-                                    className="flex-1 min-w-0 h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3]"
+                                    placeholder="500"
+                                    className="min-w-0 flex-1 h-full px-3 text-sm font-semibold tabular-nums bg-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:outline-none"
                                   />
-                                  <button
-                                    type="button"
-                                    disabled={!inlineCategoryName.trim() || inlineCategoryBusy}
-                                    onClick={() => void handleCreateInlineCategory()}
-                                    className="h-11 px-3 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] disabled:opacity-50 rounded-lg shrink-0"
+                                  <div
+                                    role="group"
+                                    aria-label={isKm ? 'ឯកតាចំណុះ' : 'Net size unit'}
+                                    className="p-1 flex items-center gap-0.5 rounded-lg bg-slate-100/90 dark:bg-emerald-950/55 mr-0.5 shrink-0"
                                   >
-                                    {isKm ? 'បន្ថែម' : 'Add'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setCreatingCategory(false);
-                                      setInlineCategoryName('');
-                                      setInlineCategoryError('');
-                                    }}
-                                    aria-label={t.common.cancel}
-                                    className="w-11 h-11 inline-flex items-center justify-center text-stone-500 hover:text-stone-800 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] rounded-lg shrink-0"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
+                                    {NET_SIZE_UNITS.map((u) => {
+                                      const isSelected = netSizeUnit === u;
+                                      return (
+                                        <button
+                                          key={u}
+                                          type="button"
+                                          aria-pressed={isSelected}
+                                          onClick={() => {
+                                            setNetSizeUnit(u);
+                                            if (stepError) setStepError('');
+                                          }}
+                                          className={`min-w-[30px] px-2 h-8 rounded-md text-[11px] font-semibold whitespace-nowrap shrink-0 transition-all duration-150 ${
+                                            isSelected
+                                              ? 'bg-white dark:bg-emerald-600 text-slate-900 dark:text-white shadow-xs'
+                                              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                                          }`}
+                                        >
+                                          {u}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                                {inlineCategoryError && (
-                                  <p className="text-[11px] text-rose-600 dark:text-rose-400">
-                                    {inlineCategoryError}
-                                  </p>
+                              </div>
+                            ) : (
+                              <div className="sm:col-span-5">
+                                <label
+                                  htmlFor="pf-category"
+                                  className="block text-xs font-semibold text-stone-700 dark:text-[#D5DFDA] mb-1.5"
+                                >
+                                  {t.products.category} *
+                                </label>
+                                <select
+                                  id="pf-category"
+                                  value={category}
+                                  onChange={(e) => {
+                                    if (e.target.value === NEW_CATEGORY_SENTINEL) {
+                                      setCreatingCategory(true);
+                                      setInlineCategoryError('');
+                                      return;
+                                    }
+                                    setCategory(e.target.value as ProductCategory);
+                                  }}
+                                  className="w-full h-11 px-3.5 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
+                                >
+                                  {productCategories.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {getCategoryDisplayName(c, isKm)}
+                                    </option>
+                                  ))}
+                                  <option value={NEW_CATEGORY_SENTINEL}>
+                                    {isKm ? '+ បង្កើតប្រភេទថ្មី...' : '+ New Category...'}
+                                  </option>
+                                </select>
+
+                                {creatingCategory && (
+                                  <div className="animate-drawer-in mt-2 p-2.5 rounded-lg bg-stone-50 dark:bg-[#18251F] border border-stone-200 dark:border-[#24352C] space-y-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <input
+                                        type="text"
+                                        maxLength={64}
+                                        value={inlineCategoryName}
+                                        onChange={(e) => {
+                                          setInlineCategoryName(e.target.value);
+                                          if (inlineCategoryError) setInlineCategoryError('');
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            void handleCreateInlineCategory();
+                                          } else if (e.key === 'Escape') {
+                                            setCreatingCategory(false);
+                                          }
+                                        }}
+                                        placeholder={isKm ? 'ឈ្មោះប្រភេទថ្មី...' : 'New category name...'}
+                                        autoFocus
+                                        className="flex-1 min-w-0 h-11 px-3 text-xs border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3]"
+                                      />
+                                      <button
+                                        type="button"
+                                        disabled={!inlineCategoryName.trim() || inlineCategoryBusy}
+                                        onClick={() => void handleCreateInlineCategory()}
+                                        className="h-11 px-3 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] disabled:opacity-50 rounded-lg shrink-0"
+                                      >
+                                        {isKm ? 'បន្ថែម' : 'Add'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCreatingCategory(false);
+                                          setInlineCategoryName('');
+                                          setInlineCategoryError('');
+                                        }}
+                                        aria-label={t.common.cancel}
+                                        className="w-11 h-11 inline-flex items-center justify-center text-stone-500 hover:text-stone-800 dark:text-[#94A39B] dark:hover:text-[#F1F5F3] rounded-lg shrink-0"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                    {inlineCategoryError && (
+                                      <p className="text-[11px] text-rose-600 dark:text-rose-400">
+                                        {inlineCategoryError}
+                                      </p>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             )}
                           </div>
+
+                          {/* Subtle Inline Canonical Name Preview + Hairline Category Row for Retail Packaged */}
+                          {productType === 'PACKAGED' && (
+                            <div className="space-y-3.5 animate-drawer-in">
+                              {name.trim() && cleanNetSizeValue && (
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 -mt-1.5">
+                                  <span className="shrink-0">
+                                    {isKm ? 'ឈ្មោះបង្ហាញ៖' : 'Display name:'}
+                                  </span>
+                                  <span className="truncate font-semibold text-slate-700 dark:text-slate-200">
+                                    {canonicalProductName}
+                                  </span>
+                                </p>
+                              )}
+
+                              <div className="pt-3.5 border-t border-slate-200/60 dark:border-emerald-950/50">
+                                <label
+                                  htmlFor="pf-category"
+                                  className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5"
+                                >
+                                  {t.products.category} *
+                                </label>
+                                <select
+                                  id="pf-category"
+                                  value={category}
+                                  onChange={(e) => {
+                                    if (e.target.value === NEW_CATEGORY_SENTINEL) {
+                                      setCreatingCategory(true);
+                                      setInlineCategoryError('');
+                                      return;
+                                    }
+                                    setCategory(e.target.value as ProductCategory);
+                                  }}
+                                  className="w-full h-11 px-3.5 text-sm border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100 focus-visible:outline-none focus-visible:border-emerald-600 dark:focus-visible:border-emerald-500 focus-visible:ring-2 focus-visible:ring-emerald-500/15 transition-colors"
+                                >
+                                  {productCategories.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {getCategoryDisplayName(c, isKm)}
+                                    </option>
+                                  ))}
+                                  <option value={NEW_CATEGORY_SENTINEL}>
+                                    {isKm ? '+ បង្កើតប្រភេទថ្មី...' : '+ New Category...'}
+                                  </option>
+                                </select>
+
+                                {creatingCategory && (
+                                  <div className="animate-drawer-in mt-2.5 pt-2.5 border-t border-slate-200/60 dark:border-emerald-950/50 space-y-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <input
+                                        type="text"
+                                        maxLength={64}
+                                        value={inlineCategoryName}
+                                        onChange={(e) => {
+                                          setInlineCategoryName(e.target.value);
+                                          if (inlineCategoryError) setInlineCategoryError('');
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            void handleCreateInlineCategory();
+                                          } else if (e.key === 'Escape') {
+                                            setCreatingCategory(false);
+                                          }
+                                        }}
+                                        placeholder={isKm ? 'ឈ្មោះប្រភេទថ្មី...' : 'New category name...'}
+                                        autoFocus
+                                        className="flex-1 min-w-0 h-11 px-3 text-xs border border-slate-200/80 dark:border-emerald-950/70 rounded-xl bg-white dark:bg-[#0B1712] text-slate-900 dark:text-slate-100"
+                                      />
+                                      <button
+                                        type="button"
+                                        disabled={!inlineCategoryName.trim() || inlineCategoryBusy}
+                                        onClick={() => void handleCreateInlineCategory()}
+                                        className="h-11 px-3.5 text-xs font-semibold text-white bg-[#0F5C43] hover:bg-[#0B4734] dark:bg-[#10B981] dark:text-[#042419] disabled:opacity-50 rounded-xl shrink-0"
+                                      >
+                                        {isKm ? 'បន្ថែម' : 'Add'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCreatingCategory(false);
+                                          setInlineCategoryName('');
+                                          setInlineCategoryError('');
+                                        }}
+                                        aria-label={t.common.cancel}
+                                        className="w-11 h-11 inline-flex items-center justify-center text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 rounded-xl shrink-0"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                    {inlineCategoryError && (
+                                      <p className="text-[11px] text-rose-600 dark:text-rose-400">
+                                        {inlineCategoryError}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Live Duplicate Protection Warning Banner */}
@@ -2137,7 +2378,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     </fieldset>
 
                     {/* Right: Product Photo Upload & Preview Card */}
-                    <fieldset className="lg:col-span-5 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between gap-3">
+                    <fieldset
+                      className={
+                        productType === 'PACKAGED'
+                          ? 'lg:col-span-5 pt-5 lg:pt-0 border-t lg:border-t-0 lg:border-l border-slate-200/60 dark:border-emerald-950/50 lg:pl-6 flex flex-col justify-between gap-3'
+                          : 'lg:col-span-5 bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-5 flex flex-col justify-between gap-3'
+                      }
+                    >
                       <legend className="sr-only">{t.products.imagePreset}</legend>
 
                       <div className="space-y-3">
@@ -2225,7 +2472,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   </div>
 
                   {/* Compact Barcode + Scan / Lookup Row */}
-                  <fieldset className="bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-4 sm:p-5 space-y-2.5">
+                  <fieldset
+                    className={
+                      productType === 'PACKAGED'
+                        ? 'pt-5 border-t border-slate-200/60 dark:border-emerald-950/50 space-y-2.5'
+                        : 'bg-white dark:bg-[#131D18] border border-stone-200 dark:border-[#24352C] rounded-xl p-4 sm:p-5 space-y-2.5'
+                    }
+                  >
                     <legend className="sr-only">
                       {isKm ? 'បាកូដ និងស្វែងរក' : 'Barcode & Lookup'}
                     </legend>

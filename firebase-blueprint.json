@@ -75,6 +75,8 @@
         "name": { "type": "string", "minLength": 1, "maxLength": 100 },
         "nameVi": { "type": "string", "maxLength": 100 },
         "brand": { "type": "string", "maxLength": 80 },
+        "netSizeValue": { "type": "string", "maxLength": 24 },
+        "netSizeUnit": { "type": "string", "enum": ["ml", "L", "g", "kg"] },
         "category": { "type": "string", "minLength": 1, "maxLength": 64 },
         "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "productType": { "type": "string", "enum": ["PACKAGED", "PREPARED_TO_ORDER", "PREPARED_STOCK"] },

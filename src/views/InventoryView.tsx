@@ -26,6 +26,7 @@ import type {
   Ingredient,
   IngredientUnit,
   MovementType,
+  NetSizeUnit,
   PackOption,
   PaymentMethod,
   Product,
@@ -70,6 +71,8 @@ interface StockItemTarget {
   id: string;
   name: string;
   nameVi: string;
+  netSizeValue?: string;
+  netSizeUnit?: NetSizeUnit;
   classification: StockClassification;
   unit: IngredientUnit;
   stockQty: number;
@@ -86,6 +89,8 @@ interface UnifiedStockItem {
   id: string;
   name: string;
   nameVi: string;
+  netSizeValue?: string;
+  netSizeUnit?: NetSizeUnit;
   tier: StockClassification;
   categoryId: string;
   unit: IngredientUnit;
@@ -379,8 +384,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       id: p.id,
       name: p.name,
       nameVi: p.nameVi,
+      netSizeValue: p.netSizeValue,
+      netSizeUnit: p.netSizeUnit,
       classification: 'packaged',
-      unit: p.unit || 'pcs',
+      unit: 'pcs',
       stockQty: p.stockQty,
       reorderLevel: p.reorderLevel,
       unitCostKhr: p.costPriceKhr,
@@ -437,9 +444,11 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         id: prod.id,
         name: prod.name,
         nameVi: prod.nameVi,
+        netSizeValue: prod.netSizeValue,
+        netSizeUnit: prod.netSizeUnit,
         tier: 'packaged',
         categoryId: resolveProductCategoryId(prod, categories),
-        unit: prod.unit || 'pcs',
+        unit: 'pcs',
         stockQty: prod.stockQty,
         reorderLevel: prod.reorderLevel,
         unitCostKhr: prod.costPriceKhr,
@@ -720,6 +729,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           name: prod.name,
           nameVi: prod.nameVi,
           brand: prod.brand,
+          netSizeValue: prod.netSizeValue,
+          netSizeUnit: prod.netSizeUnit,
           productType: prod.productType,
           category: nextCategoryId,
           categoryId: nextCategoryId,
@@ -727,6 +738,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           costPriceKhr: prod.costPriceKhr,
           markupPercent: prod.markupPercent,
           manualPriceOverride: prod.manualPriceOverride,
+          allowSingleUnitSale: prod.allowSingleUnitSale,
           imageUrl: prod.imageUrl,
           active: prod.active,
           barcode: prod.barcode,
@@ -734,7 +746,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           packagingBarcodes: prod.packagingBarcodes,
           stockQty: prod.stockQty,
           reorderLevel: prod.reorderLevel,
-          unit: prod.unit,
+          unit: prod.productType === 'PACKAGED' ? 'pcs' : prod.unit,
           supplier: prod.supplier,
           recipe: prod.recipe,
           recipeVersion: prod.recipeVersion,

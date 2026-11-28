@@ -4,6 +4,7 @@ import type {
   Ingredient,
   IngredientUnit,
   MovementType,
+  NetSizeUnit,
   PackOption,
   PackagingBarcode,
   PaymentMethod,
@@ -25,8 +26,10 @@ import {
   BUSINESS_TIMEZONE,
   calculateProductCogs,
   convertUnitQty,
+  formatCanonicalProductName,
   generateId,
   normalizeName,
+  sanitizeNetSizeValue,
   sanitizeString,
   todayIso,
 } from './format';
@@ -52,6 +55,7 @@ export function roundKhr(val: number): number {
 // ---------------------------------------------------------------------------
 
 const VALID_UNITS = new Set<IngredientUnit>(['pcs', 'ml', 'L', 'g', 'kg']);
+const VALID_NET_SIZE_UNITS = new Set<NetSizeUnit>(['ml', 'L', 'g', 'kg']);
 const VALID_PAYMENT_METHODS = new Set<PaymentMethod>(['cash', 'khqr', 'aba', 'wing']);
 
 export function normalizeIngredient(raw: Partial<Ingredient> & { id: string }): Ingredient {
@@ -157,7 +161,34 @@ export function normalizeProduct(raw: Partial<Product> & { id: string }): Produc
   const safeCategoryId = rawCategoryId || safeCategory;
 
   const safeUnit: IngredientUnit =
-    raw.unit && VALID_UNITS.has(raw.unit) ? raw.unit : 'pcs';
+    productType === 'PACKAGED'
+      ? 'pcs'
+      : raw.unit && VALID_UNITS.has(raw.unit)
+        ? raw.unit
+        : 'pcs';
+
+  const cleanNetSizeValue =
+    productType === 'PACKAGED' ? sanitizeNetSizeValue(raw.netSizeValue) : '';
+  const cleanNetSizeUnit: NetSizeUnit | undefined =
+    productType === 'PACKAGED' &&
+    cleanNetSizeValue &&
+    raw.netSizeUnit &&
+    VALID_NET_SIZE_UNITS.has(raw.netSizeUnit)
+      ? raw.netSizeUnit
+      : undefined;
+
+  const rawNameStr = String(raw.name || 'Untitled Item').trim() || 'Untitled Item';
+  const canonicalName =
+    productType === 'PACKAGED' && cleanNetSizeValue && cleanNetSizeUnit
+      ? formatCanonicalProductName(rawNameStr, cleanNetSizeValue, cleanNetSizeUnit)
+      : rawNameStr;
+  const rawNameViStr = String(raw.nameVi || '').trim();
+  const canonicalNameVi =
+    !rawNameViStr || rawNameViStr === rawNameStr
+      ? canonicalName
+      : productType === 'PACKAGED' && cleanNetSizeValue && cleanNetSizeUnit
+        ? formatCanonicalProductName(rawNameViStr, cleanNetSizeValue, cleanNetSizeUnit)
+        : rawNameViStr;
 
   const basePriceKhr = Math.max(0, Number(raw.priceKhr ?? 0) || 0);
   const baseCostKhr = Math.max(0, Number(raw.costPriceKhr ?? 0) || 0);
@@ -216,9 +247,12 @@ export function normalizeProduct(raw: Partial<Product> & { id: string }): Produc
 
   return {
     id: String(raw.id),
-    name: String(raw.name || 'Untitled Item'),
-    nameVi: String(raw.nameVi || raw.name || 'Sản phẩm'),
+    name: canonicalName,
+    nameVi: canonicalNameVi,
     brand: String(raw.brand ?? ''),
+    ...(cleanNetSizeValue && cleanNetSizeUnit
+      ? { netSizeValue: cleanNetSizeValue, netSizeUnit: cleanNetSizeUnit }
+      : {}),
     category: safeCategory,
     categoryId: safeCategoryId,
     productType,
