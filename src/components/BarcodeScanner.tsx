@@ -344,11 +344,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             onChange={(e) => onSearchChange(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             data-barcode-capture="true"
-            placeholder={
-              isVi
-                ? 'Tìm tên sản phẩm hoặc quét / nhập mã vạch + Enter...'
-                : 'Search products or scan / type barcode + Enter...'
-            }
+            placeholder={isVi ? 'Tìm kiếm' : 'Search'}
             className="flex-1 min-w-0 h-full px-2.5 text-sm bg-transparent text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] focus:outline-none"
           />
           {searchValue && (

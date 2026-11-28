@@ -1498,7 +1498,7 @@ export const SalesView: React.FC<SalesViewProps> = ({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={t.sales.searchOrders}
+                placeholder={isVi ? 'Tìm kiếm' : 'Search'}
                 className="w-full h-11 pl-10 pr-3 text-sm border border-stone-200 dark:border-[#24352C] rounded-lg bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B]"
               />
             </div>

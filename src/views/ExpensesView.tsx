@@ -555,9 +555,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={
-                isVi ? 'Tìm mô tả, nhà cung cấp, ghi chú...' : 'Search description, vendor, note...'
-              }
+              placeholder={isVi ? 'Tìm kiếm' : 'Search'}
               className="w-full h-11 pl-10 pr-9 text-sm bg-white dark:bg-[#18251F] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#94A39B] border border-stone-200 dark:border-[#24352C] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43] dark:focus-visible:ring-[#10B981]"
             />
             {search && (

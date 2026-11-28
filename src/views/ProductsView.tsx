@@ -1055,7 +1055,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                   setSearch(e.target.value);
                   if (scannedMatch) setScannedMatch(null);
                 }}
-                placeholder={isVi ? 'Tìm tên, mã vạch...' : 'Search products or barcode...'}
+                placeholder={isVi ? 'Tìm kiếm' : 'Search'}
                 className={`w-full h-11 pl-9 ${search ? 'pr-20' : 'pr-11'} text-sm bg-white/80 dark:bg-[#131D18] text-stone-900 dark:text-[#F1F5F3] placeholder:text-stone-400 dark:placeholder:text-[#6E8278] border border-slate-200/80 dark:border-emerald-950/80 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F5C43]/30 dark:focus-visible:ring-[#10B981]/40 focus-visible:border-[#0F5C43] dark:focus-visible:border-[#10B981] transition-all duration-150`}
               />
               <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
